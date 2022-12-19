@@ -24,6 +24,4 @@ jobs:
       - name: Run svlint
         uses: dalance/svlint-action@master
         with:
-          files: |
-            pzaxi_common/pzaxi_if.sv
           filelists: all.f
