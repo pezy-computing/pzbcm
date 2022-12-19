@@ -26,3 +26,4 @@ jobs:
         with:
           files: |
             pzaxi_common/pzaxi_if.sv
+          filelists: all.f
