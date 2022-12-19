@@ -1,0 +1,31 @@
+
+name: svlint
+
+on: [push, pull_request]
+
+jobs:
+  svlint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v3
+
+      - name: Setup Ruby and FLGen
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: 3.0
+          bundler-cache: true
+
+      - name: Generate filelist
+        run: |
+          bundle exec flgen --out all.f  pzbcm.list.rb pzcorebus.list.rb pzhsbus.list.rb pzvbus.list.rb
+          sed -i 's|${{ github.workspace }}|${PZBCM_HOME}|g' all.f
+
+      - name: Run svlint
+        uses: dalance/svlint-action@master
+        with:
+          filelists: |
+            all.f
+        env:
+          PZBCM_HOME: ${{ github.workspace }}
