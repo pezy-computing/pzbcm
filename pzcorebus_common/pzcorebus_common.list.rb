@@ -22,7 +22,7 @@ include_directory '.'
   'pzcorebus_transposer.sv',
   'pzcorebus_id_assigner.sv',
   'pzcorebus_broadcast_forcer.sv',
-  'pzcorebus_base_address_remover.sv'
+  'pzcorebus_base_address_remover.sv',
   'pzcorebus_if_packer.sv',
   'pzcorebus_if_unpacker.sv',
   'pzcorebus_array_if_packer.sv',
