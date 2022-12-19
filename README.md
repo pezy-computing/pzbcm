@@ -1,3 +1,5 @@
+[![svlint](https://github.com/pezy-computing/pzbcm/actions/workflows/svlint.yml/badge.svg)](https://github.com/pezy-computing/pzbcm/actions/workflows/svlint.yml)
+
 # PZBCM
 
 共通 RTL モジュール群 (PEZY Basic Common Modules) です。
