@@ -164,14 +164,14 @@ module pzbcm_matrix_arbiter
     return matrix_next;
   endfunction
 
-  function logic is_highest_priority(int row_index, logic [REQUESTS-1:0] row_vector);
+  function automatic logic is_highest_priority(int row_index, logic [REQUESTS-1:0] row_vector);
     logic [REQUESTS-1:0]  vector;
     vector            = row_vector;
     vector[row_index] = '1;
     return vector == '1;
   endfunction
 
-  function logic is_lowest_priority(logic [REQUESTS-1:0] row_vector);
+  function automatic logic is_lowest_priority(logic [REQUESTS-1:0] row_vector);
     return row_vector == '0;
   endfunction
 

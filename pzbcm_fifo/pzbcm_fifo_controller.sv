@@ -315,7 +315,7 @@ module pzbcm_fifo_controller #(
       end
     end
   end
-  else begin
+  else begin : g
     always_comb begin
       match_data    = '0;
       last_pop_data = '1;

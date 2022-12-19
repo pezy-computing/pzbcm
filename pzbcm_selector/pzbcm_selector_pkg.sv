@@ -7,7 +7,7 @@
 //                                      All Rights Reserved.
 //==========================================================
 package pzbcm_selector_pkg;
-  typedef enum {
+  typedef enum bit [1:0] {
     PZBCM_SELECTOR_BINARY,
     PZBCM_SELECTOR_PRIORITY,
     PZBCM_SELECTOR_ONEHOT
