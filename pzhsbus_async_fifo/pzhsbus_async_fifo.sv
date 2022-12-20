@@ -1,11 +1,9 @@
-//==========================================================
+//========================================
 //
-// PEZY Computing Confidential
+// Copyright (c) 2022 PEZY Computing, K.K.
+//                    All Rights Reserved.
 //
-// ---------------------------------------------------------
-//                   Copyright (c) 2022 PEZY Computing, K.K.
-//                                      All Rights Reserved.
-//==========================================================
+//========================================
 module pzhsbus_async_fifo #(
   parameter int DEPTH   = 4,
   parameter int STAGES  = `PZBCM_SYNCHRONIZER_DEFAULT_STAGES

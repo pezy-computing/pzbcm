@@ -1,11 +1,9 @@
-//==========================================================
+//========================================
 //
-// PEZY Computing Confidential
+// Copyright (c) 2022 PEZY Computing, K.K.
+//                    All Rights Reserved.
 //
-// ---------------------------------------------------------
-//                   Copyright (c) 2022 PEZY Computing, K.K.
-//                                      All Rights Reserved.
-//==========================================================
+//========================================
 module pzhsbus_mux #(
   parameter   int SLAVES        = 2,
   parameter   bit ONE_HOT       = 1,

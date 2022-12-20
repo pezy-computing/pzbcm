@@ -1,11 +1,9 @@
-##==========================================================
+##========================================
 ##
-## PEZY Computing Confidential
+## Copyright (c) 2022 PEZY Computing, K.K.
+##                    All Rights Reserved.
 ##
-## ---------------------------------------------------------
-##                   Copyright (c) 2022 PEZY Computing, K.K.
-##                                      All Rights Reserved.
-##==========================================================
+##========================================
 file_list   'pzcorebus_common/pzcorebus_common.list.rb'
 file_list   'pzbcm_selector/pzbcm_selector.list.rb'
 source_file 'pzcorebus_mux.sv'

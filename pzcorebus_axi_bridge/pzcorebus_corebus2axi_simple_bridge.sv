@@ -1,11 +1,9 @@
-//==========================================================
+//========================================
 //
-// PEZY Computing Confidential
+// Copyright (c) 2022 PEZY Computing, K.K.
+//                    All Rights Reserved.
 //
-// ---------------------------------------------------------
-//                   Copyright (c) 2022 PEZY Computing, K.K.
-//                                      All Rights Reserved.
-//==========================================================
+//========================================
 module pzcorebus_corebus2axi_simple_bridge
   import  pzcorebus_pkg::*,
           pzaxi_pkg::*;

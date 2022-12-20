@@ -1,11 +1,9 @@
-//==========================================================
+//========================================
 //
-// PEZY Computing Confidential
+// Copyright (c) 2022 PEZY Computing, K.K.
+//                    All Rights Reserved.
 //
-// ---------------------------------------------------------
-//                   Copyright (c) 2022 PEZY Computing, K.K.
-//                                      All Rights Reserved.
-//==========================================================
+//========================================
 module pzbcm_counter #(
   parameter   int             WIDTH         = 2,
   parameter   bit [WIDTH-1:0] MAX_COUNT     = '1,

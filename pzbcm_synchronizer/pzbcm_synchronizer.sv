@@ -1,11 +1,9 @@
-//==========================================================
+//========================================
 //
-// PEZY Computing Confidential
+// Copyright (c) 2022 PEZY Computing, K.K.
+//                    All Rights Reserved.
 //
-// ---------------------------------------------------------
-//                   Copyright (c) 2022 PEZY Computing, K.K.
-//                                      All Rights Reserved.
-//==========================================================
+//========================================
 `ifndef PZBCM_SYNCHRONIZER_DEFAULT_STAGES
   `define PZBCM_SYNCHRONIZER_DEFAULT_STAGES 2
 `endif

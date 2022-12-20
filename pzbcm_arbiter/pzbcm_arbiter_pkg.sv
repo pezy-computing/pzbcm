@@ -1,11 +1,9 @@
-//==========================================================
+//========================================
 //
-// PEZY Computing Confidential
+// Copyright (c) 2022 PEZY Computing, K.K.
+//                    All Rights Reserved.
 //
-// ---------------------------------------------------------
-//                   Copyright (c) 2022 PEZY Computing, K.K.
-//                                      All Rights Reserved.
-//==========================================================
+//========================================
 package pzbcm_arbiter_pkg;
   localparam  int PZBCM_ARBITER_MAX_REQUESTS  =
     `ifdef  PZBCM_ARBITER_MAX_REQUESTS  `PZBCM_ARBITER_MAX_REQUESTS

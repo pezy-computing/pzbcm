@@ -1,10 +1,8 @@
-##==========================================================
+##========================================
 ##
-## PEZY Computing Confidential
+## Copyright (c) 2022 PEZY Computing, K.K.
+##                    All Rights Reserved.
 ##
-## ---------------------------------------------------------
-##                   Copyright (c) 2022 PEZY Computing, K.K.
-##                                      All Rights Reserved.
-##==========================================================
+##========================================
 file_list   'pzbcm_selector/pzbcm_selector.list.rb'
 source_file 'pzbcm_priority_encoder.sv'

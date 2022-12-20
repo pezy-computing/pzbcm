@@ -1,11 +1,9 @@
-//==========================================================
+//========================================
 //
-// PEZY Computing Confidential
+// Copyright (c) 2022 PEZY Computing, K.K.
+//                    All Rights Reserved.
 //
-// ---------------------------------------------------------
-//                   Copyright (c) 2022 PEZY Computing, K.K.
-//                                      All Rights Reserved.
-//==========================================================
+//========================================
 module pzbcm_ram #(
   parameter int       WORD_SIZE       = 1,
   parameter int       ADDRESS_WIDTH   = (WORD_SIZE >= 2) ? $clog2(WORD_SIZE) : 1,
