@@ -442,6 +442,14 @@ function automatic logic response_last_burst_ack(); \
   else begin \
     return response_last_ack(); \
   end \
+endfunction \
+\
+function automatic logic response_with_data_ack(); \
+  return response_ack() && (sresp == PZCOREBUS_RESPONSE_WITH_DATA); \
+endfunction \
+\
+function automatic logic response_no_data_ack(); \
+  return response_ack() && (sresp == PZCOREBUS_RESPONSE); \
 endfunction
 
 `define pzcorebus_if_define_request_modports \
@@ -667,7 +675,9 @@ modport response_master ( \
   import  get_response, \
   import  response_ack, \
   import  response_last_ack, \
-  import  response_last_burst_ack \
+  import  response_last_burst_ack, \
+  import  response_with_data_ack, \
+  import  response_no_data_ack \
 ); \
 \
 modport response_slave ( \
@@ -684,7 +694,9 @@ modport response_slave ( \
   import  put_response, \
   import  response_ack, \
   import  response_last_ack, \
-  import  response_last_burst_ack \
+  import  response_last_burst_ack, \
+  import  response_with_data_ack, \
+  import  response_no_data_ack \
 ); \
 \
 modport response_monitor ( \
@@ -701,7 +713,9 @@ modport response_monitor ( \
   import  get_response, \
   import  response_ack, \
   import  response_last_ack, \
-  import  response_last_burst_ack \
+  import  response_last_burst_ack, \
+  import  response_with_data_ack, \
+  import  response_no_data_ack \
 );
 
 `endif
