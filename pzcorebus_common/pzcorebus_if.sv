@@ -100,6 +100,8 @@ interface pzcorebus_if
     import  response_ack,
     import  response_last_ack,
     import  response_last_burst_ack,
+    import  response_with_data_ack,
+    import  response_no_data_ack,
     import  get_unpacked_length,
     import  get_burst_length
   );
@@ -155,6 +157,8 @@ interface pzcorebus_if
     import  response_ack,
     import  response_last_ack,
     import  response_last_burst_ack,
+    import  response_with_data_ack,
+    import  response_no_data_ack,
     import  get_unpacked_length,
     import  get_burst_length
   );
@@ -210,6 +214,8 @@ interface pzcorebus_if
     import  response_ack,
     import  response_last_ack,
     import  response_last_burst_ack,
+    import  response_with_data_ack,
+    import  response_no_data_ack,
     import  get_unpacked_length,
     import  get_burst_length
   );
@@ -265,6 +271,8 @@ interface pzcorebus_if
     import  response_ack,
     import  response_last_ack,
     import  response_last_burst_ack,
+    import  response_with_data_ack,
+    import  response_no_data_ack,
     import  get_unpacked_length,
     import  get_burst_length
   );
