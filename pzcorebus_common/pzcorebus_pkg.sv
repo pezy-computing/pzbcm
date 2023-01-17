@@ -153,8 +153,19 @@ package pzcorebus_pkg;
     end
   endfunction
 
+  function automatic int get_unit_data_width(pzcorebus_config bus_config);
+    if (bus_config.profile == PZCOREBUS_MEMORY_H) begin
+      return bus_config.unit_data_width;
+    end
+    else begin
+      return bus_config.data_width;
+    end
+  endfunction
+
   function automatic int get_data_size(pzcorebus_config bus_config);
-    return bus_config.data_width / bus_config.unit_data_width;
+    int unit_data_width;
+    unit_data_width = get_unit_data_width(bus_config);
+    return bus_config.data_width / unit_data_width;
   endfunction
 
   function automatic int get_max_burst_length(pzcorebus_config bus_config);
