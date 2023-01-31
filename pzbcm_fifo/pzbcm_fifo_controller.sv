@@ -216,6 +216,7 @@ module pzbcm_fifo_controller #(
     logic [DEPTH-1:0][MATCH_COUNT_WIDTH-1:0]  match_count;
     logic [DEPTH-1:0]                         match_count_full;
     logic [DEPTH-1:0]                         match_count_eq_1;
+    logic [DEPTH-1:0]                         last_match_data;
     POINTER [1:0]                             write_pointer;
     POINTER                                   read_pointer;
     TYPE                                      data;
@@ -279,22 +280,22 @@ module pzbcm_fifo_controller #(
 
     always_comb begin
       match_data    = (!status_flag.empty) && (i_data == data) && (!match_count_full[write_pointer[1]]);
-      last_pop_data = match_count_eq_1[read_pointer];
+      last_pop_data = last_match_data[read_pointer];
     end
 
     for (genvar i = 0;i < DEPTH;++i) begin : g_match_count
-      logic [1:0] up;
-      logic       down;
+      logic [2:0] up_down;
 
       always_comb begin
         match_count_full[i] = match_count[i] == '1;
         match_count_eq_1[i] = match_count[i] == MATCH_COUNT_WIDTH'(1);
+        last_match_data[i]  = match_count_eq_1[i] && (up_down[2:1] == '0);
       end
 
       always_comb begin
-        up[0] = (match_data == '0) && (write_pointer[0] == POINTER'(i)) && push;
-        up[1] = (match_data == '1) && (write_pointer[1] == POINTER'(i)) && i_push;
-        down  = (!status_flag.empty) && (read_pointer == POINTER'(i)) && i_pop;
+        up_down[2]  = (match_data == '0) && (write_pointer[0] == POINTER'(i)) && push;
+        up_down[1]  = (match_data == '1) && (write_pointer[1] == POINTER'(i)) && i_push;
+        up_down[0]  = (!status_flag.empty) && (read_pointer == POINTER'(i)) && i_pop;
       end
 
       always_ff @(posedge i_clk, negedge i_rst_n) begin
@@ -304,10 +305,10 @@ module pzbcm_fifo_controller #(
         else if (i_clear) begin
           match_count[i]  <= MATCH_COUNT_WIDTH'(0);
         end
-        else if (up != '0) begin
+        else if (up_down inside {3'b1?0, 3'b?10}) begin
           match_count[i]  <= match_count[i] + MATCH_COUNT_WIDTH'(1);
         end
-        else if (down) begin
+        else if (up_down == 3'b001) begin
           match_count[i]  <= match_count[i] - MATCH_COUNT_WIDTH'(1);
         end
       end
