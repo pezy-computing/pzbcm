@@ -80,9 +80,9 @@ module pzbcm_fifo_controller #(
   end
 
   always_comb begin
-    word_counter_eq_1 = word_counter == COUNTER'(1);
-    word_counter_eq_2 = word_counter == COUNTER'(2);
-    word_counter_ge_2 = word_counter >= COUNTER'(2);
+    word_counter_eq_1 = (DEPTH >= 1) && (word_counter == COUNTER'(1));
+    word_counter_eq_2 = (DEPTH >= 2) && (word_counter == COUNTER'(2));
+    word_counter_ge_2 = (DEPTH >= 2) && (word_counter >= COUNTER'(2));
   end
 
   always_ff @(posedge i_clk, negedge i_rst_n) begin
