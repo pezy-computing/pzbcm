@@ -32,7 +32,7 @@ module pzbcm_arbiter_core
 //--------------------------------------------------------------
 //  Arbiters
 //--------------------------------------------------------------
-  logic [1:0] select_round_robin;
+  logic select_round_robin;
 
   always_comb begin
     select_round_robin  = i_config.arbiter_type == PZBCM_ARBITER_ROUND_ROBIN;
