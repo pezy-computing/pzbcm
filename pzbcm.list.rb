@@ -13,6 +13,7 @@
   pzbcm_edge_detector
   pzbcm_fifo
   pzbcm_gray
+  pzbcm_lzd
   pzbcm_min_max_finder
   pzbcm_multi_bits_detector
   pzbcm_onehot
