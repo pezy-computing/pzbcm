@@ -21,6 +21,7 @@
   pzbcm_ram
   pzbcm_selector
   pzbcm_slicer
+  pzbcm_sram
   pzbcm_synchronizer
 ).each do |bcm_module|
   file_list "#{bcm_module}/#{bcm_module}.list.rb", from: :current
