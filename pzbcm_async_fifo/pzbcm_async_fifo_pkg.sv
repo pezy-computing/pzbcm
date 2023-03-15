@@ -6,6 +6,6 @@
 //========================================
 package pzbcm_async_fifo_pkg;
   function automatic int calc_default_depth(int stages);
-    return 2**($clog2(3 * stages) + 1);
+    return 2**($clog2(2 * stages) + 1);
   endfunction
 endpackage
