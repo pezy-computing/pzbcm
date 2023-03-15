@@ -5,7 +5,7 @@
 //
 //========================================
 `ifndef PZCOREBUS_MAX_ID_WIDTH
-  `define PZCOREBUS_MAX_ID_WIDTH  19
+  `define PZCOREBUS_MAX_ID_WIDTH  20
 `endif
 
 `ifndef PZCOREBUS_MAX_ADDRESS_WIDTH
