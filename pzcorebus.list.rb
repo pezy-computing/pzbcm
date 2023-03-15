@@ -20,7 +20,6 @@ file_list 'pzbcm.list.rb', from: :current
   pzcorebus_m_to_1_switch
   pzcorebus_membus2csrbus_adapter
   pzcorebus_packer
-  pzcorebus_response_reorder
   pzcorebus_rmw_converter
   pzcorebus_selector
   pzcorebus_slicer

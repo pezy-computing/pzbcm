@@ -7,15 +7,16 @@
 module pzcorebus_membus2csrbus_adapter
   import  pzcorebus_pkg::*;
 #(
-  parameter pzcorebus_config  MEMBUS_CONFIG       = '0,
-  parameter pzcorebus_config  CSRBUS_CONFIG       = '0,
-  parameter int               RESPONSE_INFO_DEPTH = 2,
-  parameter bit               SLAVE_SLICER        = 0,
-  parameter bit               MASTER_SLICER       = 0
+  parameter pzcorebus_config  MEMBUS_CONFIG           = '0,
+  parameter pzcorebus_config  CSRBUS_CONFIG           = '0,
+  parameter int               MAX_NON_POSTED_REQUESTS = 2,
+  parameter int               RESPONSE_INFO_DEPTH     = MAX_NON_POSTED_REQUESTS,
+  parameter bit [1:0]         SLAVE_SLICER            = '0,
+  parameter bit [1:0]         MASTER_SLICER           = '0
 )(
   input var                               i_clk,
   input var                               i_rst_n,
-  input var [CSRBUS_CONFIG.id_width-1:0]  i_csrbus_id,
+  input var [CSRBUS_CONFIG.id_width-1:0]  i_base_id,
   pzcorebus_if.slave                      membus_slave_if,
   pzcorebus_if.master                     csrbus_master_if
 );
@@ -95,13 +96,16 @@ module pzcorebus_membus2csrbus_adapter
 //--------------------------------------------------------------
 //  Command/Data aligner
 //--------------------------------------------------------------
+  localparam  int REQUEST_FIFO_DEPTH  = (SLAVE_SLICER[0]) ? 2 : 0;
+  localparam  int RESPONSE_FIFO_DEPTH = (SLAVE_SLICER[1]) ? 2 : 0;
+
   pzcorebus_command_data_aligner #(
-    .BUS_CONFIG     (MEMBUS_CONFIG  ),
-    .WAIT_FOR_DATA  (1              ),
-    .SLAVE_FIFO     (SLAVE_SLICER   ),
-    .COMMAND_DEPTH  (2              ),
-    .DATA_DEPTH     (2              ),
-    .RESPONSE_DEPTH (2              )
+    .BUS_CONFIG     (MEMBUS_CONFIG        ),
+    .WAIT_FOR_DATA  (1                    ),
+    .SLAVE_FIFO     (1                    ),
+    .COMMAND_DEPTH  (REQUEST_FIFO_DEPTH   ),
+    .DATA_DEPTH     (REQUEST_FIFO_DEPTH   ),
+    .RESPONSE_DEPTH (RESPONSE_FIFO_DEPTH  )
   ) u_aligner (
     .i_clk      (i_clk            ),
     .i_rst_n    (i_rst_n          ),
@@ -202,7 +206,7 @@ module pzcorebus_membus2csrbus_adapter
       end
 
       csrbus_if.mcmd  = get_mcmd(write_busy);
-      csrbus_if.mid   = i_csrbus_id;
+      csrbus_if.mid   = '0;
       csrbus_if.maddr = maddr;
       csrbus_if.mdata = aligner_if.mdata[UNIT_WIDTH*data_count+:UNIT_WIDTH];
     end
@@ -297,16 +301,17 @@ module pzcorebus_membus2csrbus_adapter
   );
 
   if (1) begin : g_response_path
-    logic                           ready;
-    logic [LENGTH_COUNT_WIDTH-1:0]  length_count;
-    logic [LENGTH_COUNT_WIDTH-1:0]  length_count_next;
-    logic [LENGTH_COUNT_WIDTH-1:0]  length_count_last;
-    logic [UNITEN_COUNT_WIDTH-1:0]  uniten_count;
-    logic [DATA_COUNT_WIDTH-1:0]    data_count;
-    logic                           data_count_last;
-    logic [2:0]                     sresp_valid;
-    logic [DATA_WIDTH-1:0]          sdata;
-    logic                           serror;
+    logic                               ready;
+    logic [LENGTH_COUNT_WIDTH-1:0]      length_count;
+    logic [LENGTH_COUNT_WIDTH-1:0]      length_count_next;
+    logic [LENGTH_COUNT_WIDTH-1:0]      length_count_last;
+    logic [1:0][UNITEN_COUNT_WIDTH-1:0] uniten_count;
+    logic [UNITEN_COUNT_WIDTH-1:0]      uniten_count_next;
+    logic [DATA_COUNT_WIDTH-1:0]        data_count;
+    logic                               data_count_last;
+    logic [2:0]                         sresp_valid;
+    logic [DATA_WIDTH-1:0]              sdata;
+    logic                               serror;
 
     always_comb begin
       info_fifo_pop = aligner_if.response_last_ack();
@@ -341,15 +346,24 @@ module pzcorebus_membus2csrbus_adapter
       end
     end
 
+    always_comb begin
+      uniten_count_next = uniten_count[0] + UNITEN_COUNT_WIDTH'(1);
+    end
+
     always_ff @(posedge i_clk, negedge i_rst_n) begin
       if (!i_rst_n) begin
-        uniten_count  <= UNITEN_COUNT_WIDTH'(0);
+        uniten_count[0] <= UNITEN_COUNT_WIDTH'(0);
+        uniten_count[1] <= UNITEN_COUNT_WIDTH'(0);
       end
       else if ((!ready) && (!info_fifo_empty)) begin
-        uniten_count  <= response_info[1].uniten_offset;
+        uniten_count[0] <= response_info[1].uniten_offset;
+        uniten_count[1] <= response_info[1].uniten_offset;
       end
       else if (csrbus_if.response_ack()) begin
-        uniten_count  <= uniten_count + UNITEN_COUNT_WIDTH'(1);
+        uniten_count[0] <= uniten_count_next;
+        if (aligner_if.sresp_valid) begin
+          uniten_count[1] <= uniten_count_next;
+        end
       end
     end
 
@@ -427,42 +441,37 @@ module pzcorebus_membus2csrbus_adapter
   end
 
   function automatic logic [UNITEN_WIDTH-1:0] get_sresp_uniten(
-    logic [UNITEN_COUNT_WIDTH-1:0]  uniten_count
+    logic [1:0][UNITEN_COUNT_WIDTH-1:0] uniten_count
   );
-    logic [WORD_SIZE-1:0][UNIT_SIZE-1:0]  uniten;
+    logic [UNITEN_COUNT_WIDTH-1:0]  begin_count;
+    logic [UNITEN_COUNT_WIDTH-1:0]  end_count;
+    logic [UNITEN_WIDTH-1:0]        uniten;
 
-    uniten  = '0;
+    begin_count = uniten_count[1];
+    end_count   = uniten_count[0];
     if (MEMBUS_CONFIG.profile == PZCOREBUS_MEMORY_H) begin
-      logic [WORD_COUNT_WIDTH-1:0]  word_count;
-      logic [DATA_COUNT_WIDTH-1:0]  data_count;
-
-      if (WORD_SIZE == 1) begin
-        word_count  = WORD_COUNT_WIDTH'(0);
-      end
-      else begin
-        word_count  = uniten_count[UNITEN_COUNT_WIDTH-1-:WORD_COUNT_WIDTH];
-      end
-
-
-      data_count  = uniten_count[0+:DATA_COUNT_WIDTH];
-      for (int i = 0;i < UNIT_SIZE;++i) begin
-        uniten[word_count][i] = data_count >= DATA_COUNT_WIDTH'(i);
+      for (int i = 0;i < UNITEN_WIDTH;++i) begin
+        uniten[i] = UNITEN_COUNT_WIDTH'(i) inside {[begin_count:end_count]};
       end
     end
+    else begin
+      uniten  = '0;
+    end
 
-    return UNITEN_WIDTH'(uniten);
+    return uniten;
   endfunction
 
 //--------------------------------------------------------------
-//  Slicer
+//  Response buffer
 //--------------------------------------------------------------
-  pzcorebus_slicer #(
-    .BUS_CONFIG     (CSRBUS_CONFIG  ),
-    .REQUEST_VALID  (MASTER_SLICER  ),
-    .RESPONSE_VALID (MASTER_SLICER  )
-  ) u_slicer (
+  pzcorebus_membus2csrbus_adapter_response_buffer #(
+    .CSRBUS_CONFIG  (CSRBUS_CONFIG            ),
+    .ENTRIES        (MAX_NON_POSTED_REQUESTS  ),
+    .MASTER_SLICER  (MASTER_SLICER            )
+  ) u_response_buffer (
     .i_clk      (i_clk            ),
     .i_rst_n    (i_rst_n          ),
+    .i_base_id  (i_base_id        ),
     .slave_if   (csrbus_if        ),
     .master_if  (csrbus_master_if )
   );
