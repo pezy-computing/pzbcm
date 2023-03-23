@@ -11,8 +11,8 @@ module pzcorebus_membus2csrbus_adapter
   parameter pzcorebus_config  CSRBUS_CONFIG           = '0,
   parameter int               MAX_NON_POSTED_REQUESTS = 2,
   parameter int               RESPONSE_INFO_DEPTH     = MAX_NON_POSTED_REQUESTS,
-  parameter bit [1:0]         SLAVE_SLICER            = '0,
-  parameter bit [1:0]         MASTER_SLICER           = '0
+  parameter bit [1:0]         SLAVE_SLICER            = '1,
+  parameter bit [1:0]         MASTER_SLICER           = '1
 )(
   input var                               i_clk,
   input var                               i_rst_n,
@@ -27,6 +27,7 @@ module pzcorebus_membus2csrbus_adapter
     end
   end
 
+  localparam  int ADDRESS_WIDTH   = CSRBUS_CONFIG.address_width;
   localparam  int DATA_WIDTH      = MEMBUS_CONFIG.data_width;
   localparam  int UNIT_WIDTH      = 32;
   localparam  int UNIT_BYTE_SIZE  = UNIT_WIDTH / 8;
@@ -81,17 +82,19 @@ module pzcorebus_membus2csrbus_adapter
   typedef struct packed {
     pzcorebus_response_type             sresp;
     logic [MEMBUS_CONFIG.id_width-1:0]  sid;
-    logic [LENGTH_COUNT_WIDTH-1:0]      length;
     logic [UNITEN_COUNT_WIDTH-1:0]      uniten_offset;
   } pzcorebus_response_info;
 
-  pzcorebus_if #(MEMBUS_CONFIG) aligner_if();
-  pzcorebus_if #(CSRBUS_CONFIG) csrbus_if();
-  logic                         info_fifo_empty;
-  logic                         info_fifo_full;
-  logic                         info_fifo_push;
-  logic                         info_fifo_pop;
-  pzcorebus_response_info [1:0] response_info;
+  pzcorebus_if #(MEMBUS_CONFIG)       aligner_if();
+  pzcorebus_if #(CSRBUS_CONFIG)       csrbus_if();
+  logic                               info_fifo_empty;
+  logic                               info_fifo_full;
+  logic                               info_fifo_push;
+  logic                               info_fifo_pop;
+  pzcorebus_response_info [1:0]       response_info;
+  logic                               response_count_empty;
+  logic                               response_count_push;
+  logic [1:0][LENGTH_COUNT_WIDTH-1:0] response_count;
 
 //--------------------------------------------------------------
 //  Command/Data aligner
@@ -117,98 +120,105 @@ module pzcorebus_membus2csrbus_adapter
 //  Request paht
 //--------------------------------------------------------------
   if (1) begin : g_request_path
-    logic                                   update;
-    logic [1:0]                             write_busy;
-    logic                                   read_busy;
-    logic                                   busy;
-    logic [LENGTH_COUNT_WIDTH-1:0]          aligned_length;
-    logic [LENGTH_COUNT_WIDTH-1:0]          length_count;
-    logic                                   length_count_last;
-    logic [DATA_COUNT_WIDTH-1:0]            data_count;
-    logic                                   data_count_last;
-    logic [CSRBUS_CONFIG.address_width-1:0] maddr;
-    logic                                   write_data_ready;
-    logic                                   write_data_active;
-    logic                                   write_data_last;
+    logic                               busy;
+    logic                               non_posted_ready;
+    logic                               write_data_inactive;
+    logic                               read_valid;
+    logic [1:0]                         write_valid;
+    logic [1:0][LENGTH_COUNT_WIDTH-1:0] length_count;
+    logic                               length_count_last;
+    logic [1:0][DATA_COUNT_WIDTH-1:0]   data_count;
+    logic                               data_count_last;
+    logic [1:0][ADDRESS_WIDTH-1:0]      maddr;
+    logic [LENGTH_COUNT_WIDTH-1:0]      request_count;
+    logic [LENGTH_COUNT_WIDTH-1:0]      request_count_next;
+    logic [1:0]                         update;
 
     always_comb begin
-      update  =
-        csrbus_if.command_ack() ||
-        (write_busy && aligner_if.mdata_valid && (!write_data_active));
-    end
-
-    always_comb begin
-      busy  = (write_busy != '0) || read_busy;
-    end
-
-    always_ff @(posedge i_clk, negedge i_rst_n) begin
-      if (!i_rst_n) begin
-        write_busy  <= '0;
-        read_busy   <= '0;
-      end
-      else if (update && length_count_last) begin
-        write_busy  <= '0;
-        read_busy   <= '0;
-      end
-      else if (aligner_if.command_ack()) begin
-        write_busy[0] <= aligner_if.mcmd == PZCOREBUS_WRITE;
-        write_busy[1] <= aligner_if.mcmd == PZCOREBUS_WRITE_NON_POSTED;
-        read_busy     <= aligner_if.mcmd == PZCOREBUS_READ;
-      end
-    end
-
-    always_comb begin
-      aligned_length    = get_aligned_length(aligner_if.maddr, aligner_if.get_unpacked_length());
-      length_count_last = length_count == LENGTH_COUNT_WIDTH'(1);
-      data_count_last   = data_count == DATA_COUNT_WIDTH'(UNIT_SIZE - 1);
-    end
-
-    always_ff @(posedge i_clk, negedge i_rst_n) begin
-      if (!i_rst_n) begin
-        length_count  <= LENGTH_COUNT_WIDTH'(0);
-        data_count    <= DATA_COUNT_WIDTH'(0);
-      end
-      else if (aligner_if.command_ack()) begin
-        length_count  <= aligned_length;
-        data_count    <= aligner_if.maddr[UNIT_OFFSET_LSB+:UNIT_OFFSET_WIDTH];
-        maddr         <= aligner_if.maddr[CSRBUS_CONFIG.address_width-1:0];
-      end
-      else if (update) begin
-        length_count  <= length_count - LENGTH_COUNT_WIDTH'(1);
-        data_count    <= data_count + DATA_COUNT_WIDTH'(1);
-        maddr         <= get_next_maddr(maddr);
-      end
-    end
-
-    always_comb begin
-      write_data_ready  = aligner_if.mdata_valid && (data_count_last || length_count_last);
-      write_data_active = aligner_if.mdata_byteen[UNIT_BYTE_SIZE*data_count+:UNIT_BYTE_SIZE] != '0;
-
       if (!busy) begin
-        aligner_if.scmd_accept  = aligner_if.is_posted_command() || (!info_fifo_full);
-        aligner_if.sdata_accept = '0;
-        csrbus_if.mcmd_valid    = '0;
+        length_count[0] = get_aligned_length(aligner_if.maddr, aligner_if.get_unpacked_length());
+        data_count[0]   = aligner_if.maddr[UNIT_OFFSET_LSB+:UNIT_OFFSET_WIDTH];
+        maddr[0]        = aligner_if.maddr[CSRBUS_CONFIG.address_width-1:0];
       end
-      else if (read_busy) begin
-        aligner_if.scmd_accept  = '0;
+      else begin
+        length_count[0] = length_count[1];
+        data_count[0]   = data_count[1];
+        maddr[0]        = maddr[1];
+      end
+
+      length_count_last   = length_count[0] == LENGTH_COUNT_WIDTH'(1);
+      data_count_last     = data_count[0]   == DATA_COUNT_WIDTH'(UNIT_SIZE - 1);
+      request_count_next  = request_count + LENGTH_COUNT_WIDTH'(1);
+      update[0]           = csrbus_if.command_ack();
+      update[1]           = (write_valid != '0) && write_data_inactive;
+    end
+
+    always_ff @(posedge i_clk, negedge i_rst_n) begin
+      if (!i_rst_n) begin
+        busy  <= '0;
+      end
+      else if (update != '0) begin
+        if (length_count_last) begin
+          busy  <= '0;
+        end
+        else begin
+          busy  <= '1;
+        end
+      end
+    end
+
+    always_ff @(posedge i_clk, negedge i_rst_n) begin
+      if (!i_rst_n) begin
+        length_count[1] <= LENGTH_COUNT_WIDTH'(0);
+        data_count[1]   <= DATA_COUNT_WIDTH'(0);
+        maddr[1]        <= ADDRESS_WIDTH'(0);
+      end
+      else if (update != '0) begin
+        length_count[1] <= length_count[0] - LENGTH_COUNT_WIDTH'(1);
+        data_count[1]   <= data_count[0] + DATA_COUNT_WIDTH'(1);
+        maddr[1]        <= get_next_maddr(maddr[0]);
+      end
+    end
+
+    always_ff @(posedge i_clk, negedge i_rst_n) begin
+      if (!i_rst_n) begin
+        request_count <= LENGTH_COUNT_WIDTH'(0);
+      end
+      else if ((update != '0) && length_count_last) begin
+        request_count <= LENGTH_COUNT_WIDTH'(0);
+      end
+      else if (update[0]) begin
+        request_count <= request_count_next;
+      end
+    end
+
+    always_comb begin
+      non_posted_ready    = busy || (!info_fifo_full);
+      write_data_inactive = aligner_if.mdata_byteen[UNIT_BYTE_SIZE*data_count[0]+:UNIT_BYTE_SIZE] == '0;
+      read_valid          = aligner_if.command_valid(PZCOREBUS_READ) && non_posted_ready;
+      write_valid[0]      = aligner_if.command_valid(PZCOREBUS_WRITE) && aligner_if.mdata_valid;
+      write_valid[1]      = aligner_if.command_valid(PZCOREBUS_WRITE_NON_POSTED) && aligner_if.mdata_valid && non_posted_ready;
+
+      if (read_valid) begin
+        aligner_if.scmd_accept  = csrbus_if.scmd_accept && length_count_last;
         aligner_if.sdata_accept = '0;
         csrbus_if.mcmd_valid    = '1;
       end
-      else if (write_data_active) begin
-        aligner_if.scmd_accept  = '0;
-        aligner_if.sdata_accept = write_data_ready && csrbus_if.scmd_accept;
-        csrbus_if.mcmd_valid    = aligner_if.mdata_valid;
+      else if (write_valid != '0) begin
+        aligner_if.scmd_accept  = (csrbus_if.scmd_accept || write_data_inactive) && length_count_last;
+        aligner_if.sdata_accept = (csrbus_if.scmd_accept || write_data_inactive) && (data_count_last || length_count_last);
+        csrbus_if.mcmd_valid    = !write_data_inactive;
       end
       else begin
         aligner_if.scmd_accept  = '0;
-        aligner_if.sdata_accept = write_data_ready;
+        aligner_if.sdata_accept = '0;
         csrbus_if.mcmd_valid    = '0;
       end
 
-      csrbus_if.mcmd  = get_mcmd(write_busy);
+      csrbus_if.mcmd  = aligner_if.mcmd;
       csrbus_if.mid   = '0;
-      csrbus_if.maddr = maddr;
-      csrbus_if.mdata = aligner_if.mdata[UNIT_WIDTH*data_count+:UNIT_WIDTH];
+      csrbus_if.maddr = maddr[0];
+      csrbus_if.mdata = aligner_if.mdata[UNIT_WIDTH*data_count[0]+:UNIT_WIDTH];
     end
 
     always_comb begin
@@ -220,11 +230,20 @@ module pzcorebus_membus2csrbus_adapter
     end
 
     always_comb begin
-      info_fifo_push                  = aligner_if.command_non_posted_ack();
+      info_fifo_push                  = (update != '0) && aligner_if.is_non_posted_command() && (!busy);
       response_info[0].sresp          = get_sresp(aligner_if.mcmd);
       response_info[0].sid            = aligner_if.mid;
-      response_info[0].length         = aligned_length;
       response_info[0].uniten_offset  = aligner_if.maddr[UNIT_OFFSET_LSB+:UNITEN_COUNT_WIDTH];
+    end
+
+    always_comb begin
+      response_count_push = (update != '0) && aligner_if.is_non_posted_command() && length_count_last;
+      if (update[0]) begin
+        response_count[0] = request_count_next;
+      end
+      else begin
+        response_count[0] = request_count;
+      end
     end
   end
 
@@ -300,12 +319,30 @@ module pzcorebus_membus2csrbus_adapter
     .o_data         (response_info[1] )
   );
 
+  pzbcm_fifo #(
+    .WIDTH  (LENGTH_COUNT_WIDTH   ),
+    .DEPTH  (RESPONSE_INFO_DEPTH  )
+  ) u_response_count_fifo (
+    .i_clk          (i_clk                ),
+    .i_rst_n        (i_rst_n              ),
+    .i_clear        ('0                   ),
+    .o_empty        (response_count_empty ),
+    .o_almost_full  (),
+    .o_full         (),
+    .o_word_count   (),
+    .i_push         (response_count_push  ),
+    .i_data         (response_count[0]    ),
+    .i_pop          (info_fifo_pop        ),
+    .o_data         (response_count[1]    )
+  );
+
   if (1) begin : g_response_path
-    logic                               ready;
-    logic [LENGTH_COUNT_WIDTH-1:0]      length_count;
+    logic [1:0]                         respons_done;
+    logic                               busy;
+    logic [1:0][LENGTH_COUNT_WIDTH-1:0] length_count;
     logic [LENGTH_COUNT_WIDTH-1:0]      length_count_next;
-    logic [LENGTH_COUNT_WIDTH-1:0]      length_count_last;
-    logic [1:0][UNITEN_COUNT_WIDTH-1:0] uniten_count;
+    logic [1:0][UNITEN_COUNT_WIDTH-1:0] uniten_end_count;
+    logic [1:0][UNITEN_COUNT_WIDTH-1:0] uniten_start_count;
     logic [UNITEN_COUNT_WIDTH-1:0]      uniten_count_next;
     logic [DATA_COUNT_WIDTH-1:0]        data_count;
     logic                               data_count_last;
@@ -314,76 +351,68 @@ module pzcorebus_membus2csrbus_adapter
     logic                               serror;
 
     always_comb begin
-      info_fifo_pop = aligner_if.response_last_ack();
+      respons_done[0] = aligner_if.response_last_ack();
+      respons_done[1] = (!response_count_empty) && (response_count[1] == LENGTH_COUNT_WIDTH'(0));
+      info_fifo_pop   = respons_done != '0;
     end
 
     always_ff @(posedge i_clk, negedge i_rst_n) begin
       if (!i_rst_n) begin
-        ready <= '0;
+        busy  <= '0;
       end
-      else if (aligner_if.response_last_ack()) begin
-        ready <= '0;
+      else if (respons_done != '0) begin
+        busy  <= '0;
       end
-      else if ((!ready) && (!info_fifo_empty)) begin
-        ready <= '1;
+      else if (csrbus_if.response_ack()) begin
+        busy  <= '1;
       end
     end
 
     always_comb begin
-      length_count_next = length_count + LENGTH_COUNT_WIDTH'(1);
-      length_count_last = length_count_next == response_info[1].length;
+      if (!busy) begin
+        length_count[0]       = LENGTH_COUNT_WIDTH'(0);
+        uniten_end_count[0]   = response_info[1].uniten_offset;
+        uniten_start_count[0] = response_info[1].uniten_offset;
+      end
+      else begin
+        length_count[0]       = length_count[1];
+        uniten_end_count[0]   = uniten_end_count[1];
+        uniten_start_count[0] = uniten_start_count[1];
+      end
+
+      length_count_next = length_count[0] + LENGTH_COUNT_WIDTH'(1);
+      uniten_count_next = uniten_end_count[0] + UNITEN_COUNT_WIDTH'(1);
+      data_count        = uniten_end_count[0][0+:DATA_COUNT_WIDTH];
+      data_count_last   = data_count == '1;
     end
 
     always_ff @(posedge i_clk, negedge i_rst_n) begin
       if (!i_rst_n) begin
-        length_count  <= LENGTH_COUNT_WIDTH'(0);
-      end
-      else if ((!ready) && (!info_fifo_empty)) begin
-        length_count  <= LENGTH_COUNT_WIDTH'(0);
-      end
-      else if (csrbus_if.response_ack()) begin
-        length_count  <= length_count_next;
-      end
-    end
-
-    always_comb begin
-      uniten_count_next = uniten_count[0] + UNITEN_COUNT_WIDTH'(1);
-    end
-
-    always_ff @(posedge i_clk, negedge i_rst_n) begin
-      if (!i_rst_n) begin
-        uniten_count[0] <= UNITEN_COUNT_WIDTH'(0);
-        uniten_count[1] <= UNITEN_COUNT_WIDTH'(0);
-      end
-      else if ((!ready) && (!info_fifo_empty)) begin
-        uniten_count[0] <= response_info[1].uniten_offset;
-        uniten_count[1] <= response_info[1].uniten_offset;
+        length_count[1]       <= LENGTH_COUNT_WIDTH'(0);
+        uniten_end_count[1]   <= UNITEN_COUNT_WIDTH'(0);
+        uniten_start_count[1] <= UNITEN_COUNT_WIDTH'(0);
       end
       else if (csrbus_if.response_ack()) begin
-        uniten_count[0] <= uniten_count_next;
+        length_count[1]     <= length_count_next;
+        uniten_end_count[1] <= uniten_count_next;
         if (aligner_if.sresp_valid) begin
-          uniten_count[1] <= uniten_count_next;
+          uniten_start_count[1] <= uniten_count_next;
         end
       end
     end
 
     always_comb begin
-      data_count      = uniten_count[0+:DATA_COUNT_WIDTH];
-      data_count_last = data_count == '1;
-    end
+      sresp_valid[0]  = (response_info[1].sresp == PZCOREBUS_RESPONSE_WITH_DATA) && data_count_last;
+      sresp_valid[1]  = is_length_count_last(length_count_next, response_count_empty, response_count[1]);
+      sresp_valid[2]  = is_length_count_last(length_count[0], response_count_empty, response_count[1]);
 
-    always_comb begin
-      sresp_valid[0]  = response_info[1].sresp == PZCOREBUS_RESPONSE;
-      sresp_valid[1]  = length_count_last;
-      sresp_valid[2]  = data_count_last;
-
-      if (!ready) begin
+      if (info_fifo_empty) begin
         csrbus_if.mresp_accept  = '0;
         aligner_if.sresp_valid  = '0;
       end
       else if (sresp_valid != '0) begin
         csrbus_if.mresp_accept  = aligner_if.mresp_accept;
-        aligner_if.sresp_valid  = csrbus_if.sresp_valid;
+        aligner_if.sresp_valid  = csrbus_if.sresp_valid || sresp_valid[2];
       end
       else begin
         csrbus_if.mresp_accept  = '1;
@@ -395,15 +424,15 @@ module pzcorebus_membus2csrbus_adapter
       aligner_if.serror       = csrbus_if.serror || serror;
       aligner_if.sdata        = sdata;
       aligner_if.sinfo        = '0;
-      aligner_if.sresp_uniten = get_sresp_uniten(uniten_count);
-      aligner_if.sresp_last   = (sresp_valid[1:0] != '0) ? '1 : '0;
+      aligner_if.sresp_uniten = get_sresp_uniten(uniten_start_count[0], uniten_end_count[0]);
+      aligner_if.sresp_last   = (sresp_valid[2:1] != '0) ? '1 : '0;
     end
 
     always_ff @(posedge i_clk, negedge i_rst_n) begin
       if (!i_rst_n) begin
         serror  <= '0;
       end
-      else if (aligner_if.response_ack()) begin
+      else if (aligner_if.response_ack() || (respons_done != '0)) begin
         serror  <= '0;
       end
       else if (csrbus_if.response_ack()) begin
@@ -440,18 +469,25 @@ module pzcorebus_membus2csrbus_adapter
     end
   end
 
-  function automatic logic [UNITEN_WIDTH-1:0] get_sresp_uniten(
-    logic [1:0][UNITEN_COUNT_WIDTH-1:0] uniten_count
+  function automatic logic is_length_count_last(
+    logic [LENGTH_COUNT_WIDTH-1:0]  length_count,
+    logic                           response_count_empty,
+    logic [LENGTH_COUNT_WIDTH-1:0]  response_count
   );
-    logic [UNITEN_COUNT_WIDTH-1:0]  begin_count;
-    logic [UNITEN_COUNT_WIDTH-1:0]  end_count;
-    logic [UNITEN_WIDTH-1:0]        uniten;
+    return
+      (!response_count_empty) && (response_count != LENGTH_COUNT_WIDTH'(0)) &&
+      (length_count == response_count);
+  endfunction
 
-    begin_count = uniten_count[1];
-    end_count   = uniten_count[0];
+  function automatic logic [UNITEN_WIDTH-1:0] get_sresp_uniten(
+    logic [UNITEN_COUNT_WIDTH-1:0]  start_count,
+    logic [UNITEN_COUNT_WIDTH-1:0]  end_count
+  );
+    logic [UNITEN_WIDTH-1:0]  uniten;
+
     if (MEMBUS_CONFIG.profile == PZCOREBUS_MEMORY_H) begin
       for (int i = 0;i < UNITEN_WIDTH;++i) begin
-        uniten[i] = UNITEN_COUNT_WIDTH'(i) inside {[begin_count:end_count]};
+        uniten[i] = UNITEN_COUNT_WIDTH'(i) inside {[start_count:end_count]};
       end
     end
     else begin
