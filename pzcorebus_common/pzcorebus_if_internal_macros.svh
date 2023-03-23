@@ -279,6 +279,10 @@ function automatic logic command_non_posted_valid(); \
   return mcmd_valid && is_non_posted_command(); \
 endfunction \
 \
+function automatic logic command_valid(pzcorebus_command_type command); \
+  return mcmd_valid && (command == mcmd); \
+endfunction \
+\
 function automatic logic write_data_ack(); \
   if (BUS_CONFIG.profile != PZCOREBUS_CSR) begin \
     return mdata_valid && sdata_accept; \
@@ -486,6 +490,7 @@ modport request_master ( \
   import  command_non_posted_ack, \
   import  command_posted_valid, \
   import  command_non_posted_valid, \
+  import  command_valid, \
   import  write_data_ack, \
   import  write_data_last_ack, \
   import  get_unpacked_length, \
@@ -518,6 +523,7 @@ modport command_master ( \
   import  command_non_posted_ack, \
   import  command_posted_valid, \
   import  command_non_posted_valid, \
+  import  command_valid, \
   import  get_unpacked_length, \
   import  get_burst_length \
 ); \
@@ -569,6 +575,7 @@ modport request_slave ( \
   import  command_non_posted_ack, \
   import  command_posted_valid, \
   import  command_non_posted_valid, \
+  import  command_valid, \
   import  write_data_ack, \
   import  write_data_last_ack, \
   import  get_unpacked_length, \
@@ -601,6 +608,7 @@ modport command_slave ( \
   import  command_non_posted_ack, \
   import  command_posted_valid, \
   import  command_non_posted_valid, \
+  import  command_valid, \
   import  get_unpacked_length, \
   import  get_burst_length \
 ); \
@@ -652,6 +660,7 @@ modport request_monitor ( \
   import  command_non_posted_ack, \
   import  command_posted_valid, \
   import  command_non_posted_valid, \
+  import  command_valid, \
   import  write_data_ack, \
   import  write_data_last_ack, \
   import  get_unpacked_length, \
