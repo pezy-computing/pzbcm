@@ -66,15 +66,16 @@ package pzcorebus_pkg;
   //        2: Atomic
   //        3: Message
   typedef enum logic [3:0] {
-    PZCOREBUS_NULL_COMMAND        = 4'b00_00,
-    PZCOREBUS_READ                = 4'b01_00,
-    PZCOREBUS_WRITE               = 4'b10_00,
-    PZCOREBUS_WRITE_NON_POSTED    = 4'b11_00,
-    PZCOREBUS_BROADCAST           = 4'b10_01,
-    PZCOREBUS_ATOMIC              = 4'b10_10,
-    PZCOREBUS_ATOMIC_NON_POSTED   = 4'b11_10,
-    PZCOREBUS_MESSAGE             = 4'b00_11,
-    PZCOREBUS_MESSAGE_NON_POSTED  = 4'b01_11
+    PZCOREBUS_NULL_COMMAND          = 4'b00_00,
+    PZCOREBUS_READ                  = 4'b01_00,
+    PZCOREBUS_WRITE                 = 4'b10_00,
+    PZCOREBUS_WRITE_NON_POSTED      = 4'b11_00,
+    PZCOREBUS_BROADCAST             = 4'b10_01,
+    PZCOREBUS_BROADCAST_NON_POSTED  = 4'b11_01,
+    PZCOREBUS_ATOMIC                = 4'b10_10,
+    PZCOREBUS_ATOMIC_NON_POSTED     = 4'b11_10,
+    PZCOREBUS_MESSAGE               = 4'b00_11,
+    PZCOREBUS_MESSAGE_NON_POSTED    = 4'b01_11
   } pzcorebus_command_type;
 
   localparam  int PZCOREBUS_WITH_DATA_BIT       = 3;

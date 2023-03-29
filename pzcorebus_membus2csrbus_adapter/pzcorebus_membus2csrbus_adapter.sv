@@ -17,6 +17,8 @@ module pzcorebus_membus2csrbus_adapter
   input var                               i_clk,
   input var                               i_rst_n,
   input var [CSRBUS_CONFIG.id_width-1:0]  i_base_id,
+  input var                               i_force_np_write,
+  input var                               i_wait_for_all_responses,
   pzcorebus_if.slave                      membus_slave_if,
   pzcorebus_if.master                     csrbus_master_if
 );
@@ -80,13 +82,34 @@ module pzcorebus_membus2csrbus_adapter
   localparam  int WORD_COUNT_WIDTH      = get_word_count_width();
 
   typedef struct packed {
+    logic force_np_write;
+    logic wait_for_all_responses;
+  } pzcorebus_sideband_info;
+
+  typedef struct packed {
     pzcorebus_response_type             sresp;
     logic [MEMBUS_CONFIG.id_width-1:0]  sid;
     logic [UNITEN_COUNT_WIDTH-1:0]      uniten_offset;
+    logic                               ignore_response;
   } pzcorebus_response_info;
 
-  pzcorebus_if #(MEMBUS_CONFIG)       aligner_if();
+  localparam  pzcorebus_config  BUS_CONFIG  = '{
+    profile:              MEMBUS_CONFIG.profile,
+    id_width:             MEMBUS_CONFIG.id_width,
+    address_width:        MEMBUS_CONFIG.address_width,
+    data_width:           MEMBUS_CONFIG.data_width,
+    max_length:           MEMBUS_CONFIG.max_length,
+    request_info_width:   $bits(pzcorebus_sideband_info),
+    response_info_width:  MEMBUS_CONFIG.response_info_width,
+    unit_data_width:      MEMBUS_CONFIG.unit_data_width,
+    max_data_width:       MEMBUS_CONFIG.max_data_width
+  };
+
+  pzcorebus_if #(BUS_CONFIG)          membus_if();
+  pzcorebus_if #(BUS_CONFIG)          aligner_if();
   pzcorebus_if #(CSRBUS_CONFIG)       csrbus_if();
+  pzcorebus_command                   request_command;
+  pzcorebus_sideband_info             sideband_info;
   logic                               info_fifo_empty;
   logic                               info_fifo_full;
   logic                               info_fifo_push;
@@ -102,18 +125,49 @@ module pzcorebus_membus2csrbus_adapter
   localparam  int REQUEST_FIFO_DEPTH  = (SLAVE_SLICER[0]) ? 2 : 0;
   localparam  int RESPONSE_FIFO_DEPTH = (SLAVE_SLICER[1]) ? 2 : 0;
 
+  always_comb begin
+    membus_slave_if.scmd_accept = membus_if.scmd_accept;
+    membus_if.mcmd_valid        = membus_slave_if.mcmd_valid;
+
+    request_command       = membus_slave_if.get_command();
+    request_command.info  = get_minfo(i_force_np_write, i_wait_for_all_responses);
+    membus_if.put_command(request_command);
+  end
+
+  always_comb begin
+    membus_slave_if.sdata_accept  = membus_if.sdata_accept;
+    membus_if.mdata_valid         = membus_slave_if.mdata_valid;
+    membus_if.put_write_data(membus_slave_if.get_write_data());
+  end
+
+  always_comb begin
+    membus_if.mresp_accept      = membus_slave_if.mresp_accept;
+    membus_slave_if.sresp_valid = membus_if.sresp_valid;
+    membus_slave_if.put_response(membus_if.get_response());
+  end
+
+  function automatic logic [`PZCOREBUS_MAX_REQUEST_INFO_WIDTH-1:0] get_minfo(
+    logic force_np_write,
+    logic wait_for_all_responses
+  );
+    pzcorebus_sideband_info info;
+    info.force_np_write         = force_np_write;
+    info.wait_for_all_responses = wait_for_all_responses;
+    return (`PZCOREBUS_MAX_REQUEST_INFO_WIDTH)'(info);
+  endfunction
+
   pzcorebus_command_data_aligner #(
-    .BUS_CONFIG     (MEMBUS_CONFIG        ),
+    .BUS_CONFIG     (BUS_CONFIG           ),
     .WAIT_FOR_DATA  (1                    ),
     .SLAVE_FIFO     (1                    ),
     .COMMAND_DEPTH  (REQUEST_FIFO_DEPTH   ),
     .DATA_DEPTH     (REQUEST_FIFO_DEPTH   ),
     .RESPONSE_DEPTH (RESPONSE_FIFO_DEPTH  )
   ) u_aligner (
-    .i_clk      (i_clk            ),
-    .i_rst_n    (i_rst_n          ),
-    .slave_if   (membus_slave_if  ),
-    .master_if  (aligner_if       )
+    .i_clk      (i_clk      ),
+    .i_rst_n    (i_rst_n    ),
+    .slave_if   (membus_if  ),
+    .master_if  (aligner_if )
   );
 
 //--------------------------------------------------------------
@@ -123,8 +177,8 @@ module pzcorebus_membus2csrbus_adapter
     logic                               busy;
     logic                               non_posted_ready;
     logic                               write_data_inactive;
-    logic                               read_valid;
-    logic [1:0]                         write_valid;
+    logic [1:0]                         read_valid;
+    logic [2:0]                         write_valid;
     logic [1:0][LENGTH_COUNT_WIDTH-1:0] length_count;
     logic                               length_count_last;
     logic [1:0][DATA_COUNT_WIDTH-1:0]   data_count;
@@ -133,6 +187,10 @@ module pzcorebus_membus2csrbus_adapter
     logic [LENGTH_COUNT_WIDTH-1:0]      request_count;
     logic [LENGTH_COUNT_WIDTH-1:0]      request_count_next;
     logic [1:0]                         update;
+
+    always_comb begin
+      sideband_info = pzcorebus_sideband_info'(aligner_if.minfo);
+    end
 
     always_comb begin
       if (!busy) begin
@@ -150,7 +208,7 @@ module pzcorebus_membus2csrbus_adapter
       data_count_last     = data_count[0]   == DATA_COUNT_WIDTH'(UNIT_SIZE - 1);
       request_count_next  = request_count + LENGTH_COUNT_WIDTH'(1);
       update[0]           = csrbus_if.command_ack();
-      update[1]           = (write_valid != '0) && write_data_inactive;
+      update[1]           = (write_valid == '1) && write_data_inactive;
     end
 
     always_ff @(posedge i_clk, negedge i_rst_n) begin
@@ -193,18 +251,24 @@ module pzcorebus_membus2csrbus_adapter
     end
 
     always_comb begin
+      csrbus_if.mcmd  = get_mcmd(aligner_if.mcmd, sideband_info);
+      csrbus_if.mid   = '0;
+      csrbus_if.maddr = maddr[0];
+      csrbus_if.mdata = aligner_if.mdata[UNIT_WIDTH*data_count[0]+:UNIT_WIDTH];
+
       non_posted_ready    = busy || (!info_fifo_full);
       write_data_inactive = aligner_if.mdata_byteen[UNIT_BYTE_SIZE*data_count[0]+:UNIT_BYTE_SIZE] == '0;
-      read_valid          = aligner_if.command_valid(PZCOREBUS_READ) && non_posted_ready;
-      write_valid[0]      = aligner_if.command_valid(PZCOREBUS_WRITE) && aligner_if.mdata_valid;
-      write_valid[1]      = aligner_if.command_valid(PZCOREBUS_WRITE_NON_POSTED) && aligner_if.mdata_valid && non_posted_ready;
-
-      if (read_valid) begin
+      read_valid[0]       = aligner_if.command_valid(PZCOREBUS_READ);
+      read_valid[1]       = non_posted_ready;
+      write_valid[0]      = aligner_if.command_with_data_valid();
+      write_valid[1]      = aligner_if.mdata_valid;
+      write_valid[2]      = csrbus_if.is_posted_command() || non_posted_ready;
+      if (read_valid == '1) begin
         aligner_if.scmd_accept  = csrbus_if.scmd_accept && length_count_last;
         aligner_if.sdata_accept = '0;
         csrbus_if.mcmd_valid    = '1;
       end
-      else if (write_valid != '0) begin
+      else if (write_valid == '1) begin
         aligner_if.scmd_accept  = (csrbus_if.scmd_accept || write_data_inactive) && length_count_last;
         aligner_if.sdata_accept = (csrbus_if.scmd_accept || write_data_inactive) && (data_count_last || length_count_last);
         csrbus_if.mcmd_valid    = !write_data_inactive;
@@ -214,11 +278,6 @@ module pzcorebus_membus2csrbus_adapter
         aligner_if.sdata_accept = '0;
         csrbus_if.mcmd_valid    = '0;
       end
-
-      csrbus_if.mcmd  = aligner_if.mcmd;
-      csrbus_if.mid   = '0;
-      csrbus_if.maddr = maddr[0];
-      csrbus_if.mdata = aligner_if.mdata[UNIT_WIDTH*data_count[0]+:UNIT_WIDTH];
     end
 
     always_comb begin
@@ -230,14 +289,12 @@ module pzcorebus_membus2csrbus_adapter
     end
 
     always_comb begin
-      info_fifo_push                  = (update != '0) && aligner_if.is_non_posted_command() && (!busy);
-      response_info[0].sresp          = get_sresp(aligner_if.mcmd);
-      response_info[0].sid            = aligner_if.mid;
-      response_info[0].uniten_offset  = aligner_if.maddr[UNIT_OFFSET_LSB+:UNITEN_COUNT_WIDTH];
+      info_fifo_push    = (update != '0) && csrbus_if.is_non_posted_command() && (!busy);
+      response_info[0]  = get_response_info(aligner_if.mcmd, aligner_if.mid, aligner_if.maddr, sideband_info);
     end
 
     always_comb begin
-      response_count_push = (update != '0) && aligner_if.is_non_posted_command() && length_count_last;
+      response_count_push = (update != '0) && csrbus_if.is_non_posted_command() && length_count_last;
       if (update[0]) begin
         response_count[0] = request_count_next;
       end
@@ -276,16 +333,35 @@ module pzcorebus_membus2csrbus_adapter
     return base + delta;
   endfunction
 
-  function automatic pzcorebus_command_type get_mcmd(logic [1:0] write_busy);
-    if (write_busy[0]) begin
-      return PZCOREBUS_WRITE;
-    end
-    else if (write_busy[1]) begin
+  function automatic pzcorebus_command_type get_mcmd(
+    pzcorebus_command_type  mcmd,
+    pzcorebus_sideband_info sideband_info
+  );
+    if (sideband_info.force_np_write && (mcmd == PZCOREBUS_WRITE)) begin
       return PZCOREBUS_WRITE_NON_POSTED;
     end
-    else begin
-      return PZCOREBUS_READ;
+    else if (sideband_info.force_np_write && (mcmd == PZCOREBUS_BROADCAST)) begin
+      return PZCOREBUS_BROADCAST_NON_POSTED;
     end
+    else begin
+      return mcmd;
+    end
+  endfunction
+
+  function automatic pzcorebus_response_info get_response_info(
+    pzcorebus_command_type                mcmd,
+    logic [BUS_CONFIG.id_width-1:0]       mid,
+    logic [BUS_CONFIG.address_width-1:0]  maddr,
+    pzcorebus_sideband_info               sideband_info
+  );
+    pzcorebus_response_info info;
+
+    info.sresp            = get_sresp(mcmd);
+    info.sid              = mid;
+    info.uniten_offset    = maddr[UNIT_OFFSET_LSB+:UNITEN_COUNT_WIDTH];
+    info.ignore_response  = sideband_info.force_np_write && (mcmd inside {PZCOREBUS_WRITE, PZCOREBUS_BROADCAST});
+
+    return info;
   endfunction
 
   function automatic pzcorebus_response_type get_sresp(
@@ -337,7 +413,7 @@ module pzcorebus_membus2csrbus_adapter
   );
 
   if (1) begin : g_response_path
-    logic [1:0]                         respons_done;
+    logic [2:0]                         respons_done;
     logic                               busy;
     logic [1:0][LENGTH_COUNT_WIDTH-1:0] length_count;
     logic [LENGTH_COUNT_WIDTH-1:0]      length_count_next;
@@ -351,8 +427,9 @@ module pzcorebus_membus2csrbus_adapter
     logic                               serror;
 
     always_comb begin
-      respons_done[0] = aligner_if.response_last_ack();
-      respons_done[1] = (!response_count_empty) && (response_count[1] == LENGTH_COUNT_WIDTH'(0));
+      respons_done[0] = csrbus_if.response_ack() && sresp_valid[1];
+      respons_done[1] = sresp_valid[2];
+      respons_done[2] = (!response_count_empty) && (response_count[1] == LENGTH_COUNT_WIDTH'(0));
       info_fifo_pop   = respons_done != '0;
     end
 
@@ -410,13 +487,13 @@ module pzcorebus_membus2csrbus_adapter
         csrbus_if.mresp_accept  = '0;
         aligner_if.sresp_valid  = '0;
       end
-      else if (sresp_valid != '0) begin
-        csrbus_if.mresp_accept  = aligner_if.mresp_accept;
-        aligner_if.sresp_valid  = csrbus_if.sresp_valid || sresp_valid[2];
-      end
-      else begin
+      else if (response_info[1].ignore_response || (sresp_valid == '0)) begin
         csrbus_if.mresp_accept  = '1;
         aligner_if.sresp_valid  = '0;
+      end
+      else begin
+        csrbus_if.mresp_accept  = aligner_if.mresp_accept;
+        aligner_if.sresp_valid  = csrbus_if.sresp_valid || sresp_valid[2];
       end
 
       aligner_if.sresp        = response_info[1].sresp;
@@ -505,10 +582,11 @@ module pzcorebus_membus2csrbus_adapter
     .ENTRIES        (MAX_NON_POSTED_REQUESTS  ),
     .MASTER_SLICER  (MASTER_SLICER            )
   ) u_response_buffer (
-    .i_clk      (i_clk            ),
-    .i_rst_n    (i_rst_n          ),
-    .i_base_id  (i_base_id        ),
-    .slave_if   (csrbus_if        ),
-    .master_if  (csrbus_master_if )
+    .i_clk                    (i_clk                                ),
+    .i_rst_n                  (i_rst_n                              ),
+    .i_base_id                (i_base_id                            ),
+    .i_wait_for_all_responses (sideband_info.wait_for_all_responses ),
+    .slave_if                 (csrbus_if                            ),
+    .master_if                (csrbus_master_if                     )
   );
 endmodule

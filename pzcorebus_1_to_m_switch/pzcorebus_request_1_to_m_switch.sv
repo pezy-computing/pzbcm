@@ -174,7 +174,7 @@ module pzcorebus_request_1_to_m_switch
       if (!command_done) begin
         command_active  =
           command_select[i] ||
-          (BROADCAST && (aligner_if.mcmd == PZCOREBUS_BROADCAST));
+          (BROADCAST && (aligner_if.mcmd inside {PZCOREBUS_BROADCAST, PZCOREBUS_BROADCAST_NON_POSTED}));
       end
       else begin
         command_active  = '0;

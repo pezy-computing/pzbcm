@@ -14,6 +14,7 @@ module pzcorebus_membus2csrbus_adapter_response_buffer
   input var                               i_clk,
   input var                               i_rst_n,
   input var [CSRBUS_CONFIG.id_width-1:0]  i_base_id,
+  input var                               i_wait_for_all_responses,
   pzcorebus_if.slave                      slave_if,
   pzcorebus_if.master                     master_if
 );
@@ -34,18 +35,17 @@ module pzcorebus_membus2csrbus_adapter_response_buffer
 //  Request
 //--------------------------------------------------------------
   logic [INDEX_WIDTH-1:0] request_index;
-  logic                   request_ready;
+  logic [1:0]             request_ready;
   pzcorebus_command       command;
 
   always_comb begin
-    command       = slave_if.get_command();
-    command.id    = i_base_id | ID_WIDTH'(request_index);
-    request_ready =
-      slave_if.is_posted_command() ||
-      (!response_entries[request_index].busy);
+    request_ready[0]      = slave_if.is_posted_command();
+    request_ready[1]      = get_non_posted_ready(request_index, response_entries, i_wait_for_all_responses);
+    slave_if.scmd_accept  = (request_ready != '0) && csrbus_if.scmd_accept;
+    csrbus_if.mcmd_valid  = (request_ready != '0) && slave_if.mcmd_valid;
 
-    slave_if.scmd_accept  = request_ready && csrbus_if.scmd_accept;
-    csrbus_if.mcmd_valid  = request_ready && slave_if.mcmd_valid;
+    command     = slave_if.get_command();
+    command.id  = i_base_id | ID_WIDTH'(request_index);
     csrbus_if.put_command(command);
   end
 
@@ -69,6 +69,20 @@ module pzcorebus_membus2csrbus_adapter_response_buffer
     csrbus_if.mdata_byteen  = '0;
     csrbus_if.mdata_last    = '0;
   end
+
+  function automatic logic get_non_posted_ready(
+    logic [INDEX_WIDTH-1:0]                 request_index,
+    pzcorebus_response_entry  [ENTRIES-1:0] response_entries,
+    logic                                   wait_for_all_responses
+  );
+    logic [ENTRIES-1:0] response_busy;
+
+    for (int i = 0;i < ENTRIES;++i) begin
+      response_busy[i]  = response_entries[i].busy;
+    end
+
+    return (!response_entries[request_index].busy) && ((!wait_for_all_responses) || (response_busy == '0));
+  endfunction
 
 //--------------------------------------------------------------
 //  Response

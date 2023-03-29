@@ -9,7 +9,7 @@ module pzcorebus_length_counter
 #(
   parameter pzcorebus_config  BUS_CONFIG      = '0,
   parameter int               WIDTH           = 16,
-  parameter bit [7:0]         TARGET_COMMAND  = '1,
+  parameter bit [6:0]         TARGET_COMMAND  = '1,
   parameter bit               BURST_COUNT     = 0
 )(
   input var               i_clk,
@@ -64,13 +64,14 @@ module pzcorebus_length_counter
     pzcorebus_command_type  mcmd
   );
     case (mcmd)
-      PZCOREBUS_READ:               return TARGET_COMMAND[0];
-      PZCOREBUS_WRITE:              return TARGET_COMMAND[1];
-      PZCOREBUS_WRITE_NON_POSTED:   return TARGET_COMMAND[2];
-      PZCOREBUS_BROADCAST:          return TARGET_COMMAND[3];
-      PZCOREBUS_ATOMIC:             return TARGET_COMMAND[4];
-      PZCOREBUS_ATOMIC_NON_POSTED:  return TARGET_COMMAND[5];
-      default:                      return '0;
+      PZCOREBUS_READ:                 return TARGET_COMMAND[0];
+      PZCOREBUS_WRITE:                return TARGET_COMMAND[1];
+      PZCOREBUS_WRITE_NON_POSTED:     return TARGET_COMMAND[2];
+      PZCOREBUS_BROADCAST:            return TARGET_COMMAND[3];
+      PZCOREBUS_BROADCAST_NON_POSTED: return TARGET_COMMAND[4];
+      PZCOREBUS_ATOMIC:               return TARGET_COMMAND[5];
+      PZCOREBUS_ATOMIC_NON_POSTED:    return TARGET_COMMAND[6];
+      default:                        return '0;
     endcase
   endfunction
 endmodule

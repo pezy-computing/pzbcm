@@ -28,6 +28,9 @@ module pzcorebus_broadcast_forcer
     if ((mcmd == PZCOREBUS_WRITE) && broadcast_condition) begin
       return PZCOREBUS_BROADCAST;
     end
+    else if ((mcmd == PZCOREBUS_WRITE_NON_POSTED) && broadcast_condition) begin
+      return PZCOREBUS_BROADCAST_NON_POSTED;
+    end
     else begin
       return mcmd;
     end
