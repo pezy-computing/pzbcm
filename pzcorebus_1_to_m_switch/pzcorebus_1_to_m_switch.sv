@@ -9,25 +9,26 @@ module pzcorebus_1_to_m_switch
           pzbcm_arbiter_pkg::*,
           pzbcm_selector_pkg::*;
 #(
-  parameter pzcorebus_config          BUS_CONFIG        = '0,
-  parameter int                       MASTERS           = 2,
-  parameter bit                       EXTERNAL_DECODE   = 0,
-  parameter pzbcm_selector_type       SELECTOR_TYPE     = PZBCM_SELECTOR_BINARY,
-  parameter int                       SELECT_WIDTH      = calc_select_width(SELECTOR_TYPE, MASTERS),
-  parameter int                       SELECT_LSB        = BUS_CONFIG.address_width - SELECT_WIDTH,
-  parameter bit                       WAIT_FOR_DATA     = 0,
-  parameter bit [1:0]                 ENABLE_ARBITER    = '1,
-  parameter int                       PRIORITY_WIDTH    = 0,
-  parameter int                       WEIGHT_WIDTH      = 0,
-  parameter pzbcm_arbiter_weight_list WEIGHT            = '1,
-  parameter bit                       ENABLE_BROADCAST  = 0,
-  parameter bit [1:0]                 SLAVE_FIFO        = 0,
-  parameter bit [1:0]                 MASTER_FIFO       = 0,
-  parameter int                       COMMAND_DEPTH     = 2,
-  parameter int                       DATA_DEPTH        = 2,
-  parameter int                       RESPONSE_DEPTH    = 2,
-  parameter bit                       ALIGN_OUT         = 0,
-  parameter int                       MINFO_WIDTH       = get_request_info_width(BUS_CONFIG, 1)
+  parameter pzcorebus_config          BUS_CONFIG                    = '0,
+  parameter int                       MASTERS                       = 2,
+  parameter bit                       EXTERNAL_DECODE               = 0,
+  parameter pzbcm_selector_type       SELECTOR_TYPE                 = PZBCM_SELECTOR_BINARY,
+  parameter int                       SELECT_WIDTH                  = calc_select_width(SELECTOR_TYPE, MASTERS),
+  parameter int                       SELECT_LSB                    = BUS_CONFIG.address_width - SELECT_WIDTH,
+  parameter bit                       WAIT_FOR_DATA                 = 0,
+  parameter bit [1:0]                 ENABLE_ARBITER                = '1,
+  parameter int                       PRIORITY_WIDTH                = 0,
+  parameter int                       WEIGHT_WIDTH                  = 0,
+  parameter pzbcm_arbiter_weight_list WEIGHT                        = '1,
+  parameter bit                       ENABLE_BROADCAST              = 0,
+  parameter int                       MAX_NON_POSTED_WRITE_REQUESTS = 8,
+  parameter bit [1:0]                 SLAVE_FIFO                    = 0,
+  parameter bit [1:0]                 MASTER_FIFO                   = 0,
+  parameter int                       COMMAND_DEPTH                 = 2,
+  parameter int                       DATA_DEPTH                    = 2,
+  parameter int                       RESPONSE_DEPTH                = 2,
+  parameter bit                       ALIGN_OUT                     = 0,
+  parameter int                       MINFO_WIDTH                   = get_request_info_width(BUS_CONFIG, 1)
 )(
   input   var                                 i_clk,
   input   var                                 i_rst_n,
@@ -42,10 +43,41 @@ module pzcorebus_1_to_m_switch
 );
   pzcorebus_if #(BUS_CONFIG)  bus_if[1+MASTERS]();
 
-  pzcorebus_connector u_slave_connector (
-    .slave_if   (slave_if   ),
-    .master_if  (bus_if[0]  )
-  );
+  if (ENABLE_BROADCAST && (BUS_CONFIG.profile == PZCOREBUS_CSR)) begin : g
+    pzcorebus_1_to_m_switch_response_filter #(
+      .BUS_CONFIG                     (BUS_CONFIG                     ),
+      .MASTERS                        (MASTERS                        ),
+      .MAX_NON_POSTED_WRITE_REQUESTS  (MAX_NON_POSTED_WRITE_REQUESTS  ),
+      .SLAVE_FIFO                     (SLAVE_FIFO                     ),
+      .COMMAND_DEPTH                  (COMMAND_DEPTH                  ),
+      .RESPONSE_DEPTH                 (RESPONSE_DEPTH                 )
+    ) u_response_filter (
+      .i_clk      (i_clk      ),
+      .i_rst_n    (i_rst_n    ),
+      .slave_if   (slave_if   ),
+      .master_if  (bus_if[0]  )
+    );
+  end
+  else begin : g
+    pzcorebus_fifo #(
+      .BUS_CONFIG     (BUS_CONFIG     ),
+      .COMMAND_DEPTH  (COMMAND_DEPTH  ),
+      .COMMAND_VALID  (SLAVE_FIFO[0]  ),
+      .DATA_DEPTH     (DATA_DEPTH     ),
+      .DATA_VALID     (SLAVE_FIFO[0]  ),
+      .RESPONSE_DEPTH (RESPONSE_DEPTH ),
+      .RESPONSE_VALID (SLAVE_FIFO[1]  )
+    ) u_slave_fifo (
+      .i_clk          (i_clk      ),
+      .i_rst_n        (i_rst_n    ),
+      .i_clear        ('0         ),
+      .o_empty        (),
+      .o_almost_full  (),
+      .o_full         (),
+      .slave_if       (slave_if   ),
+      .master_if      (bus_if[0]  )
+    );
+  end
 
   pzcorebus_request_1_to_m_switch #(
     .BUS_CONFIG       (BUS_CONFIG       ),
@@ -56,7 +88,7 @@ module pzcorebus_1_to_m_switch
     .SELECT_LSB       (SELECT_LSB       ),
     .ENABLE_BROADCAST (ENABLE_BROADCAST ),
     .WAIT_FOR_DATA    (WAIT_FOR_DATA    ),
-    .SLAVE_FIFO       (SLAVE_FIFO[0]    ),
+    .SLAVE_FIFO       ('0               ),
     .MASTER_FIFO      (MASTER_FIFO[0]   ),
     .COMMAND_DEPTH    (COMMAND_DEPTH    ),
     .DATA_DEPTH       (DATA_DEPTH       ),
@@ -80,7 +112,7 @@ module pzcorebus_1_to_m_switch
     .PRIORITY_WIDTH (PRIORITY_WIDTH ),
     .WEIGHT_WIDTH   (WEIGHT_WIDTH   ),
     .WEIGHT         (WEIGHT         ),
-    .SLAVE_FIFO     (SLAVE_FIFO[1]  ),
+    .SLAVE_FIFO     ('0             ),
     .MASTER_FIFO    (MASTER_FIFO[1] ),
     .RESPONSE_DEPTH (RESPONSE_DEPTH )
   ) u_response_switch (

@@ -17,6 +17,8 @@ module pzcorebus_gate
   pzcorebus_if.slave  slave_if,
   pzcorebus_if.master master_if
 );
+  localparam  bit TIE_OFF = (BUS_CONFIG.profile != PZCOREBUS_CSR) && (!RETURN_RESPONSE);
+
   pzcorebus_if #(BUS_CONFIG)  bus_if[2]();
 
   pzcorebus_demux #(
@@ -37,8 +39,8 @@ module pzcorebus_gate
   );
 
   pzcorebus_dummy_slave #(
-    .BUS_CONFIG (BUS_CONFIG       ),
-    .TIE_OFF    (!RETURN_RESPONSE )
+    .BUS_CONFIG (BUS_CONFIG ),
+    .TIE_OFF    (TIE_OFF    )
   ) u_dummy (
     .i_clk    (i_clk      ),
     .i_rst_n  (i_rst_n    ),

@@ -51,6 +51,7 @@ module pzcorebus_dummy_slave
     logic [1:0]                 sresp_valid;
     pzcorebus_response_type     sresp;
     pzcorebus_id                sid;
+    logic                       serror;
     pzcorebus_unit_enable       sresp_uniten;
     pzcorebus_response_last     sresp_last;
 
@@ -72,7 +73,7 @@ module pzcorebus_dummy_slave
       corebus_if.sresp_valid  = sresp_valid == '1;
       corebus_if.sresp        = sresp;
       corebus_if.sid          = sid;
-      corebus_if.serror       = ERROR;
+      corebus_if.serror       = serror;
       corebus_if.sdata        = READ_DATA;
       corebus_if.sinfo        = '0;
       corebus_if.sresp_uniten = sresp_uniten;
@@ -81,12 +82,19 @@ module pzcorebus_dummy_slave
 
     always_ff @(posedge i_clk, negedge i_rst_n) begin
       if (!i_rst_n) begin
-        sresp <= pzcorebus_response_type'(0);
-        sid   <= '0;
+        sresp   <= pzcorebus_response_type'(0);
+        sid     <= '0;
+        serror  <= '0;
       end
       else if (corebus_if.command_non_posted_ack()) begin
         sresp <= get_sresp(corebus_if.mcmd);
         sid   <= corebus_if.mid;
+        if (corebus_if.mcmd == PZCOREBUS_BROADCAST_NON_POSTED) begin
+          serror  <= '0;
+        end
+        else begin
+          serror  <= ERROR;
+        end
       end
     end
 
@@ -255,12 +263,12 @@ module pzcorebus_dummy_slave
   function automatic pzcorebus_response_type get_sresp(
     pzcorebus_command_type  mcmd
   );
-    if (mcmd inside {PZCOREBUS_WRITE_NON_POSTED, PZCOREBUS_MESSAGE_NON_POSTED}) begin
-      return PZCOREBUS_RESPONSE;
-    end
-    else begin
-      return PZCOREBUS_RESPONSE_WITH_DATA;
-    end
+    case (mcmd)
+      PZCOREBUS_WRITE_NON_POSTED:     return PZCOREBUS_RESPONSE;
+      PZCOREBUS_BROADCAST_NON_POSTED: return PZCOREBUS_RESPONSE;
+      PZCOREBUS_MESSAGE_NON_POSTED:   return PZCOREBUS_RESPONSE;
+      default:                        return PZCOREBUS_RESPONSE_WITH_DATA;
+    endcase
   endfunction
 
   function automatic pzcorebus_response_size get_sresp_size(
@@ -315,7 +323,7 @@ module pzcorebus_dummy_slave
 
   property p_no_requests_arrive;
     @(posedge i_clk) disable iff (!i_rst_n)
-    !slave_if.mcmd_valid;
+    !(slave_if.mcmd_valid && (!(slave_if.mcmd inside {PZCOREBUS_BROADCAST, PZCOREBUS_BROADCAST_NON_POSTED})));
   endproperty
 
   if (ENABLE_WARNING) begin : g_sva
