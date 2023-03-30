@@ -127,10 +127,12 @@ module pzcorebus_corebus2axi_simple_bridge
     if (corebus_if.is_command_with_data()) begin
       corebus_if.scmd_accept  = (!block_write) && axi_if.awready;
       axi_if.awvalid          = (!block_write) && corebus_if.mcmd_valid;
+      axi_if.arvalid          = '0;
     end
     else begin
       corebus_if.scmd_accept  = (!block_read) && axi_if.arready;
       axi_if.arvalid          = (!block_read) && corebus_if.mcmd_valid;
+      axi_if.awvalid          = '0;
     end
 
     axi_if.awid     = corebus_if.mid;
