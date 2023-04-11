@@ -11,7 +11,7 @@ module pzcorebus_request_m_to_1_switch
 #(
   parameter pzcorebus_config          BUS_CONFIG        = '0,
   parameter int                       SLAVES            = 2,
-  parameter bit [1:0]                 ENABLE_ARBITER    = '1,
+  parameter bit [1:0]                 ENABLE_ARBITER    = 2'b01,
   parameter int                       PRIORITY_WIDTH    = 0,
   parameter int                       WEIGHT_WIDTH      = 0,
   parameter pzbcm_arbiter_weight_list WEIGHT            = '1,

@@ -17,7 +17,7 @@ module pzcorebus_m_to_1_switch
   parameter pzbcm_selector_type       SELECTOR_TYPE     = PZBCM_SELECTOR_BINARY,
   parameter int                       SELECT_WIDTH      = calc_select_width(SELECTOR_TYPE, SLAVES),
   parameter int                       SELECT_LSB        = BUS_CONFIG.id_width - SELECT_WIDTH,
-  parameter bit [1:0]                 ENABLE_ARBITER    = '1,
+  parameter bit [1:0]                 ENABLE_ARBITER    = 2'b01,
   parameter int                       PRIORITY_WIDTH    = 0,
   parameter int                       WEIGHT_WIDTH      = 0,
   parameter pzbcm_arbiter_weight_list WEIGHT            = '1,

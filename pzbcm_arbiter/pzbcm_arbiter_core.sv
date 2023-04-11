@@ -34,15 +34,12 @@ module pzbcm_arbiter_core
 //--------------------------------------------------------------
   logic select_round_robin;
 
-  always_comb begin
-    select_round_robin  = i_config.arbiter_type == PZBCM_ARBITER_ROUND_ROBIN;
-  end
-
   if (ENABLE_ARBITER[0]) begin : g_round_robin_arbiter
     logic enable;
 
     always_comb begin
-      enable  = (!busy) && select_round_robin;
+      select_round_robin  = i_config.arbiter_type inside {PZBCM_ARBITER_ROUND_ROBIN, PZBCM_ARBITER_FIXED_PRIORITY};
+      enable              = (!busy) && select_round_robin;
     end
 
     pzbcm_round_robin_arbiter #(
@@ -63,7 +60,8 @@ module pzbcm_arbiter_core
   end
   else begin : g_round_robin_arbiter
     always_comb begin
-      grant_round_robin = GRANT_WIDTH'(0);
+      select_round_robin  = '0;
+      grant_round_robin   = GRANT_WIDTH'(0);
     end
   end
 
@@ -71,12 +69,7 @@ module pzbcm_arbiter_core
     logic enable;
 
     always_comb begin
-      if (ENABLE_ARBITER[0]) begin
-        enable  = (!busy) && (!select_round_robin);
-      end
-      else begin
-        enable  = !busy;
-      end
+      enable  = (!busy) && (!select_round_robin);
     end
 
     pzbcm_matrix_arbiter #(
@@ -103,10 +96,7 @@ module pzbcm_arbiter_core
 //  Grant
 //--------------------------------------------------------------
   always_comb begin
-    case (i_config.arbiter_type)
-      PZBCM_ARBITER_ROUND_ROBIN:  grant[0]  = grant_round_robin;
-      default:                    grant[0]  = grant_matrix;
-    endcase
+    grant[0]  = (select_round_robin) ? grant_round_robin : grant_matrix;
   end
 
   if (KEEP_RESULT) begin : g_result

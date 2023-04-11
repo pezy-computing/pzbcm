@@ -16,7 +16,7 @@ module pzcorebus_1_to_m_switch
   parameter int                       SELECT_WIDTH                  = calc_select_width(SELECTOR_TYPE, MASTERS),
   parameter int                       SELECT_LSB                    = BUS_CONFIG.address_width - SELECT_WIDTH,
   parameter bit                       WAIT_FOR_DATA                 = 0,
-  parameter bit [1:0]                 ENABLE_ARBITER                = '1,
+  parameter bit [1:0]                 ENABLE_ARBITER                = 2'b01,
   parameter int                       PRIORITY_WIDTH                = 0,
   parameter int                       WEIGHT_WIDTH                  = 0,
   parameter pzbcm_arbiter_weight_list WEIGHT                        = '1,

@@ -50,6 +50,7 @@ module pzbcm_round_robin_arbiter
   logic [REQUESTS-1:0][ACTUAL_WEIGHT_WIDTH-1:0] weight;
   pzbcm_compare_data  [REQUESTS-1:0]            compare_data;
   pzbcm_compare_result                          compare_result;
+  logic                                         use_round_robin;
 
   pzbcm_min_max_finder #(
     .ENTRIES        (REQUESTS             ),
@@ -62,38 +63,40 @@ module pzbcm_round_robin_arbiter
   localparam  int PRIORITY_LSB  = WEIGHT_LSB   + WEIGHT_WIDTH;
   localparam  int REQUEST_LSB   = PRIORITY_LSB + PRIORITY_WIDTH;
 
-  function automatic pzbcm_compare_data get_compare_data(
-    int                                       index,
-    logic [INDEX_WIDTH-1:0]                   current_grant,
-    logic                                     request,
-    logic [ACTUAL_WEIGHT_WIDTH-1:0]           weight,
-    logic [PZBCM_ARBITER_PRIORITY_WIDTH-1:0]  request_priority
+  function automatic pzbcm_compare_data [REQUESTS-1:0] get_compare_data(
+    logic [INDEX_WIDTH-1:0]                       current_grant,
+    logic [REQUESTS-1:0]                          request,
+    pzbcm_arbiter_config                          arbiter_config,
+    logic                                         use_round_robin,
+    logic [REQUESTS-1:0][ACTUAL_WEIGHT_WIDTH-1:0] weight
   );
-    pzbcm_compare_data        data;
-    logic [COMPARE_WIDTH-1:0] value;
+    pzbcm_compare_data [REQUESTS-1:0] data;
+    logic [COMPARE_WIDTH-1:0]         value;
 
-    value[0]            = INDEX_WIDTH'(index) > current_grant;
-    value[REQUEST_LSB]  = request;
-    if (WEIGHT_WIDTH > 0) begin
-      value[WEIGHT_LSB] = weight > ACTUAL_WEIGHT_WIDTH'(0);
-    end
-    if (PRIORITY_WIDTH > 0) begin
-      value[PRIORITY_LSB+:ACTUAL_PRIORITY_WIDTH]  = ACTUAL_PRIORITY_WIDTH'(request_priority);
-    end
+    for (int i = 0;i < REQUESTS;++i) begin
+      value[0]            = use_round_robin && (INDEX_WIDTH'(i) > current_grant);
+      value[REQUEST_LSB]  = request[i];
+      if (WEIGHT_WIDTH > 0) begin
+        value[WEIGHT_LSB] = weight[i] > ACTUAL_WEIGHT_WIDTH'(0);
+      end
+      if (PRIORITY_WIDTH > 0) begin
+        value[PRIORITY_LSB+:ACTUAL_PRIORITY_WIDTH]  = ACTUAL_PRIORITY_WIDTH'(arbiter_config.request_priority[i]);
+      end
 
-    data.index          = INDEX_WIDTH'(index);
-    data.compare_value  = value;
+      data[i].index         = INDEX_WIDTH'(i);
+      data[i].compare_value = value;
+    end
 
     return data;
   endfunction
 
   always_comb begin
-    request = (i_enable) ? i_request : '0;
-    for (int i = 0;i < REQUESTS;++i) begin
-      compare_data[i] =
-        get_compare_data(i, current_grant, request[i], weight[i], i_config.request_priority[i]);
-    end
+    use_round_robin = i_config.arbiter_type == PZBCM_ARBITER_ROUND_ROBIN;
+  end
 
+  always_comb begin
+    request         = (i_enable) ? i_request : '0;
+    compare_data    = get_compare_data(current_grant, request, i_config, use_round_robin, weight);
     compare_result  = u_max_finder.find_max(compare_data);
   end
 
@@ -101,7 +104,7 @@ module pzbcm_round_robin_arbiter
     if (!i_rst_n) begin
       current_grant <= INDEX_WIDTH'(0);
     end
-    else if (i_config.reset) begin
+    else if (i_config.reset || (!use_round_robin)) begin
       current_grant <= INDEX_WIDTH'(0);
     end
     else if (request != '0) begin
@@ -130,7 +133,7 @@ module pzbcm_round_robin_arbiter
     logic [2:0]                   reset_weight;
 
     always_comb begin
-      reset_weight[0] = i_config.reset;
+      reset_weight[0] = i_config.reset || (!use_round_robin);
       reset_weight[1] = (weight_0_grant != '0) && (reset_count == MAX_RESET_COUNT);
       reset_weight[2] = weight_eq_0 == '1;
     end
