@@ -9,7 +9,17 @@ interface pzcorebus_utils
 #(
   parameter pzcorebus_config  BUS_CONFIG  = '0
 );
-  localparam  int DATA_SIZE = BUS_CONFIG.data_width / BUS_CONFIG.unit_data_width;
+  localparam  int DATA_SIZE     = BUS_CONFIG.data_width / BUS_CONFIG.unit_data_width;
+  localparam  int MAX_DATA_SIZE = BUS_CONFIG.max_data_width / BUS_CONFIG.unit_data_width;
+
+  function automatic int calc_width(int value);
+    if (value >= 2) begin
+      return $clog2(value);
+    end
+    else begin
+      return 1;
+    end
+  endfunction
 
   typedef logic [BUS_CONFIG.address_width-1:0]                  pzcorebus_addrss;
   typedef logic [get_length_width(BUS_CONFIG, 1)-1:0]           pzcorebus_length;
@@ -35,12 +45,60 @@ interface pzcorebus_utils
     return !command_type[PZCOREBUS_WITH_DATA_BIT];
   endfunction
 
+  function automatic logic is_read_command(pzcorebus_command_type command_type);
+    return pzcorebus_command_kind'(command_type) == PZCOREBUS_READ_COMMAND;
+  endfunction
+
+  function automatic logic is_write_command(pzcorebus_command_type command_type);
+    return pzcorebus_command_kind'(command_type) == PZCOREBUS_WRITE_COMMAND;
+  endfunction
+
+  function automatic logic is_full_write_command(pzcorebus_command_type command_type);
+    if (BUS_CONFIG.profile != PZCOREBUS_CSR) begin
+      return pzcorebus_command_kind'(command_type) == PZCOREBUS_FULL_WRITE_COMMAND;
+    end
+    else begin
+      return '0;
+    end
+  endfunction
+
+  function automatic logic is_broadcast_command(pzcorebus_command_type command_type);
+    if (BUS_CONFIG.profile == PZCOREBUS_CSR) begin
+      return pzcorebus_command_kind'(command_type) == PZCOREBUS_BROADCAST_COMMAND;
+    end
+    else begin
+      return '0;
+    end
+  endfunction
+
+  function automatic logic is_write_access_command(pzcorebus_command_type command_type);
+    return is_write_command(command_type) || is_full_write_command(command_type) || is_broadcast_command(command_type);
+  endfunction
+
+  function automatic logic is_posted_write_acess_command(pzcorebus_command_type command_type);
+    return is_posted_command(command_type) && is_write_access_command(command_type);
+  endfunction
+
+  function automatic logic is_non_posted_write_acess_command(pzcorebus_command_type command_type);
+    return is_non_posted_command(command_type) && is_write_access_command(command_type);
+  endfunction
+
   function automatic logic is_atomic_command(pzcorebus_command_type command_type);
-    return command_type[1:0] == 2'b10;
+    if (BUS_CONFIG.profile != PZCOREBUS_CSR) begin
+      return pzcorebus_command_kind'(command_type) == PZCOREBUS_ATOMIC_COMMAND;
+    end
+    else begin
+      return '0;
+    end
   endfunction
 
   function automatic logic is_message_command(pzcorebus_command_type command_type);
-    return command_type[1:0] == 2'b11;
+    if (BUS_CONFIG.profile != PZCOREBUS_CSR) begin
+      return pzcorebus_command_kind'(command_type) == PZCOREBUS_MESSAGE_COMMAND;
+    end
+    else begin
+      return '0;
+    end
   endfunction
 
   function automatic logic is_response_with_data(pzcorebus_command_type command_type);
@@ -51,17 +109,74 @@ interface pzcorebus_utils
     return pzcorebus_length'(length);
   endfunction
 
-  localparam  pzcorebus_unpacked_length MAX_LENGTH  = BUS_CONFIG.max_length;
-
   function automatic pzcorebus_unpacked_length unpack_length(pzcorebus_length length);
-    if (BUS_CONFIG.profile == PZCOREBUS_CSR) begin
-      return pzcorebus_unpacked_length'(1);
-    end
-    else if (length != '0) begin
+    if (length != '0) begin
       return pzcorebus_unpacked_length'(length);
     end
     else begin
-      return MAX_LENGTH;
+      return pzcorebus_unpacked_length'(BUS_CONFIG.max_length);
+    end
+  endfunction
+
+  function automatic pzcorebus_unpacked_length get_length(
+    pzcorebus_command_type  command_type,
+    pzcorebus_length        length
+  );
+    if (BUS_CONFIG.profile == PZCOREBUS_CSR) begin
+      return pzcorebus_unpacked_length'(1);
+    end
+    else if (is_atomic_command(command_type)) begin
+      return pzcorebus_unpacked_length'(DATA_SIZE);
+    end
+    else if (is_message_command(command_type)) begin
+      return pzcorebus_unpacked_length'(0);
+    end
+    else begin
+      return unpack_length(length);
+    end
+  endfunction
+
+  localparam  int LENGTH_OFFSET_LSB   = $clog2(BUS_CONFIG.unit_data_width) - 3;
+  localparam  int LENGTH_OFFSET_WIDTH = calc_width(DATA_SIZE);
+
+  function automatic pzcorebus_unpacked_length get_aligned_length(
+    pzcorebus_command_type  command_type,
+    pzcorebus_addrss        address,
+    pzcorebus_length        length
+  );
+    pzcorebus_unpacked_length offset;
+    logic [3:0]               no_offset;
+
+    no_offset[0]  = BUS_CONFIG.profile != PZCOREBUS_MEMORY_H;
+    no_offset[1]  = DATA_SIZE == 1;
+    no_offset[2]  = is_atomic_command(command_type);
+    no_offset[3]  = is_message_command(command_type);
+    if (no_offset != '1) begin
+      offset  = pzcorebus_unpacked_length'(0);
+    end
+    else begin
+      offset  = address[LENGTH_OFFSET_LSB+:LENGTH_OFFSET_WIDTH];
+    end
+
+    return get_length(command_type, length) + offset;
+  endfunction
+
+  localparam  int BURST_OFFSET  = DATA_SIZE - 1;
+  localparam  int BURST_SHIFT   = $clog2(DATA_SIZE);
+
+  function automatic pzcorebus_burst_length get_burst_length(
+    pzcorebus_command_type  command_type,
+    pzcorebus_addrss        address,
+    pzcorebus_length        length
+  );
+    if (BUS_CONFIG.profile == PZCOREBUS_MEMORY_H) begin
+      pzcorebus_unpacked_length length;
+      length  = get_aligned_length(command_type, address, length)
+              + pzcorebus_unpacked_length'(BURST_OFFSET);
+      return pzcorebus_burst_length'(length >> BURST_SHIFT);
+    end
+    else begin
+      return get_length(command_type, length);
     end
   endfunction
 
@@ -74,59 +189,18 @@ interface pzcorebus_utils
     end
   endfunction
 
-  localparam  int LENGTH_OFFSET_LSB   = $clog2(BUS_CONFIG.unit_data_width) - 3;
-  localparam  int LENGTH_OFFSET_WIDTH = (DATA_SIZE > 1) ? $clog2(DATA_SIZE) : 1;
-
-  function automatic pzcorebus_unpacked_length get_length_offset(
-    pzcorebus_command_type  command,
-    pzcorebus_addrss        address
-  );
-    if (BUS_CONFIG.profile != PZCOREBUS_MEMORY_H) begin
-      return pzcorebus_unpacked_length'(0);
-    end
-    else if (DATA_SIZE == 1) begin
-      return pzcorebus_unpacked_length'(0);
-    end
-    if (is_message_command(command)) begin
-      return pzcorebus_unpacked_length'(0);
-    end
-    else if (is_atomic_command(command)) begin
-      return pzcorebus_unpacked_length'(0);
-    end
-    else begin
-      return pzcorebus_unpacked_length'(address[LENGTH_OFFSET_LSB+:LENGTH_OFFSET_WIDTH]);
-    end
-  endfunction
-
-  function automatic pzcorebus_unpacked_length get_aligned_length(
-    pzcorebus_command_type  command,
-    pzcorebus_addrss        address,
+  function automatic pzcorebus_unpacked_length get_response_length(
+    pzcorebus_command_type  command_type,
     pzcorebus_length        length
   );
-    if (is_message_command(command)) begin
-      return pzcorebus_unpacked_length'(DATA_SIZE);
+    if (is_posted_command(command_type)) begin
+      return pzcorebus_unpacked_length'(0);
     end
-    else begin
-      return unpack_length(length) + get_length_offset(command, address);
-    end
-  endfunction
-
-  localparam  int BURST_LSB     = $clog2(BUS_CONFIG.data_width / BUS_CONFIG.unit_data_width);
-  localparam  int BURST_OFFSET  = (BUS_CONFIG.data_width / BUS_CONFIG.unit_data_width) - 1;
-
-  function automatic pzcorebus_burst_length get_burst_length(
-    pzcorebus_command_type  command,
-    pzcorebus_addrss        address,
-    pzcorebus_length        length
-  );
-    if (BUS_CONFIG.profile == PZCOREBUS_MEMORY_H) begin
-      pzcorebus_unpacked_length temp;
-      temp  = get_aligned_length(command, address, length)
-            + pzcorebus_unpacked_length'(BURST_OFFSET);
-      return temp[$bits(pzcorebus_unpacked_length)-1:BURST_LSB];
-    end
-    else begin
+    else if (is_read_command(command_type)) begin
       return unpack_length(length);
+    end
+    else begin
+      return pzcorebus_unpacked_length'(DATA_SIZE);
     end
   endfunction
 
@@ -134,7 +208,7 @@ interface pzcorebus_utils
     pzcorebus_length  index
   );
     if (BUS_CONFIG.profile == PZCOREBUS_MEMORY_H) begin
-      return index[$bits(pzcorebus_length)-1:BURST_LSB];
+      return pzcorebus_burst_length'(index >> BURST_SHIFT);
     end
     else begin
       return index;
@@ -142,9 +216,7 @@ interface pzcorebus_utils
   endfunction
 
   localparam  int RESPONSE_OFFSET_LSB   = $clog2(BUS_CONFIG.unit_data_width) - 3;
-  localparam  int RESPONSE_OFFSET_WIDTH =
-    (BUS_CONFIG.max_data_width > BUS_CONFIG.unit_data_width) ?
-      $clog2(BUS_CONFIG.max_data_width / BUS_CONFIG.unit_data_width) : 1;
+  localparam  int RESPONSE_OFFSET_WIDTH = calc_width(MAX_DATA_SIZE);
 
   function automatic pzcorebus_response_offset get_initial_offset(
     pzcorebus_command_type  command,
@@ -172,9 +244,7 @@ interface pzcorebus_utils
     return (current_offset & (~OFFSET_MASK)) + pzcorebus_response_offset'(DATA_SIZE);
   endfunction
 
-  localparam  int RESPONSE_OFFSET_SLICE_WIDTH =
-    (BUS_CONFIG.data_width > BUS_CONFIG.unit_data_width) ?
-      $clog2(BUS_CONFIG.data_width / BUS_CONFIG.unit_data_width) : 1;
+  localparam  int RESPONSE_OFFSET_SLICE_WIDTH = calc_width(DATA_SIZE);
 
   function automatic pzcorebus_response_size calc_response_size(
     pzcorebus_unpacked_length remaining_size,
@@ -223,25 +293,4 @@ interface pzcorebus_utils
       return unit_enable;
     end
   endfunction
-
-  modport utils(
-    import  is_non_posted_command,
-    import  is_posted_command,
-    import  is_command_with_data,
-    import  is_command_no_data,
-    import  is_atomic_command,
-    import  is_message_command,
-    import  is_response_with_data,
-    import  pack_length,
-    import  unpack_length,
-    import  get_sresp,
-    import  get_length_offset,
-    import  get_aligned_length,
-    import  get_burst_length,
-    import  get_burst_index,
-    import  get_initial_offset,
-    import  get_next_offset,
-    import  calc_response_size,
-    import  get_sresp_uniten
-  );
 endinterface
