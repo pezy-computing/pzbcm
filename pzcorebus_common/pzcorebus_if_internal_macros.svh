@@ -357,7 +357,7 @@ localparam  int DATA_SIZE           = BUS_CONFIG.data_width / BUS_CONFIG.unit_da
 localparam  int LENGTH_OFFSET_LSB   = $clog2(BUS_CONFIG.unit_data_width / 8); \
 localparam  int LENGTH_OFFSET_WIDTH = (DATA_SIZE > 1) ? $clog2(DATA_SIZE) : 1; \
 localparam  int BURST_OFFSET        = DATA_SIZE - 1; \
-localparam  int BUSRT_SHIFT         = $clog2(DATA_SIZE); \
+localparam  int BURST_SHIFT         = $clog2(DATA_SIZE); \
 \
 function automatic pzcorebus_unpacked_length get_length(); \
   if (BUS_CONFIG.profile == PZCOREBUS_CSR) begin \
@@ -391,7 +391,7 @@ function automatic pzcorebus_burst_length get_burst_length(); \
   if (BUS_CONFIG.profile == PZCOREBUS_MEMORY_H) begin \
     pzcorebus_unpacked_length length; \
     length  = get_aligned_length() + pzcorebus_unpacked_length'(BURST_OFFSET); \
-    return pzcorebus_burst_length'(length >> BUSRT_SHIFT); \
+    return pzcorebus_burst_length'(length >> BURST_SHIFT); \
   end \
   else begin \
     return pzcorebus_burst_length'(get_length()); \
