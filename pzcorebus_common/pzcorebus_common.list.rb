@@ -15,6 +15,7 @@ include_directory '.'
   'pzcorebus_request_if.sv',
   'pzcorebus_response_if.sv',
   'pzcorebus_bundled_if.sv',
+  'pzcorebus_utils.sv',
   'pzcorebus_connector.sv',
   'pzcorebus_transposer.sv',
   'pzcorebus_id_assigner.sv',
