@@ -5,11 +5,12 @@
 //
 //========================================
 module pzcorebus_command_counter
-  import  pzcorebus_pkg::*;
+  import  pzcorebus_pkg::*,
+          pzcorebus_debug_pkg::*;
 #(
-  parameter pzcorebus_config  BUS_CONFIG      = '0,
-  parameter int               WIDTH           = 8,
-  parameter bit [8:0]         TARGET_COMMAND  = '1
+  parameter pzcorebus_config                BUS_CONFIG      = '0,
+  parameter int                             WIDTH           = 8,
+  parameter pzcorebus_debug_target_command  TARGET_COMMAND  = '1
 )(
   input   var             i_clk,
   input   var             i_rst_n,
@@ -40,23 +41,6 @@ module pzcorebus_command_counter
   always_comb begin
     hit_command =
       corebus_if.command_ack() &&
-      is_target_command(corebus_if.mcmd);
+      is_target_command(corebus_if.mcmd, TARGET_COMMAND);
   end
-
-  function automatic logic is_target_command(
-    pzcorebus_command_type  mcmd
-  );
-    case (mcmd)
-      PZCOREBUS_READ:                 return TARGET_COMMAND[0];
-      PZCOREBUS_WRITE:                return TARGET_COMMAND[1];
-      PZCOREBUS_WRITE_NON_POSTED:     return TARGET_COMMAND[2];
-      PZCOREBUS_BROADCAST:            return TARGET_COMMAND[3];
-      PZCOREBUS_BROADCAST_NON_POSTED: return TARGET_COMMAND[4];
-      PZCOREBUS_ATOMIC:               return TARGET_COMMAND[5];
-      PZCOREBUS_ATOMIC_NON_POSTED:    return TARGET_COMMAND[6];
-      PZCOREBUS_MESSAGE:              return TARGET_COMMAND[7];
-      PZCOREBUS_MESSAGE_NON_POSTED:   return TARGET_COMMAND[8];
-      default:                        return '0;
-    endcase
-  endfunction
 endmodule

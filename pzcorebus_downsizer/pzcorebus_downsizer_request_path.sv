@@ -23,11 +23,9 @@ module pzcorebus_downsizer_request_path
   localparam  int DATA_SIZE           = MASTER_CONFIG.data_width / MASTER_CONFIG.unit_data_width;
   localparam  int MASTER_BYTE_LSB     = $clog2(MASTER_CONFIG.data_width) - 3;
   localparam  int UNIT_BYTE_LSB       = $clog2(MASTER_CONFIG.unit_data_width) - 3;
-  localparam  int LENGTH_WIDTH        = get_length_width(SLAVE_CONFIG, 1) + 1;
+  localparam  int LENGTH_WIDTH        = get_unpacked_length_width(SLAVE_CONFIG);
   localparam  int OFFSET_WIDTH        = (DATA_SIZE > 1) ? $clog2(DATA_SIZE) : 1;
   localparam  int DATA_COUNTER_WIDTH  = $clog2(CONVERSION_RATIO);
-
-  pzcorebus_utils #(SLAVE_CONFIG) u_utils();
 
   logic [LENGTH_WIDTH-1:0]        length;
   logic [LENGTH_WIDTH-1:0]        length_latched;
@@ -50,7 +48,7 @@ module pzcorebus_downsizer_request_path
 
   always_comb begin
     if (slave_if.mcmd_valid && (!mdata_busy)) begin
-      length      = get_initial_length(slave_if.mcmd, slave_if.mlength, offset);
+      length      = get_initial_length(slave_if.mcmd, slave_if.maddr, slave_if.get_length());
       mdata_count = get_initial_data_count(slave_if.mcmd, slave_if.maddr);
     end
     else begin
@@ -74,26 +72,15 @@ module pzcorebus_downsizer_request_path
     end
   end
 
-  if (DATA_SIZE > 1) begin : g_offset
-    always_comb begin
-      offset  = slave_if.maddr[UNIT_BYTE_LSB+:OFFSET_WIDTH];
-    end
-  end
-  else begin : g_offset
-    always_comb begin
-      offset  = OFFSET_WIDTH'(0);
-    end
-  end
-
   function automatic logic [DATA_COUNTER_WIDTH-1:0] get_initial_data_count(
     pzcorebus_command_type                  mcmd,
     logic [SLAVE_CONFIG.address_width-1:0]  maddr
   );
-    if (ALLIGNED_ACCESS_ONLY) begin
-      return '0;
-    end
-    else if (mcmd inside {PZCOREBUS_ATOMIC, PZCOREBUS_ATOMIC_NON_POSTED}) begin
-      return '0;
+    logic no_offset;
+
+    no_offset = pzcorebus_command_kind'(mcmd) inside {PZCOREBUS_ATOMIC_COMMAND, PZCOREBUS_MESSAGE_COMMAND};
+    if (ALLIGNED_ACCESS_ONLY || no_offset) begin
+      return DATA_COUNTER_WIDTH'(0);
     end
     else begin
       return maddr[MASTER_BYTE_LSB+:DATA_COUNTER_WIDTH];
@@ -101,22 +88,22 @@ module pzcorebus_downsizer_request_path
   endfunction
 
   function automatic logic [LENGTH_WIDTH-1:0] get_initial_length(
-    pzcorebus_command_type    mcmd,
-    logic [LENGTH_WIDTH-2:0]  mlength,
-    logic [OFFSET_WIDTH-1:0]  offset
+    pzcorebus_command_type                  mcmd,
+    logic [SLAVE_CONFIG.address_width-1:0]  maddr,
+    logic [LENGTH_WIDTH-1:0]                length
   );
-    logic [LENGTH_WIDTH-1:0]  length_unpacked;
+    logic [LENGTH_WIDTH-1:0]  offset;
+    logic                     no_offset;
 
-    length_unpacked = u_utils.unpack_length(mlength);
-    if (ALLIGNED_ACCESS_ONLY) begin
-      return length_unpacked;
-    end
-    else if (mcmd inside {PZCOREBUS_ATOMIC, PZCOREBUS_ATOMIC_NON_POSTED}) begin
-      return length_unpacked;
+    no_offset = pzcorebus_command_kind'(mcmd) inside {PZCOREBUS_ATOMIC_COMMAND, PZCOREBUS_MESSAGE_COMMAND};
+    if (ALLIGNED_ACCESS_ONLY || (DATA_SIZE == 1) || no_offset) begin
+      offset  = LENGTH_WIDTH'(0);
     end
     else begin
-      return length_unpacked + LENGTH_WIDTH'(offset);
+      offset  = LENGTH_WIDTH'(maddr[UNIT_BYTE_LSB+:OFFSET_WIDTH]);
     end
+
+    return length + offset;
   endfunction
 
   always_comb begin

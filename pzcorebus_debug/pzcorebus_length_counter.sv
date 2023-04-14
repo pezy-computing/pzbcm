@@ -5,12 +5,13 @@
 //
 //========================================
 module pzcorebus_length_counter
-  import  pzcorebus_pkg::*;
+  import  pzcorebus_pkg::*,
+          pzcorebus_debug_pkg::*;
 #(
-  parameter pzcorebus_config  BUS_CONFIG      = '0,
-  parameter int               WIDTH           = 16,
-  parameter bit [6:0]         TARGET_COMMAND  = '1,
-  parameter bit               BURST_COUNT     = 0
+  parameter pzcorebus_config                BUS_CONFIG      = '0,
+  parameter int                             WIDTH           = 16,
+  parameter pzcorebus_debug_target_command  TARGET_COMMAND  = '1,
+  parameter bit                             BURST_COUNT     = 0
 )(
   input var               i_clk,
   input var               i_rst_n,
@@ -22,8 +23,6 @@ module pzcorebus_length_counter
   logic [WIDTH-1:0] count;
   logic [WIDTH-1:0] length;
   logic             hit_command;
-
-  pzcorebus_utils #(BUS_CONFIG) u_utils();
 
   always_comb begin
     o_count = count;
@@ -42,36 +41,17 @@ module pzcorebus_length_counter
   end
 
   always_comb begin
-    if ((BUS_CONFIG.profile == PZCOREBUS_MEMORY_H) && BURST_COUNT) begin
-      length  = WIDTH'(
-        u_utils.get_burst_length(corebus_if.mcmd, corebus_if.maddr, corebus_if.mlength)
-      );
+    if (BURST_COUNT) begin
+      length  = WIDTH'(corebus_if.get_burst_length());
     end
     else begin
-      length  = WIDTH'(
-        u_utils.unpack_length(corebus_if.mlength)
-      );
+      length  = WIDTH'(corebus_if.get_length());
     end
   end
 
   always_comb begin
     hit_command =
       corebus_if.command_ack() &&
-      is_target_command(corebus_if.mcmd);
+      is_target_command(corebus_if.mcmd, TARGET_COMMAND);
   end
-
-  function automatic logic is_target_command(
-    pzcorebus_command_type  mcmd
-  );
-    case (mcmd)
-      PZCOREBUS_READ:                 return TARGET_COMMAND[0];
-      PZCOREBUS_WRITE:                return TARGET_COMMAND[1];
-      PZCOREBUS_WRITE_NON_POSTED:     return TARGET_COMMAND[2];
-      PZCOREBUS_BROADCAST:            return TARGET_COMMAND[3];
-      PZCOREBUS_BROADCAST_NON_POSTED: return TARGET_COMMAND[4];
-      PZCOREBUS_ATOMIC:               return TARGET_COMMAND[5];
-      PZCOREBUS_ATOMIC_NON_POSTED:    return TARGET_COMMAND[6];
-      default:                        return '0;
-    endcase
-  endfunction
 endmodule

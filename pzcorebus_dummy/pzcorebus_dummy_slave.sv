@@ -89,7 +89,7 @@ module pzcorebus_dummy_slave
       else if (corebus_if.command_non_posted_ack()) begin
         sresp <= get_sresp(corebus_if.mcmd);
         sid   <= corebus_if.mid;
-        if (corebus_if.mcmd == PZCOREBUS_BROADCAST_NON_POSTED) begin
+        if (corebus_if.is_broadcast_command()) begin
           serror  <= '0;
         end
         else begin
@@ -180,10 +180,10 @@ module pzcorebus_dummy_slave
             sresp_count <= pzcorebus_unpacked_length'(0);
           end
           else if (corebus_if.command_non_posted_ack()) begin
-            sresp_count <= corebus_if.get_unpacked_length();
+            sresp_count <= corebus_if.get_response_length();
           end
           else if (corebus_if.response_ack()) begin
-            sresp_count <= sresp_count + pzcorebus_unpacked_length'(1);
+            sresp_count <= sresp_count - pzcorebus_unpacked_length'(1);
           end
         end
       end
@@ -211,12 +211,7 @@ module pzcorebus_dummy_slave
             mlength <= pzcorebus_unpacked_length'(0);
           end
           else if (corebus_if.command_non_posted_ack()) begin
-            if (corebus_if.mcmd == PZCOREBUS_READ) begin
-              mlength <= corebus_if.get_unpacked_length();
-            end
-            else begin
-              mlength <= pzcorebus_unpacked_length'(DATA_SIZE);
-            end
+            mlength <= corebus_if.get_response_length();
           end
         end
 
@@ -227,7 +222,7 @@ module pzcorebus_dummy_slave
           end
           else if (corebus_if.command_non_posted_ack()) begin
             sresp_count <= pzcorebus_unpacked_length'(0);
-            if (corebus_if.mcmd == PZCOREBUS_READ) begin
+            if (corebus_if.is_read_command()) begin
               sresp_offset  <= pzcorebus_response_offset'(corebus_if.maddr >> OFFSET_LSB);
             end
             else begin
@@ -263,11 +258,10 @@ module pzcorebus_dummy_slave
   function automatic pzcorebus_response_type get_sresp(
     pzcorebus_command_type  mcmd
   );
-    case (mcmd)
-      PZCOREBUS_WRITE_NON_POSTED:     return PZCOREBUS_RESPONSE;
-      PZCOREBUS_BROADCAST_NON_POSTED: return PZCOREBUS_RESPONSE;
-      PZCOREBUS_MESSAGE_NON_POSTED:   return PZCOREBUS_RESPONSE;
-      default:                        return PZCOREBUS_RESPONSE_WITH_DATA;
+    case (pzcorebus_command_kind'(mcmd))
+      PZCOREBUS_READ_COMMAND:   return PZCOREBUS_RESPONSE_WITH_DATA;
+      PZCOREBUS_ATOMIC_COMMAND: return PZCOREBUS_RESPONSE_WITH_DATA;
+      default:                  return PZCOREBUS_RESPONSE;
     endcase
   endfunction
 
@@ -323,7 +317,7 @@ module pzcorebus_dummy_slave
 
   property p_no_requests_arrive;
     @(posedge i_clk) disable iff (!i_rst_n)
-    !(slave_if.mcmd_valid && (!(slave_if.mcmd inside {PZCOREBUS_BROADCAST, PZCOREBUS_BROADCAST_NON_POSTED})));
+    !(slave_if.mcmd_valid && (!slave_if.is_broadcast_command()));
   endproperty
 
   if (ENABLE_WARNING) begin : g_sva

@@ -231,16 +231,64 @@ function automatic logic is_command_with_response_data(); \
   return mcmd inside {PZCOREBUS_READ, PZCOREBUS_ATOMIC_NON_POSTED}; \
 endfunction \
 \
+function automatic pzcorebus_command_kind get_command_kind(); \
+  return pzcorebus_command_kind'(mcmd); \
+endfunction \
+\
+function automatic logic is_read_command(); \
+  return get_command_kind() == PZCOREBUS_READ_COMMAND; \
+endfunction \
+\
+function automatic logic is_write_command(); \
+  return get_command_kind() == PZCOREBUS_WRITE_COMMAND; \
+endfunction \
+\
+function automatic logic is_full_write_command(); \
+  if (BUS_CONFIG.profile != PZCOREBUS_CSR) begin \
+    return get_command_kind() == PZCOREBUS_FULL_WRITE_COMMAND; \
+  end \
+  else begin \
+    return '0; \
+  end \
+endfunction \
+\
+function automatic logic is_broadcast_command(); \
+  if (BUS_CONFIG.profile == PZCOREBUS_CSR) begin \
+    return get_command_kind() == PZCOREBUS_BROADCAST_COMMAND; \
+  end \
+  else begin \
+    return '0; \
+  end \
+endfunction \
+\
+function automatic logic is_write_access_command(); \
+  return is_write_command() || is_full_write_command() || is_broadcast_command(); \
+endfunction \
+\
+function automatic logic is_posted_write_acess_command(); \
+  return is_posted_command() && is_write_access_command(); \
+endfunction \
+\
+function automatic logic is_non_posted_write_access_command(); \
+  return is_non_posted_command() && is_write_access_command(); \
+endfunction \
+\
 function automatic logic is_atomic_command(); \
-  return \
-    mcmd[PZOCREBUS_COMMAND_KIND_BIT+:PZOCREBUS_COMMAND_KIND_WIDTH] == \
-      PZOCREBUS_COMMAND_KIND_WIDTH'(PZCOREBUS_ATOMIC); \
+  if (BUS_CONFIG.profile != PZCOREBUS_CSR) begin \
+    return get_command_kind() == PZCOREBUS_ATOMIC_COMMAND; \
+  end \
+  else begin \
+    return '0; \
+  end \
 endfunction\
 \
 function automatic logic is_message_command(); \
-  return \
-    mcmd[PZOCREBUS_COMMAND_KIND_BIT+:PZOCREBUS_COMMAND_KIND_WIDTH] == \
-      PZOCREBUS_COMMAND_KIND_WIDTH'(PZCOREBUS_MESSAGE); \
+  if (BUS_CONFIG.profile != PZCOREBUS_CSR) begin \
+    return get_command_kind() == PZCOREBUS_MESSAGE_COMMAND; \
+  end \
+  else begin \
+    return '0; \
+  end \
 endfunction \
 \
 function automatic logic command_ack(); \
@@ -296,15 +344,12 @@ function automatic logic write_data_last_ack(); \
   return write_data_ack() && mdata_last; \
 endfunction \
 \
-function automatic pzcorebus_unpacked_length get_unpacked_length(); \
-  if (BUS_CONFIG.profile == PZCOREBUS_CSR) begin \
-    return pzcorebus_unpacked_length'(1); \
-  end \
-  else if (mlength != '0) begin \
-    return pzcorebus_unpacked_length'(mlength); \
+function automatic pzcorebus_unpacked_length unpack_length(); \
+  if (mlength == '0) begin \
+    return pzcorebus_unpacked_length'(BUS_CONFIG.max_length); \
   end \
   else begin \
-    return pzcorebus_unpacked_length'(BUS_CONFIG.max_length); \
+    return pzcorebus_unpacked_length'(mlength); \
   end \
 endfunction \
 \
@@ -313,29 +358,56 @@ localparam  int LENGTH_OFFSET_LSB   = $clog2(BUS_CONFIG.unit_data_width / 8); \
 localparam  int LENGTH_OFFSET_WIDTH = (DATA_SIZE > 1) ? $clog2(DATA_SIZE) : 1; \
 localparam  int BURST_OFFSET        = DATA_SIZE - 1; \
 localparam  int BUSRT_SHIFT         = $clog2(DATA_SIZE); \
+\
+function automatic pzcorebus_unpacked_length get_length(); \
+  if (BUS_CONFIG.profile == PZCOREBUS_CSR) begin \
+    return pzcorebus_unpacked_length'(1); \
+  end \
+  else if (is_atomic_command()) begin \
+    return pzcorebus_unpacked_length'(DATA_SIZE); \
+  end \
+  else if (is_message_command()) begin \
+    return pzcorebus_unpacked_length'(0); \
+  end \
+  else begin \
+    return unpack_length(); \
+  end \
+endfunction \
+\
+function automatic pzcorebus_unpacked_length get_aligned_length(); \
+  pzcorebus_unpacked_length offset; \
+  logic                     no_offset; \
+  no_offset = (BUS_CONFIG.profile != PZCOREBUS_MEMORY_H) || (DATA_SIZE == 1) || is_atomic_command() || is_message_command(); \
+  if (no_offset) begin \
+    offset  = pzcorebus_unpacked_length'(0); \
+  end \
+  else begin \
+    offset  = pzcorebus_unpacked_length'(maddr[LENGTH_OFFSET_LSB+:LENGTH_OFFSET_WIDTH]); \
+  end \
+  return get_length() + offset; \
+endfunction \
+\
 function automatic pzcorebus_burst_length get_burst_length(); \
-  case (BUS_CONFIG.profile) \
-    PZCOREBUS_CSR: begin \
-      return pzcorebus_burst_length'(1); \
-    end \
-    PZCOREBUS_MEMORY_L: begin \
-      return get_unpacked_length(); \
-    end \
-    default: begin \
-      pzcorebus_unpacked_length length; \
-      length  = BURST_OFFSET; \
-      if (is_message_command()) begin \
-        length  += pzcorebus_unpacked_length'(DATA_SIZE); \
-      end \
-      else begin \
-        length  += get_unpacked_length(); \
-      end \
-      if (!(is_atomic_command() || is_message_command() || (DATA_SIZE == 1))) begin \
-        length  += pzcorebus_unpacked_length'(maddr[LENGTH_OFFSET_LSB+:LENGTH_OFFSET_WIDTH]); \
-      end \
-      return pzcorebus_burst_length'(length >> BUSRT_SHIFT); \
-    end \
-  endcase \
+  if (BUS_CONFIG.profile == PZCOREBUS_MEMORY_H) begin \
+    pzcorebus_unpacked_length length; \
+    length  = get_aligned_length() + pzcorebus_unpacked_length'(BURST_OFFSET); \
+    return pzcorebus_burst_length'(length >> BUSRT_SHIFT); \
+  end \
+  else begin \
+    return pzcorebus_burst_length'(get_length()); \
+  end \
+endfunction \
+\
+function automatic pzcorebus_unpacked_length get_response_length(); \
+  if (is_posted_command()) begin \
+    return pzcorebus_unpacked_length'(0); \
+  end \
+  else if (is_read_command()) begin \
+    return unpack_length(); \
+  end \
+  else begin \
+    return pzcorebus_unpacked_length'(DATA_SIZE); \
+  end \
 endfunction
 
 `define pzcorebus_if_define_response_api(BUS_CONFIG) \
@@ -479,6 +551,14 @@ modport request_master ( \
   import  is_command_with_data, \
   import  is_command_no_data, \
   import  is_command_with_response_data, \
+  import  get_command_kind, \
+  import  is_read_command, \
+  import  is_write_command, \
+  import  is_full_write_command, \
+  import  is_broadcast_command, \
+  import  is_write_access_command, \
+  import  is_posted_write_acess_command, \
+  import  is_non_posted_write_access_command, \
   import  is_atomic_command, \
   import  is_message_command, \
   import  command_ack, \
@@ -493,8 +573,11 @@ modport request_master ( \
   import  command_valid, \
   import  write_data_ack, \
   import  write_data_last_ack, \
-  import  get_unpacked_length, \
-  import  get_burst_length \
+  import  unpack_length, \
+  import  get_length, \
+  import  get_aligned_length, \
+  import  get_burst_length, \
+  import  get_response_length \
 ); \
 \
 modport command_master ( \
@@ -512,6 +595,14 @@ modport command_master ( \
   import  is_command_with_data, \
   import  is_command_no_data, \
   import  is_command_with_response_data, \
+  import  get_command_kind, \
+  import  is_read_command, \
+  import  is_write_command, \
+  import  is_full_write_command, \
+  import  is_broadcast_command, \
+  import  is_write_access_command, \
+  import  is_posted_write_acess_command, \
+  import  is_non_posted_write_access_command, \
   import  is_atomic_command, \
   import  is_message_command, \
   import  command_ack, \
@@ -524,8 +615,11 @@ modport command_master ( \
   import  command_posted_valid, \
   import  command_non_posted_valid, \
   import  command_valid, \
-  import  get_unpacked_length, \
-  import  get_burst_length \
+  import  unpack_length, \
+  import  get_length, \
+  import  get_aligned_length, \
+  import  get_burst_length, \
+  import  get_response_length \
 ); \
 \
 modport write_data_master ( \
@@ -564,6 +658,14 @@ modport request_slave ( \
   import  is_command_with_data, \
   import  is_command_no_data, \
   import  is_command_with_response_data, \
+  import  get_command_kind, \
+  import  is_read_command, \
+  import  is_write_command, \
+  import  is_full_write_command, \
+  import  is_broadcast_command, \
+  import  is_write_access_command, \
+  import  is_posted_write_acess_command, \
+  import  is_non_posted_write_access_command, \
   import  is_atomic_command, \
   import  is_message_command, \
   import  command_ack, \
@@ -578,8 +680,11 @@ modport request_slave ( \
   import  command_valid, \
   import  write_data_ack, \
   import  write_data_last_ack, \
-  import  get_unpacked_length, \
-  import  get_burst_length \
+  import  unpack_length, \
+  import  get_length, \
+  import  get_aligned_length, \
+  import  get_burst_length, \
+  import  get_response_length \
 ); \
 \
 modport command_slave ( \
@@ -597,6 +702,14 @@ modport command_slave ( \
   import  is_command_with_data, \
   import  is_command_no_data, \
   import  is_command_with_response_data, \
+  import  get_command_kind, \
+  import  is_read_command, \
+  import  is_write_command, \
+  import  is_full_write_command, \
+  import  is_broadcast_command, \
+  import  is_write_access_command, \
+  import  is_posted_write_acess_command, \
+  import  is_non_posted_write_access_command, \
   import  is_atomic_command, \
   import  is_message_command, \
   import  command_ack, \
@@ -609,8 +722,11 @@ modport command_slave ( \
   import  command_posted_valid, \
   import  command_non_posted_valid, \
   import  command_valid, \
-  import  get_unpacked_length, \
-  import  get_burst_length \
+  import  unpack_length, \
+  import  get_length, \
+  import  get_aligned_length, \
+  import  get_burst_length, \
+  import  get_response_length \
 ); \
 \
 modport write_data_slave ( \
@@ -649,6 +765,14 @@ modport request_monitor ( \
   import  is_command_with_data, \
   import  is_command_no_data, \
   import  is_command_with_response_data, \
+  import  get_command_kind, \
+  import  is_read_command, \
+  import  is_write_command, \
+  import  is_full_write_command, \
+  import  is_broadcast_command, \
+  import  is_write_access_command, \
+  import  is_posted_write_acess_command, \
+  import  is_non_posted_write_access_command, \
   import  is_atomic_command, \
   import  is_message_command, \
   import  command_ack, \
@@ -663,8 +787,11 @@ modport request_monitor ( \
   import  command_valid, \
   import  write_data_ack, \
   import  write_data_last_ack, \
-  import  get_unpacked_length, \
-  import  get_burst_length \
+  import  unpack_length, \
+  import  get_length, \
+  import  get_aligned_length, \
+  import  get_burst_length, \
+  import  get_response_length \
 );
 
 `define pzcorebus_if_define_response_modports \

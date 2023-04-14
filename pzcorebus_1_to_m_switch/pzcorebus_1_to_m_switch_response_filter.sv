@@ -68,7 +68,7 @@ module pzcorebus_1_to_m_switch_response_filter
 //  Request path
 //--------------------------------------------------------------
   always_comb begin
-    request_ready[2]  = !(bus_if[0].mcmd inside {PZCOREBUS_WRITE_NON_POSTED, PZCOREBUS_BROADCAST_NON_POSTED});
+    request_ready[2]  = !bus_if[0].is_non_posted_write_access_command();
     request_ready[1]  = !request_info[request_index].busy;
     request_ready[0]  = id_busy == '0;
 

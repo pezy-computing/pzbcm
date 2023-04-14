@@ -84,6 +84,14 @@ interface pzcorebus_if
     import  is_command_with_data,
     import  is_command_no_data,
     import  is_command_with_response_data,
+    import  get_command_kind,
+    import  is_read_command,
+    import  is_write_command,
+    import  is_full_write_command,
+    import  is_broadcast_command,
+    import  is_write_access_command,
+    import  is_posted_write_acess_command,
+    import  is_non_posted_write_access_command,
     import  is_atomic_command,
     import  is_message_command,
     import  command_ack,
@@ -103,8 +111,11 @@ interface pzcorebus_if
     import  response_last_burst_ack,
     import  response_with_data_ack,
     import  response_no_data_ack,
-    import  get_unpacked_length,
-    import  get_burst_length
+    import  unpack_length,
+    import  get_length,
+    import  get_aligned_length,
+    import  get_burst_length,
+    import  get_response_length
   );
 
   modport slave (
@@ -142,6 +153,14 @@ interface pzcorebus_if
     import  is_command_with_data,
     import  is_command_no_data,
     import  is_command_with_response_data,
+    import  get_command_kind,
+    import  is_read_command,
+    import  is_write_command,
+    import  is_full_write_command,
+    import  is_broadcast_command,
+    import  is_write_access_command,
+    import  is_posted_write_acess_command,
+    import  is_non_posted_write_access_command,
     import  is_atomic_command,
     import  is_message_command,
     import  command_ack,
@@ -161,8 +180,11 @@ interface pzcorebus_if
     import  response_last_burst_ack,
     import  response_with_data_ack,
     import  response_no_data_ack,
-    import  get_unpacked_length,
-    import  get_burst_length
+    import  unpack_length,
+    import  get_length,
+    import  get_aligned_length,
+    import  get_burst_length,
+    import  get_response_length
   );
 
   modport monitor (
@@ -200,6 +222,14 @@ interface pzcorebus_if
     import  is_command_with_data,
     import  is_command_no_data,
     import  is_command_with_response_data,
+    import  get_command_kind,
+    import  is_read_command,
+    import  is_write_command,
+    import  is_full_write_command,
+    import  is_broadcast_command,
+    import  is_write_access_command,
+    import  is_posted_write_acess_command,
+    import  is_non_posted_write_access_command,
     import  is_atomic_command,
     import  is_message_command,
     import  command_ack,
@@ -219,8 +249,11 @@ interface pzcorebus_if
     import  response_last_burst_ack,
     import  response_with_data_ack,
     import  response_no_data_ack,
-    import  get_unpacked_length,
-    import  get_burst_length
+    import  unpack_length,
+    import  get_length,
+    import  get_aligned_length,
+    import  get_burst_length,
+    import  get_response_length
   );
 
   modport monitor_out (
@@ -258,6 +291,14 @@ interface pzcorebus_if
     import  is_command_with_data,
     import  is_command_no_data,
     import  is_command_with_response_data,
+    import  get_command_kind,
+    import  is_read_command,
+    import  is_write_command,
+    import  is_full_write_command,
+    import  is_broadcast_command,
+    import  is_write_access_command,
+    import  is_posted_write_acess_command,
+    import  is_non_posted_write_access_command,
     import  is_atomic_command,
     import  is_message_command,
     import  command_ack,
@@ -276,8 +317,11 @@ interface pzcorebus_if
     import  response_last_burst_ack,
     import  response_with_data_ack,
     import  response_no_data_ack,
-    import  get_unpacked_length,
-    import  get_burst_length
+    import  unpack_length,
+    import  get_length,
+    import  get_aligned_length,
+    import  get_burst_length,
+    import  get_response_length
   );
 
   `pzcorebus_if_define_request_modports

@@ -194,7 +194,7 @@ module pzcorebus_membus2csrbus_adapter
 
     always_comb begin
       if (!busy) begin
-        length_count[0] = get_aligned_length(aligner_if.maddr, aligner_if.get_unpacked_length());
+        length_count[0] = get_aligned_length(aligner_if.maddr, aligner_if.get_length());
         data_count[0]   = aligner_if.maddr[UNIT_OFFSET_LSB+:UNIT_OFFSET_WIDTH];
         maddr[0]        = aligner_if.maddr[CSRBUS_CONFIG.address_width-1:0];
       end
@@ -340,8 +340,8 @@ module pzcorebus_membus2csrbus_adapter
     if (sideband_info.force_np_write && (mcmd == PZCOREBUS_WRITE)) begin
       return PZCOREBUS_WRITE_NON_POSTED;
     end
-    else if (sideband_info.force_np_write && (mcmd == PZCOREBUS_BROADCAST)) begin
-      return PZCOREBUS_BROADCAST_NON_POSTED;
+    else if (sideband_info.force_np_write && (mcmd == PZCOREBUS_FULL_WRITE)) begin
+      return PZCOREBUS_FULL_WRITE_NON_POSTED;
     end
     else begin
       return mcmd;
@@ -359,7 +359,7 @@ module pzcorebus_membus2csrbus_adapter
     info.sresp            = get_sresp(mcmd);
     info.sid              = mid;
     info.uniten_offset    = maddr[UNIT_OFFSET_LSB+:UNITEN_COUNT_WIDTH];
-    info.ignore_response  = sideband_info.force_np_write && (mcmd inside {PZCOREBUS_WRITE, PZCOREBUS_BROADCAST});
+    info.ignore_response  = sideband_info.force_np_write && (mcmd inside {PZCOREBUS_WRITE, PZCOREBUS_FULL_WRITE});
 
     return info;
   endfunction

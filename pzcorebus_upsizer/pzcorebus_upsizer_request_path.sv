@@ -40,9 +40,7 @@ module pzcorebus_upsizer_request_path
 
   always_comb begin
     if (slave_if.mcmd_valid && (!mdata_busy)) begin
-      mdata_count = (slave_if.mcmd inside {
-        PZCOREBUS_ATOMIC, PZCOREBUS_ATOMIC_NON_POSTED
-      }) ? COUNTER_WIDTH'(0) : slave_if.maddr[ADDRESS_LSB+:COUNTER_WIDTH];
+      mdata_count = get_initial_mdata_count(slave_if.mcmd, slave_if.maddr);
     end
     else begin
       mdata_count = mdata_count_latched;
@@ -60,6 +58,19 @@ module pzcorebus_upsizer_request_path
       mdata_count_latched <= mdata_count;
     end
   end
+
+  function automatic logic [COUNTER_WIDTH-1:0] get_initial_mdata_count(
+    pzcorebus_command_type                  mcmd,
+    logic [SLAVE_CONFIG.address_width-1:0]  maddr
+  );
+    if (pzcorebus_command_kind'(mcmd) inside {PZCOREBUS_ATOMIC_COMMAND, PZCOREBUS_MESSAGE_COMMAND}) begin
+      return COUNTER_WIDTH'(0);
+    end
+    else begin
+      return maddr[ADDRESS_LSB+:COUNTER_WIDTH];
+    end
+  endfunction
+
 
   pzcorebus_data  [CONVERSION_RATIO-1:0]        mdata;
   pzcorebus_byte_enable [CONVERSION_RATIO-1:0]  mdata_byteen;
@@ -115,7 +126,7 @@ module pzcorebus_upsizer_request_path
   always_comb begin
     slave_if.scmd_accept  = master_if.scmd_accept;
     master_if.mcmd_valid  = slave_if.mcmd_valid;
-    master_if.put_command(slave_if.get_command());
+    master_if.put_command(get_command(slave_if.get_command()));
 
     if ((mdata_count == '1) || slave_if.mdata_last) begin
       master_if.mdata_valid = slave_if.mdata_valid;
@@ -129,4 +140,14 @@ module pzcorebus_upsizer_request_path
     master_if.mdata_byteen  = mdata_byteen;
     master_if.mdata_last    = slave_if.mdata_last;
   end
+
+  function automatic pzcorebus_command get_command(pzcorebus_command command);
+    if (command.command == PZCOREBUS_FULL_WRITE) begin
+      command.command = PZCOREBUS_WRITE;
+    end
+    else if (command.command == PZCOREBUS_FULL_WRITE_NON_POSTED) begin
+      command.command = PZCOREBUS_WRITE_NON_POSTED;
+    end
+    return command;
+  endfunction
 endmodule
