@@ -58,38 +58,36 @@ package pzcorebus_pkg;
   } pzcorebus_profile;
 
   typedef enum logic [2:0] {
-    PZCOREBUS_READ_COMMAND        = 3'h1,
-    PZCOREBUS_WRITE_COMMAND       = 3'h2,
-    PZCOREBUS_FULL_WRITE_COMMAND  = 3'h3,
-    PZCOREBUS_BROADCAST_COMMAND   = 3'h4,
-    PZCOREBUS_ATOMIC_COMMAND      = 3'h5,
-    PZCOREBUS_MESSAGE_COMMAND     = 3'h6
+    PZCOREBUS_READ_COMMAND        = 3'b001,
+    PZCOREBUS_WRITE_COMMAND       = 3'b100,
+    PZCOREBUS_FULL_WRITE_COMMAND  = 3'b101,
+    PZCOREBUS_BROADCAST_COMMAND   = 3'b110,
+    PZCOREBUS_ATOMIC_COMMAND      = 3'b111,
+    PZCOREBUS_MESSAGE_COMMAND     = 3'b010
   } pzcorebus_command_kind;
 
-  //  [3]   1: width data
-  //        0: without data
-  //  [3]   1: need response
-  //        0: need no response
+  //  [3]   1: non-posted request
+  //        0: posted request
   //  [2:0] see pzcorebus_command_kind
-  typedef enum logic [4:0] {
-    PZCOREBUS_NULL_COMMAND          = 5'b00_000,
-    PZCOREBUS_READ                  = {2'b01, PZCOREBUS_READ_COMMAND      },
-    PZCOREBUS_WRITE                 = {2'b10, PZCOREBUS_WRITE_COMMAND     },
-    PZCOREBUS_WRITE_NON_POSTED      = {2'b11, PZCOREBUS_WRITE_COMMAND     },
-    PZCOREBUS_FULL_WRITE            = {2'b10, PZCOREBUS_FULL_WRITE_COMMAND},
-    PZCOREBUS_FULL_WRITE_NON_POSTED = {2'b11, PZCOREBUS_FULL_WRITE_COMMAND},
-    PZCOREBUS_BROADCAST             = {2'b10, PZCOREBUS_BROADCAST_COMMAND },
-    PZCOREBUS_BROADCAST_NON_POSTED  = {2'b11, PZCOREBUS_BROADCAST_COMMAND },
-    PZCOREBUS_ATOMIC                = {2'b10, PZCOREBUS_ATOMIC_COMMAND    },
-    PZCOREBUS_ATOMIC_NON_POSTED     = {2'b11, PZCOREBUS_ATOMIC_COMMAND    },
-    PZCOREBUS_MESSAGE               = {2'b00, PZCOREBUS_MESSAGE_COMMAND   },
-    PZCOREBUS_MESSAGE_NON_POSTED    = {2'b01, PZCOREBUS_MESSAGE_COMMAND   }
+  typedef enum logic [3:0] {
+    PZCOREBUS_NULL_COMMAND          = 4'b0_000,
+    PZCOREBUS_READ                  = {1'b1, PZCOREBUS_READ_COMMAND      },
+    PZCOREBUS_WRITE                 = {1'b0, PZCOREBUS_WRITE_COMMAND     },
+    PZCOREBUS_WRITE_NON_POSTED      = {1'b1, PZCOREBUS_WRITE_COMMAND     },
+    PZCOREBUS_FULL_WRITE            = {1'b0, PZCOREBUS_FULL_WRITE_COMMAND},
+    PZCOREBUS_FULL_WRITE_NON_POSTED = {1'b1, PZCOREBUS_FULL_WRITE_COMMAND},
+    PZCOREBUS_BROADCAST             = {1'b0, PZCOREBUS_BROADCAST_COMMAND },
+    PZCOREBUS_BROADCAST_NON_POSTED  = {1'b1, PZCOREBUS_BROADCAST_COMMAND },
+    PZCOREBUS_ATOMIC                = {1'b0, PZCOREBUS_ATOMIC_COMMAND    },
+    PZCOREBUS_ATOMIC_NON_POSTED     = {1'b1, PZCOREBUS_ATOMIC_COMMAND    },
+    PZCOREBUS_MESSAGE               = {1'b0, PZCOREBUS_MESSAGE_COMMAND   },
+    PZCOREBUS_MESSAGE_NON_POSTED    = {1'b1, PZCOREBUS_MESSAGE_COMMAND   }
   } pzcorebus_command_type;
 
   localparam  int PZOCREBUS_COMMAND_KIND_WIDTH  = $bits(pzcorebus_command_kind);
   localparam  int PZOCREBUS_COMMAND_KIND_BIT    = 0;
-  localparam  int PZCOREBUS_NON_POSTED_BIT      = PZOCREBUS_COMMAND_KIND_BIT + PZOCREBUS_COMMAND_KIND_WIDTH;
-  localparam  int PZCOREBUS_WITH_DATA_BIT       = PZCOREBUS_NON_POSTED_BIT   + 1;
+  localparam  int PZCOREBUS_WITH_DATA_BIT       = PZOCREBUS_COMMAND_KIND_WIDTH - 1;
+  localparam  int PZCOREBUS_NON_POSTED_BIT      = PZCOREBUS_WITH_DATA_BIT + 1;
 
   typedef enum logic {
     PZCOREBUS_RESPONSE            = 1'b0,
