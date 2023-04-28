@@ -39,7 +39,7 @@ module pzcorebus_packer_data_fifo
   logic                             slicer_full;
 
   always_comb begin
-    o_fifo_empty  = fifo_empty && slicer_empty;
+    o_fifo_empty  = fifo_empty && slicer_empty && (!slicer_push);
     o_fifo_full   = fifo_full  && slicer_full;
   end
 
