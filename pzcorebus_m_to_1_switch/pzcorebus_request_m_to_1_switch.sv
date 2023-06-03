@@ -32,7 +32,7 @@ module pzcorebus_request_m_to_1_switch
   interface.request_master          master_if
 );
   pzcorebus_request_if #(BUS_CONFIG)  aligner_if[SLAVES]();
-  pzcorebus_request_if #(BUS_CONFIG)  switch_if();
+  pzcorebus_request_if #(BUS_CONFIG)  switch_if[SLAVES+1]();
 
 //--------------------------------------------------------------
 //  Slave Command/Data Aligner
@@ -85,11 +85,23 @@ module pzcorebus_request_m_to_1_switch
   logic [SLAVES-1:0]  request_valid;
   logic [SLAVES-1:0]  request_grant;
   logic               request_free;
-  logic               response_busy;
+  logic               response_idle;
 
-  for (genvar i = 0;i < SLAVES;++i) begin : g_request_valid
+  for (genvar i = 0;i < SLAVES;++i) begin : g_request
     always_comb begin
-      request_valid[i]  = aligner_if[i].mcmd_valid && (!response_busy);
+      aligner_if[i].scmd_accept = response_idle && switch_if[i].scmd_accept;
+      switch_if[i].mcmd_valid   = response_idle && aligner_if[i].mcmd_valid;
+      switch_if[i].put_command(aligner_if[i].get_command());
+    end
+
+    always_comb begin
+      aligner_if[i].sdata_accept  = switch_if[i].sdata_accept;
+      switch_if[i].mdata_valid    = aligner_if[i].mdata_valid;
+      switch_if[i].put_write_data(aligner_if[i].get_write_data());
+    end
+
+    always_comb begin
+      request_valid[i]  = switch_if[i].mcmd_valid;
     end
   end
 
@@ -99,10 +111,10 @@ module pzcorebus_request_m_to_1_switch
     logic       data_done;
 
     always_comb begin
-      access_done[0]  = switch_if.command_no_data_ack();
-      access_done[1]  = switch_if.command_with_data_ack() && switch_if.write_data_last_ack();
-      access_done[2]  = switch_if.command_with_data_ack() && data_done;
-      access_done[3]  = switch_if.write_data_last_ack() && command_done;
+      access_done[0]  = switch_if[SLAVES].command_no_data_ack();
+      access_done[1]  = switch_if[SLAVES].command_with_data_ack() && switch_if[SLAVES].write_data_last_ack();
+      access_done[2]  = switch_if[SLAVES].command_with_data_ack() && data_done;
+      access_done[3]  = switch_if[SLAVES].write_data_last_ack() && command_done;
       request_free    = access_done != '0;
     end
 
@@ -115,11 +127,11 @@ module pzcorebus_request_m_to_1_switch
         command_done  <= '0;
         data_done     <= '0;
       end
-      else if (switch_if.command_with_data_ack()) begin
+      else if (switch_if[SLAVES].command_with_data_ack()) begin
         command_done  <= '1;
         data_done     <= '0;
       end
-      else if (switch_if.write_data_last_ack()) begin
+      else if (switch_if[SLAVES].write_data_last_ack()) begin
         command_done  <= '0;
         data_done     <= '1;
       end
@@ -127,7 +139,7 @@ module pzcorebus_request_m_to_1_switch
   end
   else begin : g_request_free
     always_comb begin
-      request_free  = switch_if.command_ack();
+      request_free  = switch_if[SLAVES].command_ack();
     end
   end
 
@@ -153,10 +165,10 @@ module pzcorebus_request_m_to_1_switch
     .SLAVES         (SLAVES                 ),
     .SELECTOR_TYPE  (PZBCM_SELECTOR_ONEHOT  )
   ) u_mux (
-    .i_command_select     (request_grant  ),
-    .i_write_data_select  (request_grant  ),
-    .slave_if             (aligner_if     ),
-    .master_if            (switch_if      )
+    .i_command_select     (request_grant          ),
+    .i_write_data_select  (request_grant          ),
+    .slave_if             (switch_if[0:SLAVES-1]  ),
+    .master_if            (switch_if[SLAVES]      )
   );
 
   if (WAIT_FOR_RESPONSE) begin : g_response_select
@@ -168,13 +180,13 @@ module pzcorebus_request_m_to_1_switch
 
     always_ff @(posedge i_clk, negedge i_rst_n) begin
       if (!i_rst_n) begin
-        response_busy <= '0;
+        response_idle <= '1;
       end
       else if (i_response_ack) begin
-        response_busy <= '0;
+        response_idle <= '1;
       end
-      else if (switch_if.command_non_posted_ack()) begin
-        response_busy <= '1;
+      else if (switch_if[SLAVES].command_non_posted_ack()) begin
+        response_idle <= '0;
       end
     end
 
@@ -182,7 +194,7 @@ module pzcorebus_request_m_to_1_switch
       if (!i_rst_n) begin
         response_select <= '0;
       end
-      else if (switch_if.command_non_posted_ack()) begin
+      else if (switch_if[SLAVES].command_non_posted_ack()) begin
         response_select <= request_grant;
       end
     end
@@ -193,7 +205,7 @@ module pzcorebus_request_m_to_1_switch
     end
 
     always_comb begin
-      response_busy = '0;
+      response_idle = '1;
     end
   end
 
@@ -208,10 +220,10 @@ module pzcorebus_request_m_to_1_switch
       .COMMAND_DEPTH  (COMMAND_DEPTH  ),
       .DATA_DEPTH     (DATA_DEPTH     )
     ) u_aligner (
-      .i_clk      (i_clk      ),
-      .i_rst_n    (i_rst_n    ),
-      .slave_if   (switch_if  ),
-      .master_if  (master_if  )
+      .i_clk      (i_clk              ),
+      .i_rst_n    (i_rst_n            ),
+      .slave_if   (switch_if[SLAVES]  ),
+      .master_if  (master_if          )
     );
   end
   else begin : g_master_aligner
@@ -222,14 +234,14 @@ module pzcorebus_request_m_to_1_switch
       .DATA_DEPTH     (DATA_DEPTH     ),
       .DATA_VALID     (MASTER_FIFO    )
     ) u_fifo (
-      .i_clk          (i_clk      ),
-      .i_rst_n        (i_rst_n    ),
-      .i_clear        ('0         ),
+      .i_clk          (i_clk              ),
+      .i_rst_n        (i_rst_n            ),
+      .i_clear        ('0                 ),
       .o_empty        (),
       .o_almost_full  (),
       .o_full         (),
-      .slave_if       (switch_if  ),
-      .master_if      (master_if  )
+      .slave_if       (switch_if[SLAVES]  ),
+      .master_if      (master_if          )
     );
   end
 endmodule
