@@ -29,12 +29,29 @@ module pzcorebus_membus2csrbus_adapter
     end
   end
 
+  typedef logic [get_request_info_width(MEMBUS_CONFIG, 1)-1:0]  pzcorebus_request_info;
+
+  typedef struct packed {
+    pzcorebus_request_info  minfo;
+    logic                   force_np_write;
+    logic                   wait_for_all_responses;
+  } pzcorebus_sideband_info;
+
   localparam  int ADDRESS_WIDTH   = CSRBUS_CONFIG.address_width;
   localparam  int DATA_WIDTH      = MEMBUS_CONFIG.data_width;
   localparam  int UNIT_WIDTH      = 32;
   localparam  int UNIT_BYTE_SIZE  = UNIT_WIDTH / 8;
   localparam  int UNIT_SIZE       = DATA_WIDTH / UNIT_WIDTH;
   localparam  int UNITEN_WIDTH    = get_unit_enable_width(MEMBUS_CONFIG, 1);
+
+  function automatic int get_minfo_width();
+    if (MEMBUS_CONFIG.request_info_width >= 1) begin
+      return $bits(pzcorebus_sideband_info);
+    end
+    else begin
+      return $bits(pzcorebus_sideband_info) - $bits(pzcorebus_request_info);
+    end
+  endfunction
 
   function automatic int get_length_count_width();
     if (MEMBUS_CONFIG.profile == PZCOREBUS_MEMORY_H) begin
@@ -72,6 +89,7 @@ module pzcorebus_membus2csrbus_adapter
     return (word_size <= 1) ? 1 : $clog2(word_size);
   endfunction
 
+  localparam  int MINFO_WIDTH           = get_minfo_width();
   localparam  int UNPACKED_LENGTH_WIDTH = get_unpacked_length_width(MEMBUS_CONFIG);
   localparam  int LENGTH_COUNT_WIDTH    = get_length_count_width();
   localparam  int DATA_COUNT_WIDTH      = get_data_count_width();
@@ -80,11 +98,6 @@ module pzcorebus_membus2csrbus_adapter
   localparam  int UNIT_OFFSET_WIDTH     = $clog2(UNIT_SIZE);
   localparam  int WORD_SIZE             = get_word_size();
   localparam  int WORD_COUNT_WIDTH      = get_word_count_width();
-
-  typedef struct packed {
-    logic force_np_write;
-    logic wait_for_all_responses;
-  } pzcorebus_sideband_info;
 
   typedef struct packed {
     pzcorebus_response_type             sresp;
@@ -99,7 +112,7 @@ module pzcorebus_membus2csrbus_adapter
     address_width:        MEMBUS_CONFIG.address_width,
     data_width:           MEMBUS_CONFIG.data_width,
     max_length:           MEMBUS_CONFIG.max_length,
-    request_info_width:   $bits(pzcorebus_sideband_info),
+    request_info_width:   MINFO_WIDTH,
     response_info_width:  MEMBUS_CONFIG.response_info_width,
     unit_data_width:      MEMBUS_CONFIG.unit_data_width,
     max_data_width:       MEMBUS_CONFIG.max_data_width
@@ -130,7 +143,7 @@ module pzcorebus_membus2csrbus_adapter
     membus_if.mcmd_valid        = membus_slave_if.mcmd_valid;
 
     request_command       = membus_slave_if.get_command();
-    request_command.info  = get_minfo(i_force_np_write, i_wait_for_all_responses);
+    request_command.info  = get_minfo(membus_slave_if.minfo, i_force_np_write, i_wait_for_all_responses);
     membus_if.put_command(request_command);
   end
 
@@ -147,12 +160,14 @@ module pzcorebus_membus2csrbus_adapter
   end
 
   function automatic logic [`PZCOREBUS_MAX_REQUEST_INFO_WIDTH-1:0] get_minfo(
-    logic force_np_write,
-    logic wait_for_all_responses
+    pzcorebus_request_info  minfo,
+    logic                   force_np_write,
+    logic                   wait_for_all_responses
   );
     pzcorebus_sideband_info info;
     info.force_np_write         = force_np_write;
     info.wait_for_all_responses = wait_for_all_responses;
+    info.minfo                  = minfo;
     return (`PZCOREBUS_MAX_REQUEST_INFO_WIDTH)'(info);
   endfunction
 
@@ -255,6 +270,7 @@ module pzcorebus_membus2csrbus_adapter
       csrbus_if.mid   = '0;
       csrbus_if.maddr = maddr[0];
       csrbus_if.mdata = aligner_if.mdata[UNIT_WIDTH*data_count[0]+:UNIT_WIDTH];
+      csrbus_if.minfo = sideband_info.minfo;
 
       non_posted_ready    = busy || (!info_fifo_full);
       write_data_inactive = aligner_if.mdata_byteen[UNIT_BYTE_SIZE*data_count[0]+:UNIT_BYTE_SIZE] == '0;
@@ -282,7 +298,6 @@ module pzcorebus_membus2csrbus_adapter
 
     always_comb begin
       csrbus_if.mlength       = '0;
-      csrbus_if.minfo         = '0;
       csrbus_if.mdata_valid   = '0;
       csrbus_if.mdata_byteen  = '0;
       csrbus_if.mdata_last    = '0;
