@@ -24,7 +24,7 @@ module pzbcm_sram #(
   input var             i_read_rst_n,
   input var             i_clear,
   input var SRAM_CONFIG i_sram_config,
-  pzbcm_sram_if         port_if
+  pzbcm_sram_if.sram    port_if
 );
   function automatic int calc_pointer_width(int width);
     if (width > 1) begin
