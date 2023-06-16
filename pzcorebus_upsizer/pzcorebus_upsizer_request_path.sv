@@ -142,12 +142,15 @@ module pzcorebus_upsizer_request_path
   end
 
   function automatic pzcorebus_command get_command(pzcorebus_command command);
+    pzcorebus_command command_out;
+
+    command_out = command;
     if (command.command == PZCOREBUS_FULL_WRITE) begin
-      command.command = PZCOREBUS_WRITE;
+      command_out.command = PZCOREBUS_WRITE;
     end
     else if (command.command == PZCOREBUS_FULL_WRITE_NON_POSTED) begin
-      command.command = PZCOREBUS_WRITE_NON_POSTED;
+      command_out.command = PZCOREBUS_WRITE_NON_POSTED;
     end
-    return command;
+    return command_out;
   endfunction
 endmodule
