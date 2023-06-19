@@ -10,7 +10,8 @@ module pzcorebus_dummy_slave
   parameter pzcorebus_config                BUS_CONFIG      = '0,
   parameter bit                             TIE_OFF         = 0,
   parameter bit                             ERROR           = '1,
-  parameter bit [BUS_CONFIG.data_width-1:0] READ_DATA       = get_default_read_data(BUS_CONFIG),
+  parameter bit [31:0]                      ERROR_DATA      = (BUS_CONFIG.profile == PZCOREBUS_CSR) ? 32'hdead_dead : 32'hdead_dead,
+  parameter bit [BUS_CONFIG.data_width-1:0] READ_DATA       = {BUS_CONFIG.data_width/32{ERROR_DATA}},
   parameter bit                             ENABLE_WARNING  = 1
 )(
   input var           i_clk,
@@ -237,23 +238,6 @@ module pzcorebus_dummy_slave
       end
     end
   end
-
-  function automatic bit [BUS_CONFIG.data_width-1:0] get_default_read_data(
-    pzcorebus_config  bus_config
-  );
-    bit [BUS_CONFIG.data_width/32-1:0][31:0]  data;
-
-    for (int i = 0;i < BUS_CONFIG.data_width / 32;++i) begin
-      if (bus_config.profile == PZCOREBUS_CSR) begin
-        data[i] = 32'hdead_dead;
-      end
-      else begin
-        data[i] = 32'hdead_beaf;
-      end
-    end
-
-    return data;
-  endfunction
 
   function automatic pzcorebus_response_type get_sresp(
     pzcorebus_command_type  mcmd
