@@ -10,7 +10,7 @@ module pzcorebus_dummy_slave
   parameter pzcorebus_config                BUS_CONFIG      = '0,
   parameter bit                             TIE_OFF         = 0,
   parameter bit                             ERROR           = '1,
-  parameter bit [31:0]                      ERROR_DATA      = (BUS_CONFIG.profile == PZCOREBUS_CSR) ? 32'hdead_dead : 32'hdead_dead,
+  parameter bit [31:0]                      ERROR_DATA      = (BUS_CONFIG.profile == PZCOREBUS_CSR) ? 32'hdead_dead : 32'hdead_beaf,
   parameter bit [BUS_CONFIG.data_width-1:0] READ_DATA       = {BUS_CONFIG.data_width/32{ERROR_DATA}},
   parameter bit                             ENABLE_WARNING  = 1
 )(
