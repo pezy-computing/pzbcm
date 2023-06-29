@@ -8,20 +8,21 @@ module pzcorebus_request_1_to_m_switch
   import  pzcorebus_pkg::*,
           pzbcm_selector_pkg::*;
 #(
-  parameter pzcorebus_config    BUS_CONFIG        = '0,
-  parameter int                 MASTERS           = 2,
-  parameter bit                 EXTERNAL_DECODE   = 0,
-  parameter pzbcm_selector_type SELECTOR_TYPE     = PZBCM_SELECTOR_BINARY,
-  parameter int                 SELECT_WIDTH      = calc_select_width(SELECTOR_TYPE, MASTERS),
-  parameter int                 SELECT_LSB        = BUS_CONFIG.address_width - SELECT_WIDTH,
-  parameter bit                 WAIT_FOR_DATA     = 0,
-  parameter bit                 ENABLE_BROADCAST  = 0,
-  parameter bit                 SLAVE_FIFO        = 0,
-  parameter bit                 MASTER_FIFO       = 0,
-  parameter int                 COMMAND_DEPTH     = 2,
-  parameter int                 DATA_DEPTH        = 2,
-  parameter bit                 ALIGN_OUT         = 0,
-  parameter int                 MINFO_WIDTH       = get_request_info_width(BUS_CONFIG, 1)
+  parameter pzcorebus_config    BUS_CONFIG                  = '0,
+  parameter int                 MASTERS                     = 2,
+  parameter bit                 EXTERNAL_DECODE             = 0,
+  parameter pzbcm_selector_type SELECTOR_TYPE               = PZBCM_SELECTOR_BINARY,
+  parameter int                 SELECT_WIDTH                = calc_select_width(SELECTOR_TYPE, MASTERS),
+  parameter int                 SELECT_LSB                  = BUS_CONFIG.address_width - SELECT_WIDTH,
+  parameter bit                 WAIT_FOR_DATA               = 0,
+  parameter bit                 ENABLE_BROADCAST            = 0,
+  parameter bit                 ENABLE_BROADCAST_NON_POSTED = 0,
+  parameter bit                 SLAVE_FIFO                  = 0,
+  parameter bit                 MASTER_FIFO                 = 0,
+  parameter int                 COMMAND_DEPTH               = 2,
+  parameter int                 DATA_DEPTH                  = 2,
+  parameter bit                 ALIGN_OUT                   = 0,
+  parameter int                 MINFO_WIDTH                 = get_request_info_width(BUS_CONFIG, 1)
 )(
   input   var                                 i_clk,
   input   var                                 i_rst_n,
@@ -166,25 +167,26 @@ module pzcorebus_request_1_to_m_switch
   end
 
   for (genvar i = 0;i < MASTERS;++i) begin : g_request
-    logic command_active;
     logic command_done;
-    logic data_active;
 
     always_comb begin
-      if (!command_done) begin
-        command_active  =
-          command_select[i] ||
-          (BROADCAST && aligner_if.is_broadcast_command());
+      if (get_command_active(aligner_if.mcmd, command_select[i], command_done)) begin
+        switch_if[i].mcmd_valid = mcmd_valid;
+        scmd_accept[i]          = switch_if[i].scmd_accept;
       end
       else begin
-        command_active  = '0;
+        switch_if[i].mcmd_valid = '0;
+        scmd_accept[i]          = '1;
       end
-      data_active = data_select[i];
 
-      switch_if[i].mcmd_valid   = (command_active) ? mcmd_valid                : '0;
-      scmd_accept[i]            = (command_active) ? switch_if[i].scmd_accept  : '1;
-      switch_if[i].mdata_valid  = (data_active   ) ? mdata_valid               : '0;
-      sdata_accept[i]           = (data_active   ) ? switch_if[i].sdata_accept : '0;
+      if (data_select[i]) begin
+        switch_if[i].mdata_valid  = mdata_valid;
+        sdata_accept[i]           = switch_if[i].sdata_accept;
+      end
+      else begin
+        switch_if[i].mdata_valid  = '0;
+        sdata_accept[i]           = '0;
+      end
       switch_if[i].put_request(aligner_if.get_request());
     end
 
@@ -207,6 +209,28 @@ module pzcorebus_request_1_to_m_switch
       end
     end
   end
+
+  function automatic logic get_command_active(
+    pzcorebus_command_type  mcmd,
+    logic                   command_select,
+    logic                   command_done
+  );
+    if (BROADCAST) begin
+      logic broadcast_command;
+
+      if (ENABLE_BROADCAST_NON_POSTED) begin
+        broadcast_command = pzcorebus_command_kind'(mcmd) == PZCOREBUS_BROADCAST_COMMAND;
+      end
+      else begin
+        broadcast_command = mcmd == PZCOREBUS_BROADCAST;
+      end
+
+      return (!command_done) && (command_select || broadcast_command);
+    end
+    else begin
+      return command_select;
+    end
+  endfunction
 
 //--------------------------------------------------------------
 //  Master Command/Data Alignment

@@ -6,7 +6,9 @@
 //========================================
 module pzcorebus_broadcast_forcer
   import  pzcorebus_pkg::*;
-(
+#(
+  parameter bit ENABLE_BROADCAST_NON_POSTED = '0
+)(
   input var           i_condition,
   pzcorebus_if.slave  slave_if,
   pzcorebus_if.master master_if
@@ -25,15 +27,15 @@ module pzcorebus_broadcast_forcer
     pzcorebus_command_type  mcmd,
     logic                   broadcast_condition
   );
-    if ((mcmd == PZCOREBUS_WRITE) && broadcast_condition) begin
-      return PZCOREBUS_BROADCAST;
-    end
-    else if ((mcmd == PZCOREBUS_WRITE_NON_POSTED) && broadcast_condition) begin
-      return PZCOREBUS_BROADCAST_NON_POSTED;
-    end
-    else begin
-      return mcmd;
-    end
+    logic [1:0] select;
+
+    select[0] = (mcmd == PZCOREBUS_WRITE) && broadcast_condition;
+    select[1] = (mcmd == PZCOREBUS_WRITE_NON_POSTED) && broadcast_condition && ENABLE_BROADCAST_NON_POSTED;
+    case (select)
+      2'b01:    return PZCOREBUS_BROADCAST;
+      2'b10:    return PZCOREBUS_BROADCAST_NON_POSTED;
+      default:  return mcmd;
+    endcase
   endfunction
 
   always_comb begin

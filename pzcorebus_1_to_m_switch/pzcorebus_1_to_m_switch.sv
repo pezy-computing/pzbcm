@@ -21,6 +21,7 @@ module pzcorebus_1_to_m_switch
   parameter int                       WEIGHT_WIDTH                  = 0,
   parameter pzbcm_arbiter_weight_list WEIGHT                        = '1,
   parameter bit                       ENABLE_BROADCAST              = 0,
+  parameter bit                       ENABLE_BROADCAST_NON_POSTED   = 0,
   parameter int                       MAX_NON_POSTED_WRITE_REQUESTS = 8,
   parameter bit [1:0]                 SLAVE_FIFO                    = 0,
   parameter bit [1:0]                 MASTER_FIFO                   = 0,
@@ -43,7 +44,7 @@ module pzcorebus_1_to_m_switch
 );
   pzcorebus_if #(BUS_CONFIG)  bus_if[1+MASTERS]();
 
-  if (ENABLE_BROADCAST && (BUS_CONFIG.profile == PZCOREBUS_CSR)) begin : g
+  if (ENABLE_BROADCAST && ENABLE_BROADCAST_NON_POSTED && (BUS_CONFIG.profile == PZCOREBUS_CSR)) begin : g
     pzcorebus_1_to_m_switch_response_filter #(
       .BUS_CONFIG                     (BUS_CONFIG                     ),
       .MASTERS                        (MASTERS                        ),
@@ -80,19 +81,20 @@ module pzcorebus_1_to_m_switch
   end
 
   pzcorebus_request_1_to_m_switch #(
-    .BUS_CONFIG       (BUS_CONFIG       ),
-    .MASTERS          (MASTERS          ),
-    .EXTERNAL_DECODE  (EXTERNAL_DECODE  ),
-    .SELECTOR_TYPE    (SELECTOR_TYPE    ),
-    .SELECT_WIDTH     (SELECT_WIDTH     ),
-    .SELECT_LSB       (SELECT_LSB       ),
-    .ENABLE_BROADCAST (ENABLE_BROADCAST ),
-    .WAIT_FOR_DATA    (WAIT_FOR_DATA    ),
-    .SLAVE_FIFO       ('0               ),
-    .MASTER_FIFO      (MASTER_FIFO[0]   ),
-    .COMMAND_DEPTH    (COMMAND_DEPTH    ),
-    .DATA_DEPTH       (DATA_DEPTH       ),
-    .ALIGN_OUT        (ALIGN_OUT        )
+    .BUS_CONFIG                   (BUS_CONFIG                   ),
+    .MASTERS                      (MASTERS                      ),
+    .EXTERNAL_DECODE              (EXTERNAL_DECODE              ),
+    .SELECTOR_TYPE                (SELECTOR_TYPE                ),
+    .SELECT_WIDTH                 (SELECT_WIDTH                 ),
+    .SELECT_LSB                   (SELECT_LSB                   ),
+    .ENABLE_BROADCAST             (ENABLE_BROADCAST             ),
+    .ENABLE_BROADCAST_NON_POSTED  (ENABLE_BROADCAST_NON_POSTED  ),
+    .WAIT_FOR_DATA                (WAIT_FOR_DATA                ),
+    .SLAVE_FIFO                   ('0                           ),
+    .MASTER_FIFO                  (MASTER_FIFO[0]               ),
+    .COMMAND_DEPTH                (COMMAND_DEPTH                ),
+    .DATA_DEPTH                   (DATA_DEPTH                   ),
+    .ALIGN_OUT                    (ALIGN_OUT                    )
   ) u_request_switch (
     .i_clk      (i_clk              ),
     .i_rst_n    (i_rst_n            ),
