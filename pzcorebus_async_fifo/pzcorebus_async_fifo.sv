@@ -8,11 +8,13 @@ module pzcorebus_async_fifo
   import  pzcorebus_pkg::*,
           pzbcm_async_fifo_pkg::calc_default_depth;
 #(
-  parameter pzcorebus_config  BUS_CONFIG      = '0,
-  parameter int               STAGES          = `PZBCM_SYNCHRONIZER_DEFAULT_STAGES,
-  parameter int               COMMAND_DEPTH   = calc_default_depth(STAGES),
-  parameter int               DATA_DEPTH      = calc_default_depth(STAGES),
-  parameter int               RESPONSE_DEPTH  = calc_default_depth(STAGES)
+  parameter pzcorebus_config  BUS_CONFIG        = '0,
+  parameter int               STAGES            = `PZBCM_SYNCHRONIZER_DEFAULT_STAGES,
+  parameter int               COMMAND_DEPTH     = calc_default_depth(STAGES),
+  parameter int               DATA_DEPTH        = calc_default_depth(STAGES),
+  parameter int               RESPONSE_DEPTH    = calc_default_depth(STAGES),
+  parameter bit               MERGE_RESET       = '0,
+  parameter int               RESET_SYNC_STAGES = 2
 )(
   input var           i_slave_clk,
   input var           i_slave_rst_n,
@@ -31,12 +33,26 @@ module pzcorebus_async_fifo
 
   logic [2:0]                 empty;
   logic [2:0]                 full;
+  logic                       slave_rst_n;
+  logic                       master_rst_n;
   pzcorebus_packed_command    slave_mcmd;
   pzcorebus_packed_command    master_mcmd;
   pzcorebus_packed_write_data slave_mdata;
   pzcorebus_packed_write_data master_mdata;
   pzcorebus_packed_response   slave_sresp;
   pzcorebus_packed_response   master_sresp;
+
+  pzbcm_async_fifo_reset_sync #(
+    .MERGE_RESET        (MERGE_RESET        ),
+    .RESET_SYNC_STAGES  (RESET_SYNC_STAGES  )
+  ) u_reset_sync (
+    .is_clk   (i_slave_clk    ),
+    .is_rst_n (i_slave_rst_n  ),
+    .os_rst_n (slave_rst_n    ),
+    .id_clk   (i_master_clk   ),
+    .id_rst_n (i_master_rst_n ),
+    .od_rst_n (master_rst_n   )
+  );
 
   always_comb begin
     slave_if.scmd_accept    = !full[0];
@@ -70,13 +86,13 @@ module pzcorebus_async_fifo
       .USE_OUT_DATA_RESET (1                    )
     ) u_async_fifo (
       .is_clk         (i_slave_clk            ),
-      .is_rst_n       (i_slave_rst_n          ),
+      .is_rst_n       (slave_rst_n            ),
       .os_almost_full (),
       .os_full        (full[0]                ),
       .is_push        (slave_if.mcmd_valid    ),
       .is_data        (slave_mcmd             ),
       .id_clk         (i_master_clk           ),
-      .id_rst_n       (i_master_rst_n         ),
+      .id_rst_n       (master_rst_n           ),
       .od_empty       (empty[0]               ),
       .id_pop         (master_if.scmd_accept  ),
       .od_data        (master_mcmd            )
@@ -90,13 +106,13 @@ module pzcorebus_async_fifo
       .STAGES (STAGES                   )
     ) u_async_fifo (
       .is_clk         (i_slave_clk            ),
-      .is_rst_n       (i_slave_rst_n          ),
+      .is_rst_n       (slave_rst_n            ),
       .os_almost_full (),
       .os_full        (full[1]                ),
       .is_push        (slave_if.mdata_valid   ),
       .is_data        (slave_mdata            ),
       .id_clk         (i_master_clk           ),
-      .id_rst_n       (i_master_rst_n         ),
+      .id_rst_n       (master_rst_n           ),
       .od_empty       (empty[1]               ),
       .id_pop         (master_if.sdata_accept ),
       .od_data        (master_mdata           )
@@ -121,13 +137,13 @@ module pzcorebus_async_fifo
       .USE_OUT_DATA_RESET (1                      )
     ) u_async_fifo (
       .is_clk         (i_master_clk           ),
-      .is_rst_n       (i_master_rst_n         ),
+      .is_rst_n       (master_rst_n           ),
       .os_almost_full (),
       .os_full        (full[2]                ),
       .is_push        (master_if.sresp_valid  ),
       .is_data        (master_sresp           ),
       .id_clk         (i_slave_clk            ),
-      .id_rst_n       (i_slave_rst_n          ),
+      .id_rst_n       (slave_rst_n            ),
       .od_empty       (empty[2]               ),
       .id_pop         (slave_if.mresp_accept  ),
       .od_data        (slave_sresp            )

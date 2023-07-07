@@ -9,7 +9,9 @@ module pzbcm_async_handshake #(
   parameter type                  TYPE                = logic [WIDTH-1:0],
   parameter int                   STAGES              = `PZBCM_SYNCHRONIZER_DEFAULT_STAGES,
   parameter bit                   INITIALIZE_DATA_OUT = 1,
-  parameter bit [$bits(TYPE)-1:0] INITIAL_DATA_OUT    = '0
+  parameter bit [$bits(TYPE)-1:0] INITIAL_DATA_OUT    = '0,
+  parameter bit                   MERGE_RESET         = '0,
+  parameter int                   RESET_SYNC_STAGES   = 2
 )(
   input   var       is_clk,
   input   var       is_rst_n,
@@ -22,9 +24,26 @@ module pzbcm_async_handshake #(
   input   var       id_ready,
   output  var TYPE  od_data
 );
+  logic srst_n;
   logic source_state[2];
+  logic drst_n;
   logic destination_state[2];
   TYPE  latched_data;
+
+//--------------------------------------------------------------
+//  Reset
+//--------------------------------------------------------------
+  pzbcm_async_fifo_reset_sync #(
+    .MERGE_RESET        (MERGE_RESET        ),
+    .RESET_SYNC_STAGES  (RESET_SYNC_STAGES  )
+  ) u_reset_sync (
+    .is_clk   (is_clk   ),
+    .is_rst_n (is_rst_n ),
+    .os_rst_n (srst_n   ),
+    .id_clk   (id_clk   ),
+    .id_rst_n (id_rst_n ),
+    .od_rst_n (drst_n   )
+  );
 
 //--------------------------------------------------------------
 //  Source Side
@@ -35,8 +54,8 @@ module pzbcm_async_handshake #(
     logic destination_state_changed;
 
     assign  os_ready  = ready;
-    always_ff @(posedge is_clk, negedge is_rst_n) begin
-      if (!is_rst_n) begin
+    always_ff @(posedge is_clk, negedge srst_n) begin
+      if (!srst_n) begin
         ready <= '1;
       end
       else if ((!ready) && destination_state_changed) begin
@@ -54,8 +73,8 @@ module pzbcm_async_handshake #(
     end
 
     assign  source_state[0] = state;
-    always_ff @(posedge is_clk, negedge is_rst_n) begin
-      if (!is_rst_n) begin
+    always_ff @(posedge is_clk, negedge srst_n) begin
+      if (!srst_n) begin
         state <= '0;
       end
       else if (is_valid && ready) begin
@@ -68,7 +87,7 @@ module pzbcm_async_handshake #(
       .INITIAL_VALUE  ('0 )
     ) u_edge_detector (
       .i_clk      (is_clk                     ),
-      .i_rst_n    (is_rst_n                   ),
+      .i_rst_n    (srst_n                     ),
       .i_clear    ('0                         ),
       .i_d        (destination_state[1]       ),
       .o_edge     (destination_state_changed  ),
@@ -85,7 +104,7 @@ module pzbcm_async_handshake #(
     .STAGES (STAGES )
   ) u_s_to_d (
     .i_clk    (id_clk           ),
-    .i_rst_n  (id_rst_n         ),
+    .i_rst_n  (drst_n         ),
     .i_d      (source_state[0]  ),
     .o_d      (source_state[1]  )
   );
@@ -95,7 +114,7 @@ module pzbcm_async_handshake #(
     .STAGES (STAGES )
   ) u_d_to_s (
     .i_clk    (is_clk               ),
-    .i_rst_n  (is_rst_n             ),
+    .i_rst_n  (srst_n               ),
     .i_d      (destination_state[0] ),
     .o_d      (destination_state[1] )
   );
@@ -110,8 +129,8 @@ module pzbcm_async_handshake #(
     logic source_state_changed;
 
     assign  od_valid  = valid;
-    always_ff @(posedge id_clk, negedge id_rst_n) begin
-      if (!id_rst_n) begin
+    always_ff @(posedge id_clk, negedge drst_n) begin
+      if (!drst_n) begin
         valid <= '0;
       end
       else if (valid && id_ready) begin
@@ -124,8 +143,8 @@ module pzbcm_async_handshake #(
 
     assign  od_data = data;
     if (INITIALIZE_DATA_OUT) begin : g
-      always_ff @(posedge id_clk, negedge id_rst_n) begin
-        if (!id_rst_n) begin
+      always_ff @(posedge id_clk, negedge drst_n) begin
+        if (!drst_n) begin
           data  <= TYPE'(INITIAL_DATA_OUT);
         end
         else if ((!valid) && source_state_changed) begin
@@ -142,8 +161,8 @@ module pzbcm_async_handshake #(
     end
 
     assign  destination_state[0]  = state;
-    always_ff @(posedge id_clk, negedge id_rst_n) begin
-      if (!id_rst_n) begin
+    always_ff @(posedge id_clk, negedge drst_n) begin
+      if (!drst_n) begin
         state <= '0;
       end
       else if (valid && id_ready) begin
@@ -156,7 +175,7 @@ module pzbcm_async_handshake #(
       .INITIAL_VALUE  ('0 )
     ) u_edge_detector (
       .i_clk      (id_clk               ),
-      .i_rst_n    (id_rst_n             ),
+      .i_rst_n    (drst_n               ),
       .i_clear    ('0                   ),
       .i_d        (source_state[1]      ),
       .o_edge     (source_state_changed ),

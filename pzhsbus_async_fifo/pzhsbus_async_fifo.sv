@@ -4,9 +4,13 @@
 //                    All Rights Reserved.
 //
 //========================================
-module pzhsbus_async_fifo #(
-  parameter int DEPTH   = 4,
-  parameter int STAGES  = `PZBCM_SYNCHRONIZER_DEFAULT_STAGES
+module pzhsbus_async_fifo
+  import  pzbcm_async_fifo_pkg::calc_default_depth;
+#(
+  parameter int STAGES            = `PZBCM_SYNCHRONIZER_DEFAULT_STAGES,
+  parameter int DEPTH             = calc_default_depth(STAGES),
+  parameter bit MERGE_RESET       = '0,
+  parameter int RESET_SYNC_STAGES = 2
 )(
   input var         i_slave_clk,
   input var         i_slave_rst_n,
@@ -24,9 +28,11 @@ module pzhsbus_async_fifo #(
   assign  master_if.valid = ~empty;
 
   pzbcm_async_fifo #(
-    .TYPE   (__payload  ),
-    .DEPTH  (DEPTH      ),
-    .STAGES (STAGES     )
+    .TYPE               (__payload            ),
+    .DEPTH              (DEPTH                ),
+    .STAGES             (STAGES               ),
+    .MERGE_RESET        (MERGE_RESET          ),
+    .RESET_SYNC_STAGES  (RESET_SYNC_STAGES    )
   ) u_async_fifo (
     .is_clk         (i_slave_clk        ),
     .is_rst_n       (i_slave_rst_n      ),

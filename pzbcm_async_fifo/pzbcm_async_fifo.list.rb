@@ -7,4 +7,5 @@
 file_list   'pzbcm_synchronizer/pzbcm_synchronizer.list.rb'
 file_list   'pzbcm_gray/pzbcm_gray.list.rb'
 source_file 'pzbcm_async_fifo_pkg.sv'
+source_file 'pzbcm_async_fifo_reset_sync.sv'
 source_file 'pzbcm_async_fifo.sv'

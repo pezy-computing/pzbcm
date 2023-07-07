@@ -8,9 +8,11 @@ module pzcorebus_response_async_fifo
   import  pzcorebus_pkg::*,
           pzbcm_async_fifo_pkg::calc_default_depth;
 #(
-  parameter pzcorebus_config  BUS_CONFIG      = '0,
-  parameter int               STAGES          = `PZBCM_SYNCHRONIZER_DEFAULT_STAGES,
-  parameter int               RESPONSE_DEPTH  = calc_default_depth(STAGES)
+  parameter pzcorebus_config  BUS_CONFIG        = '0,
+  parameter int               STAGES            = `PZBCM_SYNCHRONIZER_DEFAULT_STAGES,
+  parameter int               RESPONSE_DEPTH    = calc_default_depth(STAGES),
+  parameter bit               MERGE_RESET       = '0,
+  parameter int               RESET_SYNC_STAGES = 2
 )(
   input var                 i_slave_clk,
   input var                 i_slave_rst_n,
@@ -40,7 +42,9 @@ module pzcorebus_response_async_fifo
     .WIDTH              (PACKED_RESPONSE_WIDTH  ),
     .DEPTH              (RESPONSE_DEPTH         ),
     .STAGES             (STAGES                 ),
-    .USE_OUT_DATA_RESET (1                      )
+    .USE_OUT_DATA_RESET (1                      ),
+    .MERGE_RESET        (MERGE_RESET            ),
+    .RESET_SYNC_STAGES  (RESET_SYNC_STAGES      )
   ) u_async_fifo (
     .is_clk         (i_master_clk           ),
     .is_rst_n       (i_master_rst_n         ),

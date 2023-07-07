@@ -13,7 +13,9 @@ module pzbcm_async_fifo
   parameter int   DEPTH               = calc_default_depth(STAGES),
   parameter int   THRESHOLD           = DEPTH,
   parameter bit   USE_OUT_DATA_RESET  = '0,
-  parameter TYPE  INITIAL_OUT_DATA    = TYPE'(0)
+  parameter TYPE  INITIAL_OUT_DATA    = TYPE'(0),
+  parameter bit   MERGE_RESET         = '0,
+  parameter int   RESET_SYNC_STAGES   = 2
 )(
   input   var       is_clk,
   input   var       is_rst_n,
@@ -33,11 +35,13 @@ module pzbcm_async_fifo
 
   localparam  int POINTER_WIDTH = $clog2(DEPTH) + 1;
 
+  logic                     srst_n;
   logic [POINTER_WIDTH-1:0] wp_sclk;
   logic [POINTER_WIDTH-1:0] wp_sclk_next;
   logic [POINTER_WIDTH-1:0] wp_sclk_gray;
   logic [POINTER_WIDTH-1:0] rp_sclk;
   logic [POINTER_WIDTH-1:0] rp_sclk_gray;
+  logic                     drst_n;
   logic [POINTER_WIDTH-1:0] wp_dclk;
   logic [POINTER_WIDTH-1:0] wp_dclk_gray;
   logic [POINTER_WIDTH-1:0] rp_dclk;
@@ -48,6 +52,21 @@ module pzbcm_async_fifo
 //  Utility
 //--------------------------------------------------------------
   pzbcm_gray #(POINTER_WIDTH) u_gray();
+
+//--------------------------------------------------------------
+//  Reset
+//--------------------------------------------------------------
+  pzbcm_async_fifo_reset_sync #(
+    .MERGE_RESET        (MERGE_RESET        ),
+    .RESET_SYNC_STAGES  (RESET_SYNC_STAGES  )
+  ) u_reset_sync (
+    .is_clk   (is_clk   ),
+    .is_rst_n (is_rst_n ),
+    .os_rst_n (srst_n   ),
+    .id_clk   (id_clk   ),
+    .id_rst_n (id_rst_n ),
+    .od_rst_n (drst_n   )
+  );
 
 //--------------------------------------------------------------
 //  FIFO Control (Write Side)
@@ -70,8 +89,8 @@ module pzbcm_async_fifo
     word_count  = wp_sclk_next - rp_sclk;
   end
 
-  always_ff @(posedge is_clk, negedge is_rst_n) begin
-    if (!is_rst_n) begin
+  always_ff @(posedge is_clk, negedge srst_n) begin
+    if (!srst_n) begin
       almost_full <= '0;
       full        <= '0;
     end
@@ -90,8 +109,8 @@ module pzbcm_async_fifo
     end
   end
 
-  always_ff @(posedge is_clk, negedge is_rst_n) begin
-    if (!is_rst_n) begin
+  always_ff @(posedge is_clk, negedge srst_n) begin
+    if (!srst_n) begin
       wp_sclk <= POINTER_WIDTH'(0);
     end
     else begin
@@ -99,8 +118,8 @@ module pzbcm_async_fifo
     end
   end
 
-  always_ff @(posedge is_clk, negedge is_rst_n) begin
-    if (!is_rst_n) begin
+  always_ff @(posedge is_clk, negedge srst_n) begin
+    if (!srst_n) begin
       wp_sclk_gray  <= POINTER_WIDTH'(0);
     end
     else begin
@@ -132,8 +151,8 @@ module pzbcm_async_fifo
     end
   end
 
-  always_ff @(posedge id_clk, negedge id_rst_n) begin
-    if (!id_rst_n) begin
+  always_ff @(posedge id_clk, negedge drst_n) begin
+    if (!drst_n) begin
       empty <= '1;
     end
     else begin
@@ -145,8 +164,8 @@ module pzbcm_async_fifo
     pop = (!empty) ? id_pop : '0;
   end
 
-  always_ff @(posedge id_clk, negedge id_rst_n) begin
-    if (!id_rst_n) begin
+  always_ff @(posedge id_clk, negedge drst_n) begin
+    if (!drst_n) begin
       rp_dclk       <= POINTER_WIDTH'(0);
       rp_dclk_next  <= POINTER_WIDTH'(1);
     end
@@ -156,8 +175,8 @@ module pzbcm_async_fifo
     end
   end
 
-  always_ff @(posedge id_clk, negedge id_rst_n) begin
-    if (!id_rst_n) begin
+  always_ff @(posedge id_clk, negedge drst_n) begin
+    if (!drst_n) begin
       rp_dclk_gray  <= POINTER_WIDTH'(0);
     end
     else begin
@@ -177,7 +196,7 @@ module pzbcm_async_fifo
     .STAGES (STAGES         )
   ) u_synchronizer_wp (
     .i_clk    (id_clk       ),
-    .i_rst_n  (id_rst_n     ),
+    .i_rst_n  (drst_n       ),
     .i_d      (wp_sclk_gray ),
     .o_d      (wp_dclk_gray )
   );
@@ -187,7 +206,7 @@ module pzbcm_async_fifo
     .STAGES (STAGES         )
   ) u_synchronizer_rp (
     .i_clk    (is_clk       ),
-    .i_rst_n  (is_rst_n     ),
+    .i_rst_n  (srst_n       ),
     .i_d      (rp_dclk_gray ),
     .o_d      (rp_sclk_gray )
   );
@@ -202,8 +221,8 @@ module pzbcm_async_fifo
   end
 
   if (USE_OUT_DATA_RESET) begin : g_q
-    always_ff @(posedge id_clk, negedge id_rst_n) begin
-      if (!id_rst_n) begin
+    always_ff @(posedge id_clk, negedge drst_n) begin
+      if (!drst_n) begin
         q <= INITIAL_OUT_DATA;
       end
       else if (empty && (!empty_next)) begin
