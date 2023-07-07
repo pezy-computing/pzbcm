@@ -501,21 +501,11 @@ function automatic logic response_ack(); \
 endfunction \
 \
 function automatic logic response_last_ack(); \
-  if (BUS_CONFIG.profile == PZCOREBUS_CSR) begin \
-    return response_ack(); \
-  end \
-  else begin \
-    return response_ack() && sresp_last[0]; \
-  end \
+  return response_ack() && ((BUS_CONFIG.profile == PZCOREBUS_CSR) || sresp_last[0]); \
 endfunction \
 \
 function automatic logic response_last_burst_ack(); \
-  if (BUS_CONFIG.profile == PZCOREBUS_MEMORY_H) begin \
-    return response_ack() && 1'(sresp_last >> 1); \
-  end \
-  else begin \
-    return response_last_ack(); \
-  end \
+  return response_ack() && ((BUS_CONFIG.profile == PZCOREBUS_CSR) || sresp_last[$bits(pzcorebus_response_last)-1]); \
 endfunction \
 \
 function automatic logic response_with_data_ack(); \
