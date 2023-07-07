@@ -119,7 +119,7 @@ module pzcorebus_membus2csrbus_adapter
   };
 
   pzcorebus_if #(BUS_CONFIG)          membus_if();
-  pzcorebus_if #(BUS_CONFIG)          aligner_if();
+  pzcorebus_if #(BUS_CONFIG)          slicer_if();
   pzcorebus_if #(CSRBUS_CONFIG)       csrbus_if();
   pzcorebus_command                   request_command;
   pzcorebus_sideband_info             sideband_info;
@@ -133,11 +133,8 @@ module pzcorebus_membus2csrbus_adapter
   logic [1:0][LENGTH_COUNT_WIDTH-1:0] response_count;
 
 //--------------------------------------------------------------
-//  Command/Data aligner
+//  Slicer
 //--------------------------------------------------------------
-  localparam  int REQUEST_FIFO_DEPTH  = (SLAVE_SLICER[0]) ? 2 : 0;
-  localparam  int RESPONSE_FIFO_DEPTH = (SLAVE_SLICER[1]) ? 2 : 0;
-
   always_comb begin
     membus_slave_if.scmd_accept = membus_if.scmd_accept;
     membus_if.mcmd_valid        = membus_slave_if.mcmd_valid;
@@ -171,18 +168,15 @@ module pzcorebus_membus2csrbus_adapter
     return (`PZCOREBUS_MAX_REQUEST_INFO_WIDTH)'(info);
   endfunction
 
-  pzcorebus_command_data_aligner #(
-    .BUS_CONFIG     (BUS_CONFIG           ),
-    .WAIT_FOR_DATA  (1                    ),
-    .SLAVE_FIFO     (1                    ),
-    .COMMAND_DEPTH  (REQUEST_FIFO_DEPTH   ),
-    .DATA_DEPTH     (REQUEST_FIFO_DEPTH   ),
-    .RESPONSE_DEPTH (RESPONSE_FIFO_DEPTH  )
-  ) u_aligner (
+  pzcorebus_slicer #(
+    .BUS_CONFIG     (BUS_CONFIG       ),
+    .REQUEST_VALID  (SLAVE_SLICER[0]  ),
+    .RESPONSE_VALID (SLAVE_SLICER[1]  )
+  ) u_slicer (
     .i_clk      (i_clk      ),
     .i_rst_n    (i_rst_n    ),
     .slave_if   (membus_if  ),
-    .master_if  (aligner_if )
+    .master_if  (slicer_if  )
   );
 
 //--------------------------------------------------------------
@@ -204,14 +198,14 @@ module pzcorebus_membus2csrbus_adapter
     logic [1:0]                         update;
 
     always_comb begin
-      sideband_info = pzcorebus_sideband_info'(aligner_if.minfo);
+      sideband_info = pzcorebus_sideband_info'(slicer_if.minfo);
     end
 
     always_comb begin
       if (!busy) begin
-        length_count[0] = get_aligned_length(aligner_if.maddr, aligner_if.get_length());
-        data_count[0]   = aligner_if.maddr[UNIT_OFFSET_LSB+:UNIT_OFFSET_WIDTH];
-        maddr[0]        = aligner_if.maddr[CSRBUS_CONFIG.address_width-1:0];
+        length_count[0] = get_aligned_length(slicer_if.maddr, slicer_if.get_length());
+        data_count[0]   = slicer_if.maddr[UNIT_OFFSET_LSB+:UNIT_OFFSET_WIDTH];
+        maddr[0]        = slicer_if.maddr[CSRBUS_CONFIG.address_width-1:0];
       end
       else begin
         length_count[0] = length_count[1];
@@ -266,32 +260,32 @@ module pzcorebus_membus2csrbus_adapter
     end
 
     always_comb begin
-      csrbus_if.mcmd  = get_mcmd(aligner_if.mcmd, sideband_info);
+      csrbus_if.mcmd  = get_mcmd(slicer_if.mcmd, sideband_info);
       csrbus_if.mid   = '0;
       csrbus_if.maddr = maddr[0];
-      csrbus_if.mdata = aligner_if.mdata[UNIT_WIDTH*data_count[0]+:UNIT_WIDTH];
+      csrbus_if.mdata = slicer_if.mdata[UNIT_WIDTH*data_count[0]+:UNIT_WIDTH];
       csrbus_if.minfo = sideband_info.minfo;
 
       non_posted_ready    = busy || (!info_fifo_full);
-      write_data_inactive = aligner_if.mdata_byteen[UNIT_BYTE_SIZE*data_count[0]+:UNIT_BYTE_SIZE] == '0;
-      read_valid[0]       = aligner_if.command_valid(PZCOREBUS_READ);
+      write_data_inactive = slicer_if.mdata_byteen[UNIT_BYTE_SIZE*data_count[0]+:UNIT_BYTE_SIZE] == '0;
+      read_valid[0]       = slicer_if.command_valid(PZCOREBUS_READ);
       read_valid[1]       = non_posted_ready;
-      write_valid[0]      = aligner_if.command_with_data_valid();
-      write_valid[1]      = aligner_if.mdata_valid;
+      write_valid[0]      = slicer_if.command_with_data_valid();
+      write_valid[1]      = slicer_if.mdata_valid;
       write_valid[2]      = csrbus_if.is_posted_command() || non_posted_ready;
       if (read_valid == '1) begin
-        aligner_if.scmd_accept  = csrbus_if.scmd_accept && length_count_last;
-        aligner_if.sdata_accept = '0;
+        slicer_if.scmd_accept   = csrbus_if.scmd_accept && length_count_last;
+        slicer_if.sdata_accept  = '0;
         csrbus_if.mcmd_valid    = '1;
       end
       else if (write_valid == '1) begin
-        aligner_if.scmd_accept  = (csrbus_if.scmd_accept || write_data_inactive) && length_count_last;
-        aligner_if.sdata_accept = (csrbus_if.scmd_accept || write_data_inactive) && (data_count_last || length_count_last);
+        slicer_if.scmd_accept   = (csrbus_if.scmd_accept || write_data_inactive) && length_count_last;
+        slicer_if.sdata_accept  = (csrbus_if.scmd_accept || write_data_inactive) && (data_count_last || length_count_last);
         csrbus_if.mcmd_valid    = !write_data_inactive;
       end
       else begin
-        aligner_if.scmd_accept  = '0;
-        aligner_if.sdata_accept = '0;
+        slicer_if.scmd_accept   = '0;
+        slicer_if.sdata_accept  = '0;
         csrbus_if.mcmd_valid    = '0;
       end
     end
@@ -305,7 +299,7 @@ module pzcorebus_membus2csrbus_adapter
 
     always_comb begin
       info_fifo_push    = (update != '0) && csrbus_if.is_non_posted_command() && (!busy);
-      response_info[0]  = get_response_info(aligner_if.mcmd, aligner_if.mid, aligner_if.maddr, sideband_info);
+      response_info[0]  = get_response_info(slicer_if.mcmd, slicer_if.mid, slicer_if.maddr, sideband_info);
     end
 
     always_comb begin
@@ -487,7 +481,7 @@ module pzcorebus_membus2csrbus_adapter
       else if (csrbus_if.response_ack()) begin
         length_count[1]     <= length_count_next;
         uniten_end_count[1] <= uniten_count_next;
-        if (aligner_if.sresp_valid) begin
+        if (slicer_if.sresp_valid) begin
           uniten_start_count[1] <= uniten_count_next;
         end
       end
@@ -500,35 +494,35 @@ module pzcorebus_membus2csrbus_adapter
 
       if (info_fifo_empty) begin
         csrbus_if.mresp_accept  = '0;
-        aligner_if.sresp_valid  = '0;
+        slicer_if.sresp_valid   = '0;
       end
       else if (response_info[1].ignore_response || (sresp_valid == '0)) begin
         csrbus_if.mresp_accept  = '1;
-        aligner_if.sresp_valid  = '0;
+        slicer_if.sresp_valid   = '0;
       end
       else begin
-        csrbus_if.mresp_accept  = aligner_if.mresp_accept;
-        aligner_if.sresp_valid  = csrbus_if.sresp_valid || sresp_valid[2];
+        csrbus_if.mresp_accept  = slicer_if.mresp_accept;
+        slicer_if.sresp_valid   = csrbus_if.sresp_valid || sresp_valid[2];
       end
 
-      aligner_if.sresp        = response_info[1].sresp;
-      aligner_if.sid          = response_info[1].sid;
-      aligner_if.serror       = csrbus_if.serror || serror;
-      aligner_if.sdata        = sdata;
-      aligner_if.sinfo        = '0;
-      aligner_if.sresp_uniten = get_sresp_uniten(uniten_start_count[0], uniten_end_count[0]);
-      aligner_if.sresp_last   = (sresp_valid[2:1] != '0) ? '1 : '0;
+      slicer_if.sresp         = response_info[1].sresp;
+      slicer_if.sid           = response_info[1].sid;
+      slicer_if.serror        = csrbus_if.serror || serror;
+      slicer_if.sdata         = sdata;
+      slicer_if.sinfo         = '0;
+      slicer_if.sresp_uniten  = get_sresp_uniten(uniten_start_count[0], uniten_end_count[0]);
+      slicer_if.sresp_last    = (sresp_valid[2:1] != '0) ? '1 : '0;
     end
 
     always_ff @(posedge i_clk, negedge i_rst_n) begin
       if (!i_rst_n) begin
         serror  <= '0;
       end
-      else if (aligner_if.response_ack() || (respons_done != '0)) begin
+      else if (slicer_if.response_ack() || (respons_done != '0)) begin
         serror  <= '0;
       end
       else if (csrbus_if.response_ack()) begin
-        serror  <= aligner_if.serror;
+        serror  <= slicer_if.serror;
       end
     end
 
