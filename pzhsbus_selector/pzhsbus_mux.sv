@@ -11,7 +11,7 @@ module pzhsbus_mux #(
 )(
   input var [SELECT_WIDTH-1:0]  i_select,
   pzhsbus_if.slave              slave_if[SLAVES],
-  pahsbus_if.master             master_if
+  pzhsbus_if.master             master_if
 );
   typedef master_if.__payload __payload;
 

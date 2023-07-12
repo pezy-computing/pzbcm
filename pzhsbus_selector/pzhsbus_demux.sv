@@ -17,9 +17,9 @@ module pzhsbus_demux #(
   logic ready[MASTERS];
 
   for (genvar i = 0;i < MASTERS;++i) begin : g
-    assign  master_if[i].valid    = valid;
+    assign  master_if[i].valid    = valid[i];
     assign  ready[i]              = master_if[i].ready;
-    assign  master_if[i].payload  = slave_if[i].payload;
+    assign  master_if[i].payload  = slave_if.payload;
   end
 
   pzbcm_demux #(
