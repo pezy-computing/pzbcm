@@ -39,21 +39,19 @@ module pzcorebus_axi2corebus_simple_bridge
 
   function automatic logic is_4bytes_access(
     pzaxi_burst_length                  axlen,
-    logic [$bits(pzaxi_burst_size)-1:0] axsize,
-    logic                               read_channel
+    logic [$bits(pzaxi_burst_size)-1:0] axsize
   );
     return
-      SUPPORT_4BYTES_ACCESS && read_channel &&
+      SUPPORT_4BYTES_ACCESS &&
       (axlen == pzaxi_burst_length'(0)) && (axsize == PZAXI_4_BYTES_BURST);
   endfunction
 
   function automatic logic [ADDRESS_WIDTH-1:0] get_maddr(
     logic [ADDRESS_WIDTH-1:0]           axaddr,
     pzaxi_burst_length                  axlen,
-    logic [$bits(pzaxi_burst_size)-1:0] axsize,
-    logic                               read_channel
+    logic [$bits(pzaxi_burst_size)-1:0] axsize
   );
-    if (is_4bytes_access(axlen, axsize, read_channel)) begin
+    if (is_4bytes_access(axlen, axsize)) begin
       return {axaddr[ADDRESS_WIDTH-1:2], 2'b01};
     end
     else begin
@@ -64,8 +62,7 @@ module pzcorebus_axi2corebus_simple_bridge
   function automatic logic [LENGTH_WIDTH-1:0] get_mlength(
     logic [ADDRESS_WIDTH-1:0]           axaddr,
     pzaxi_burst_length                  axlen,
-    logic [$bits(pzaxi_burst_size)-1:0] axsize,
-    logic                               read_channel
+    logic [$bits(pzaxi_burst_size)-1:0] axsize
   );
     pzaxi_burst_length_unpacked       burst_length;
     logic [UNPACKED_LENGTH_WIDTH-1:0] length;
@@ -75,7 +72,7 @@ module pzcorebus_axi2corebus_simple_bridge
     if (COREBUS_CONFIG.profile == PZCOREBUS_MEMORY_L) begin
       return LENGTH_WIDTH'(burst_length);
     end
-    else if (is_4bytes_access(axlen, axsize, read_channel)) begin
+    else if (is_4bytes_access(axlen, axsize)) begin
       return LENGTH_WIDTH'(1);
     end
     else begin
@@ -97,8 +94,8 @@ module pzcorebus_axi2corebus_simple_bridge
     read_bus_if.mcmd_valid  = axi_if.arvalid;
     read_bus_if.mcmd        = PZCOREBUS_READ;
     read_bus_if.mid         = axi_if.arid;
-    read_bus_if.maddr       = get_maddr(axi_if.araddr, axi_if.arlen, axi_if.arsize, '1);
-    read_bus_if.mlength     = get_mlength(axi_if.araddr, axi_if.arlen, axi_if.arsize, '1);
+    read_bus_if.maddr       = get_maddr(axi_if.araddr, axi_if.arlen, axi_if.arsize);
+    read_bus_if.mlength     = get_mlength(axi_if.araddr, axi_if.arlen, axi_if.arsize);
     read_bus_if.minfo       = '0;
   end
 
@@ -194,8 +191,8 @@ module pzcorebus_axi2corebus_simple_bridge
     write_bus_if.mcmd_valid = (!bid_full) && axi_if.awvalid;
     write_bus_if.mcmd       = PZCOREBUS_WRITE;
     write_bus_if.mid        = axi_if.awid;
-    write_bus_if.maddr      = get_maddr(axi_if.awaddr, axi_if.awlen, axi_if.awsize, '0);
-    write_bus_if.mlength    = get_mlength(axi_if.awaddr, axi_if.awlen, axi_if.awsize, '0);
+    write_bus_if.maddr      = get_maddr(axi_if.awaddr, axi_if.awlen, axi_if.awsize);
+    write_bus_if.mlength    = get_mlength(axi_if.awaddr, axi_if.awlen, axi_if.awsize);
     write_bus_if.minfo      = '0;
   end
 
