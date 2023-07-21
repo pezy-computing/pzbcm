@@ -12,7 +12,8 @@ module pzcorebus_membus2csrbus_adapter
   parameter int               MAX_NON_POSTED_REQUESTS = 2,
   parameter int               RESPONSE_INFO_DEPTH     = MAX_NON_POSTED_REQUESTS,
   parameter bit [1:0]         SLAVE_SLICER            = '1,
-  parameter bit [1:0]         MASTER_SLICER           = '1
+  parameter bit [1:0]         MASTER_SLICER           = '1,
+  parameter int               VALID_ADDRESS_WIDTH     = CSRBUS_CONFIG.address_width
 )(
   input var                               i_clk,
   input var                               i_rst_n,
@@ -24,6 +25,7 @@ module pzcorebus_membus2csrbus_adapter
 );
   initial begin
     assume (CSRBUS_CONFIG.data_width == 32);
+    assume (VALID_ADDRESS_WIDTH inside {[1:CSRBUS_CONFIG.address_width]});
     if (MEMBUS_CONFIG.profile == PZCOREBUS_MEMORY_H) begin
       assume (MEMBUS_CONFIG.unit_data_width == 32);
     end
@@ -98,6 +100,7 @@ module pzcorebus_membus2csrbus_adapter
   localparam  int UNIT_OFFSET_WIDTH     = $clog2(UNIT_SIZE);
   localparam  int WORD_SIZE             = get_word_size();
   localparam  int WORD_COUNT_WIDTH      = get_word_count_width();
+  localparam  int UNIT_ADDRESS_WIDTH    = VALID_ADDRESS_WIDTH - UNIT_OFFSET_LSB;
 
   typedef struct packed {
     pzcorebus_response_type             sresp;
@@ -205,7 +208,7 @@ module pzcorebus_membus2csrbus_adapter
       if (!busy) begin
         length_count[0] = get_aligned_length(slicer_if.maddr, slicer_if.get_length());
         data_count[0]   = slicer_if.maddr[UNIT_OFFSET_LSB+:UNIT_OFFSET_WIDTH];
-        maddr[0]        = slicer_if.maddr[CSRBUS_CONFIG.address_width-1:0];
+        maddr[0]        = get_initial_maddr(slicer_if.maddr);
       end
       else begin
         length_count[0] = length_count[1];
@@ -332,14 +335,22 @@ module pzcorebus_membus2csrbus_adapter
     return length - LENGTH_COUNT_WIDTH'(offset);
   endfunction
 
+  function automatic logic [CSRBUS_CONFIG.address_width-1:0] get_initial_maddr(
+    logic [MEMBUS_CONFIG.address_width-1:0] maddr
+  );
+    logic [VALID_ADDRESS_WIDTH-1:0] initial_maddr;
+    initial_maddr = {maddr[UNIT_OFFSET_LSB+:UNIT_ADDRESS_WIDTH], UNIT_OFFSET_LSB'(0)};
+    return (CSRBUS_CONFIG.address_width)'(initial_maddr);
+  endfunction
+
   function automatic logic [CSRBUS_CONFIG.address_width-1:0] get_next_maddr(
     logic [CSRBUS_CONFIG.address_width-1:0] maddr
   );
-    logic [CSRBUS_CONFIG.address_width-1:0] base;
-    logic [CSRBUS_CONFIG.address_width-1:0] delta;
-    base  = {maddr[CSRBUS_CONFIG.address_width-1:UNIT_OFFSET_LSB], UNIT_OFFSET_LSB'(0)};
-    delta = (CSRBUS_CONFIG.address_width)'(UNIT_WIDTH / 8);
-    return base + delta;
+    logic [UNIT_ADDRESS_WIDTH-1:0]  base;
+    logic [UNIT_ADDRESS_WIDTH-1:0]  maddr_next;
+    base        = maddr[UNIT_OFFSET_LSB+:UNIT_ADDRESS_WIDTH];
+    maddr_next  = base + UNIT_ADDRESS_WIDTH'(1);
+    return {maddr_next, UNIT_OFFSET_LSB'(0)};
   endfunction
 
   function automatic pzcorebus_command_type get_mcmd(
