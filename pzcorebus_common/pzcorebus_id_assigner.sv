@@ -7,17 +7,29 @@
 module pzcorebus_id_assigner
   import  pzcorebus_pkg::*;
 #(
-  parameter pzcorebus_config  BUS_CONFIG      = '0,
-  parameter int               ID_WIDTH        = BUS_CONFIG.id_width,
-  parameter int               LOCAL_ID_WIDTH  = ID_WIDTH - 1,
-  parameter int               LOCAL_ID_LSB    = 0,
-  parameter int               BASE_ID_WIDTH   = ID_WIDTH - LOCAL_ID_WIDTH,
-  parameter int               BASE_ID_LSB     = LOCAL_ID_WIDTH
+  parameter   pzcorebus_config  BUS_CONFIG            = '0,
+  parameter   int               ID_WIDTH              = BUS_CONFIG.id_width,
+  parameter   int               LOCAL_ID_WIDTH        = ID_WIDTH - 1,
+  parameter   int               LOCAL_ID_LSB          = 0,
+  parameter   int               BASE_ID_WIDTH         = ID_WIDTH - LOCAL_ID_WIDTH,
+  parameter   int               BASE_ID_LSB           = LOCAL_ID_WIDTH,
+  localparam  int               BASE_ID_ACTUAL_WIDTH  = (BASE_ID_WIDTH > 0) ? BASE_ID_WIDTH : 1
 )(
-  input var [BASE_ID_WIDTH-1:0] i_base_id,
-  pzcorebus_if.slave            slave_if,
-  pzcorebus_if.master           master_if
+  input var [BASE_ID_ACTUAL_WIDTH-1:0]  i_base_id,
+  pzcorebus_if.slave                    slave_if,
+  pzcorebus_if.master                   master_if
 );
+  localparam  bit [ID_WIDTH-1:0]  LOCAL_ID_MASK = (1 << LOCAL_ID_WIDTH) - 1;
+
+  function automatic logic [ID_WIDTH-1:0] get_mid(
+    logic [BASE_ID_ACTUAL_WIDTH-1:0]  base_id,
+    logic [ID_WIDTH-1:0]              local_id
+  );
+    return
+      ID_WIDTH'(base_id << BASE_ID_LSB) |
+      ID_WIDTH'((local_id & LOCAL_ID_MASK) << LOCAL_ID_LSB);
+  endfunction
+
   always_comb begin
     slave_if.scmd_accept  = master_if.scmd_accept;
     master_if.mcmd_valid  = slave_if.mcmd_valid;
@@ -27,17 +39,6 @@ module pzcorebus_id_assigner
     master_if.mlength     = slave_if.mlength;
     master_if.minfo       = slave_if.minfo;
   end
-
-  function automatic logic [ID_WIDTH-1:0] get_mid(
-    logic [BASE_ID_WIDTH-1:0] base_id,
-    logic [ID_WIDTH-1:0]      local_id
-  );
-    logic [ID_WIDTH-1:0]  id;
-    id                                = '0;
-    id[BASE_ID_LSB+:BASE_ID_WIDTH]    = base_id;
-    id[LOCAL_ID_LSB+:LOCAL_ID_WIDTH]  = local_id[0+:LOCAL_ID_WIDTH];
-    return id;
-  endfunction
 
   always_comb begin
     slave_if.sdata_accept   = master_if.sdata_accept;
@@ -62,24 +63,36 @@ module pzcorebus_id_assigner
   function automatic logic [ID_WIDTH-1:0] get_sid(
     logic [ID_WIDTH-1:0]  id
   );
-    return ID_WIDTH'(id[LOCAL_ID_LSB+:LOCAL_ID_WIDTH]);
+    return ID_WIDTH'((id >> LOCAL_ID_LSB) & LOCAL_ID_MASK);
   endfunction
 endmodule
 
 module pzcorebus_request_id_assigner
   import  pzcorebus_pkg::*;
 #(
-  parameter pzcorebus_config  BUS_CONFIG      = '0,
-  parameter int               ID_WIDTH        = BUS_CONFIG.id_width,
-  parameter int               LOCAL_ID_WIDTH  = ID_WIDTH - 1,
-  parameter int               LOCAL_ID_LSB    = 0,
-  parameter int               BASE_ID_WIDTH   = ID_WIDTH - LOCAL_ID_WIDTH,
-  parameter int               BASE_ID_LSB     = LOCAL_ID_WIDTH
+  parameter   pzcorebus_config  BUS_CONFIG            = '0,
+  parameter   int               ID_WIDTH              = BUS_CONFIG.id_width,
+  parameter   int               LOCAL_ID_WIDTH        = ID_WIDTH - 1,
+  parameter   int               LOCAL_ID_LSB          = 0,
+  parameter   int               BASE_ID_WIDTH         = ID_WIDTH - LOCAL_ID_WIDTH,
+  parameter   int               BASE_ID_LSB           = LOCAL_ID_WIDTH,
+  localparam  int               BASE_ID_ACTUAL_WIDTH  = (BASE_ID_WIDTH > 0) ? BASE_ID_WIDTH : 1
 )(
-  input var [BASE_ID_WIDTH-1:0] i_base_id,
-  interface.request_slave       slave_if,
-  interface.request_master      master_if
+  input var [BASE_ID_ACTUAL_WIDTH-1:0]  i_base_id,
+  interface.request_slave               slave_if,
+  interface.request_master              master_if
 );
+  localparam  bit [ID_WIDTH-1:0]  LOCAL_ID_MASK = (1 << LOCAL_ID_WIDTH) - 1;
+
+  function automatic logic [ID_WIDTH-1:0] get_mid(
+    logic [BASE_ID_ACTUAL_WIDTH-1:0]  base_id,
+    logic [ID_WIDTH-1:0]              local_id
+  );
+    return
+      ID_WIDTH'(base_id << BASE_ID_LSB) |
+      ID_WIDTH'((local_id & LOCAL_ID_MASK) << LOCAL_ID_LSB);
+  endfunction
+
   always_comb begin
     slave_if.scmd_accept  = master_if.scmd_accept;
     master_if.mcmd_valid  = slave_if.mcmd_valid;
@@ -89,17 +102,6 @@ module pzcorebus_request_id_assigner
     master_if.mlength     = slave_if.mlength;
     master_if.minfo       = slave_if.minfo;
   end
-
-  function automatic logic [ID_WIDTH-1:0] get_mid(
-    logic [BASE_ID_WIDTH-1:0] base_id,
-    logic [ID_WIDTH-1:0]      local_id
-  );
-    logic [ID_WIDTH-1:0]  id;
-    id                                = '0;
-    id[BASE_ID_LSB+:BASE_ID_WIDTH]    = base_id;
-    id[LOCAL_ID_LSB+:LOCAL_ID_WIDTH]  = local_id[0+:LOCAL_ID_WIDTH];
-    return id;
-  endfunction
 
   always_comb begin
     slave_if.sdata_accept   = master_if.sdata_accept;
