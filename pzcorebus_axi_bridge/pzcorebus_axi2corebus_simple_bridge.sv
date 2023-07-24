@@ -36,6 +36,7 @@ module pzcorebus_axi2corebus_simple_bridge
   localparam  int OFFSET_LSB            = $clog2(UNIT_WIDTH / 8);
   localparam  int OFFSET_WIDTH          = $clog2(COREBUS_CONFIG.data_width / UNIT_WIDTH);
   localparam  int BVALID_COUNT_WIDTH    = $clog2(BID_FIFO_DEPTH + 1);
+  localparam  int AXI_ADDRESS_WIDTH     = AXI_CONFIG.address_width;
 
   function automatic logic is_4bytes_access(
     pzaxi_burst_length                  axlen,
@@ -47,20 +48,20 @@ module pzcorebus_axi2corebus_simple_bridge
   endfunction
 
   function automatic logic [ADDRESS_WIDTH-1:0] get_maddr(
-    logic [ADDRESS_WIDTH-1:0]           axaddr,
+    logic [AXI_ADDRESS_WIDTH-1:0]       axaddr,
     pzaxi_burst_length                  axlen,
     logic [$bits(pzaxi_burst_size)-1:0] axsize
   );
     if (is_4bytes_access(axlen, axsize)) begin
-      return {axaddr[ADDRESS_WIDTH-1:2], 2'b01};
+      return ADDRESS_WIDTH'({axaddr[AXI_ADDRESS_WIDTH-1:2], 2'b01});
     end
     else begin
-      return {axaddr[ADDRESS_WIDTH-1:2], 2'b00};
+      return ADDRESS_WIDTH'({axaddr[AXI_ADDRESS_WIDTH-1:2], 2'b00});
     end
   endfunction
 
   function automatic logic [LENGTH_WIDTH-1:0] get_mlength(
-    logic [ADDRESS_WIDTH-1:0]           axaddr,
+    logic [AXI_ADDRESS_WIDTH-1:0]       axaddr,
     pzaxi_burst_length                  axlen,
     logic [$bits(pzaxi_burst_size)-1:0] axsize
   );
