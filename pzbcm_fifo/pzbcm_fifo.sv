@@ -13,6 +13,7 @@ module pzbcm_fifo #(
   parameter   bit   DATA_FF_OUT       = 1,
   parameter   bit   RESET_RAM         = 0,
   parameter   bit   CLEAR_DATA        = 0,
+  parameter   bit   PUSH_ON_CLEAR     = 0,
   parameter   int   MATCH_COUNT_WIDTH = 0,
   localparam  type  COUNTER           = logic [$clog2(DEPTH+1)-1:0]
 )(
@@ -29,6 +30,10 @@ module pzbcm_fifo #(
   output  var TYPE    o_data
 );
   localparam  int RAM_WORDS = (DATA_FF_OUT) ? DEPTH - 1 : DEPTH;
+
+  initial begin
+    assume (!(CLEAR_DATA && PUSH_ON_CLEAR));
+  end
 
   logic clear_data;
 
@@ -53,6 +58,7 @@ module pzbcm_fifo #(
     .THRESHOLD          (THRESHOLD          ),
     .FLAG_FF_OUT        (FLAG_FF_OUT        ),
     .DATA_FF_OUT        (DATA_FF_OUT        ),
+    .PUSH_ON_CLEAR      (PUSH_ON_CLEAR      ),
     .RAM_WORDS          (RAM_WORDS          ),
     .RAM_POINTER_WIDTH  (POINTER_WIDTH      ),
     .MATCH_COUNT_WIDTH  (MATCH_COUNT_WIDTH  )

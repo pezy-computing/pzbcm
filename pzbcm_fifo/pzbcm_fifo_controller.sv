@@ -10,6 +10,7 @@ module pzbcm_fifo_controller #(
   parameter   int   THRESHOLD         = DEPTH,
   parameter   bit   FLAG_FF_OUT       = 1,
   parameter   bit   DATA_FF_OUT       = 1,
+  parameter   bit   PUSH_ON_CLEAR     = 0,
   parameter   int   RAM_WORDS         = (DATA_FF_OUT) ? DEPTH - 1 : DEPTH,
   parameter   int   RAM_POINTER_WIDTH = (RAM_WORDS >= 2) ? $clog2(RAM_WORDS) : 1,
   parameter   int   MATCH_COUNT_WIDTH = 0,
@@ -42,7 +43,8 @@ module pzbcm_fifo_controller #(
 
   logic         push;
   logic         pop;
-  logic [1:0]   push_pop;
+  logic [1:0]   clear;
+  logic         update_state;
   COUNTER       word_counter;
   COUNTER       word_counter_next;
   logic         word_counter_eq_1;
@@ -59,9 +61,17 @@ module pzbcm_fifo_controller #(
   logic         last_pop_data;
 
   always_comb begin
-    push      = i_push && ((!status_flag.full) && (!match_data));
-    pop       = i_pop  && (!status_flag.empty) && last_pop_data;
-    push_pop  = {push, pop};
+    push  = i_push && ((PUSH_ON_CLEAR && i_clear) || ((!status_flag.full) && (!match_data)));
+    pop   = i_pop && (!status_flag.empty) && last_pop_data;
+  end
+
+  always_comb begin
+    clear[0]  = i_clear && ((!PUSH_ON_CLEAR) || (!push));
+    clear[1]  = i_clear && PUSH_ON_CLEAR && push;
+  end
+
+  always_comb begin
+    update_state  = push || pop || i_clear;
   end
 
 //--------------------------------------------------------------
@@ -72,30 +82,42 @@ module pzbcm_fifo_controller #(
   end
 
   always_comb begin
-    case (push_pop)
-      2'b10:    word_counter_next = word_counter + COUNTER'(1);
-      2'b01:    word_counter_next = word_counter - COUNTER'(1);
-      default:  word_counter_next = word_counter;
-    endcase
-  end
-
-  always_comb begin
     word_counter_eq_1 = (DEPTH >= 1) && (word_counter == COUNTER'(1));
     word_counter_eq_2 = (DEPTH >= 2) && (word_counter == COUNTER'(2));
     word_counter_ge_2 = (DEPTH >= 2) && (word_counter >= COUNTER'(2));
+  end
+
+  always_comb begin
+    word_counter_next = get_word_counter_next(push, pop, clear, word_counter);
   end
 
   always_ff @(posedge i_clk, negedge i_rst_n) begin
     if (!i_rst_n) begin
       word_counter  <= '0;
     end
-    else if (i_clear) begin
-      word_counter  <= '0;
-    end
-    else if (push || pop) begin
+    else if (update_state) begin
       word_counter  <= word_counter_next;
     end
   end
+
+  function automatic COUNTER get_word_counter_next(
+    logic       push,
+    logic       pop,
+    logic [1:0] clear,
+    COUNTER     word_counter
+  );
+    logic up;
+    logic down;
+    up    = push && (!pop);
+    down  = (!push) && pop;
+    case (1'b1)
+      clear[0]: return COUNTER'(0);
+      clear[1]: return COUNTER'(1);
+      up:       return word_counter + COUNTER'(1);
+      down:     return word_counter - COUNTER'(1);
+      default:  return word_counter;
+    endcase
+  endfunction
 
 //--------------------------------------------------------------
 //  status flag
@@ -111,10 +133,7 @@ module pzbcm_fifo_controller #(
       if (!i_rst_n) begin
         status_flag <= '{empty: '1, default: '0};
       end
-      else if (i_clear) begin
-        status_flag <= '{empty: '1, default: '0};
-      end
-      else if (pop || push) begin
+      else if (update_state) begin
         status_flag <= get_status_flag(word_counter_next);
       end
     end
@@ -146,8 +165,14 @@ module pzbcm_fifo_controller #(
 
   if (DATA_FF_OUT) begin : g_data_ff_out
     always_comb begin
-      write_to_ff     = push && ((word_counter_eq_1 && (pop == '1)) || status_flag.empty);
-      write_to_ram    = push && ((word_counter_eq_1 && (pop == '0)) || word_counter_ge_2);
+      if ((word_counter_eq_1 && pop) || status_flag.empty || clear[1]) begin
+        write_to_ff   = push;
+        write_to_ram  = '0;
+      end
+      else begin
+        write_to_ff   = '0;
+        write_to_ram  = push;
+      end
       read_from_ram   = pop && word_counter_ge_2;
       ram_empty_next  = read_from_ram && (!write_to_ram) && word_counter_eq_2;
     end
@@ -166,8 +191,11 @@ module pzbcm_fifo_controller #(
       if (!i_rst_n) begin
         ram_write_pointer <= RAM_POINTER'(0);
       end
-      else if (i_clear) begin
+      else if (clear[0]) begin
         ram_write_pointer <= RAM_POINTER'(0);
+      end
+      else if (clear[1]) begin
+        ram_write_pointer <= (DATA_FF_OUT) ? RAM_POINTER'(0) : RAM_POINTER'(1);
       end
       else if (ram_empty_next) begin
         ram_write_pointer <= ram_read_pointer;
@@ -232,8 +260,11 @@ module pzbcm_fifo_controller #(
         if (!i_rst_n) begin
           write_pointer[0]  <= POINTER'(0);
         end
-        else if (i_clear) begin
+        else if (clear[0]) begin
           write_pointer[0]  <= POINTER'(0);
+        end
+        else if (clear[1]) begin
+          write_pointer[0]  <= POINTER'(1);
         end
         else if (push) begin
           if (write_pointer[0] == POINTER'(DEPTH - 1)) begin
@@ -302,8 +333,11 @@ module pzbcm_fifo_controller #(
         if (!i_rst_n) begin
           match_count[i]  <= MATCH_COUNT_WIDTH'(0);
         end
-        else if (i_clear) begin
+        else if (clear[0] || (i_clear && (i >= 1))) begin
           match_count[i]  <= MATCH_COUNT_WIDTH'(0);
+        end
+        else if (clear[1] && (i == 0)) begin
+          match_count[i]  <= MATCH_COUNT_WIDTH'(1);
         end
         else if (up_down inside {3'b1?0, 3'b?10}) begin
           match_count[i]  <= match_count[i] + MATCH_COUNT_WIDTH'(1);
