@@ -4,10 +4,12 @@
 //                    All Rights Reserved.
 //
 //========================================
-module pzhsbus_mux #(
-  parameter   int SLAVES        = 2,
-  parameter   bit ONE_HOT       = 1,
-  localparam  int SELECT_WIDTH  = (ONE_HOT) ? SLAVES : $clog2(SLAVES)
+module pzhsbus_mux
+  import  pzbcm_selector_pkg::*;
+#(
+  parameter int                 SLAVES        = 2,
+  parameter pzbcm_selector_type SELECTOR_TYPE = PZBCM_SELECTOR_ONEHOT,
+  parameter int                 SELECT_WIDTH  = calc_select_width(SELECTOR_TYPE, SLAVES)
 )(
   input var [SELECT_WIDTH-1:0]  i_select,
   pzhsbus_if.slave              slave_if[SLAVES],
@@ -15,37 +17,51 @@ module pzhsbus_mux #(
 );
   typedef master_if.__payload __payload;
 
-  logic     valid[SLAVES];
-  logic     ready[SLAVES];
-  __payload payload[SLAVES];
+  logic [SLAVES-1:0]      ready;
+  logic [SLAVES-1:0]      valid;
+  __payload [SLAVES-1:0]  payload;
 
-  for (genvar i = 0;i < SLAVES;++i) begin : g
-    assign  valid[i]          = slave_if[i].valid;
-    assign  slave_if[i].ready = ready[i];
-    assign  payload[i]        = slave_if[i].payload;
+  for (genvar i = 0;i < SLAVES;++i) begin : g_slave
+    always_comb begin
+      slave_if[i].ready = ready[i];
+      valid[i]          = slave_if[i].valid;
+      payload[i]        = slave_if[i].payload;
+    end
   end
 
-  pzbcm_mux #(
-    .TYPE     (logic    ),
-    .ENTRIES  (SLAVES   ),
-    .ONE_HOT  (ONE_HOT  )
-  ) u_valid_mux (
-    i_select, valid, master_if.valid
-  );
+  if (SELECTOR_TYPE == PZBCM_SELECTOR_PRIORITY) begin : g_valid_ready
+    logic [SLAVES-1:0]  select;
 
-  pzbcm_demux #(
-    .TYPE     (logic    ),
-    .ENTRIES  (SLAVES   ),
-    .ONE_HOT  (ONE_HOT  )
-  ) u_ready_demux (
-    i_select, master_if.ready, ready
-  );
+    pzbcm_onehot #(
+      .N  (SLAVES )
+    ) u_onehot();
 
-  pzbcm_mux #(
-    .TYPE     (__payload  ),
-    .ENTRIES  (SLAVES     ),
-    .ONE_HOT  (ONE_HOT    )
-  ) u_payload_mux (
-    i_select, payload, master_if.payload
-  );
+    always_comb begin
+      select          = u_onehot.to_onehot(i_select);
+      ready           = select & {SLAVES{master_if.ready}};
+      master_if.valid = |(select & valid);
+    end
+  end
+  else begin : g_master
+    pzbcm_selector #(
+      .WIDTH          (1              ),
+      .ENTRIES        (SLAVES         ),
+      .SELECTOR_TYPE  (SELECTOR_TYPE  )
+    ) u_selector();
+
+    always_comb begin
+      ready           = u_selector.demux(i_select, master_if.ready);
+      master_if.valid = u_selector.mux(i_select, valid);
+    end
+  end
+
+  pzbcm_selector #(
+    .TYPE           (__payload      ),
+    .ENTRIES        (SLAVES         ),
+    .SELECTOR_TYPE  (SELECTOR_TYPE  )
+  ) u_payload_selector();
+
+  always_comb begin
+    master_if.payload = u_payload_selector.mux(i_select, payload);
+  end
 endmodule
