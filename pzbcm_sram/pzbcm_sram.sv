@@ -64,6 +64,7 @@ module pzbcm_sram #(
   logic [BANKS-1:0][DATA_WIDTH-1:0] read_data;
   logic [BANKS-1:0]                 read_data_valid;
   READ_INFO                         read_info;
+  logic                             read_busy;
   logic [DATA_WIDTH-1:0]            ram_read_data;
   logic                             fifo_ready;
 
@@ -128,41 +129,82 @@ module pzbcm_sram #(
         end
       end
 
-      `PZBCM_SRAM_1RW_WRAPPER #(
-        .WORDS          (RAM_WORDS          ),
-        .DATA_WIDTH     (DATA_WIDTH         ),
-        .POINTER_WIDTH  (RAM_POINTER_WIDTH  ),
-        .SRAM_CONFIG    (SRAM_CONFIG        ),
-        .SRAM_ID        (SRAM_ID            )
-      ) u_sram (
-        .i_clk          (i_write_clk        ),
-        .i_enable       (enable             ),
-        .i_write        (write_enable[i]    ),
-        .i_pointer      (ram_pointer        ),
-        .i_write_data   (port_if.write_data ),
-        .o_read_data    (read_data[i]       ),
-        .i_sram_config  (i_sram_config      )
-      );
+      if (SRAM_ID >= 0) begin : g
+        `PZBCM_SRAM_1RW_WRAPPER #(
+          .WORDS          (RAM_WORDS          ),
+          .DATA_WIDTH     (DATA_WIDTH         ),
+          .POINTER_WIDTH  (RAM_POINTER_WIDTH  ),
+          .SRAM_CONFIG    (SRAM_CONFIG        ),
+          .SRAM_ID        (SRAM_ID            )
+        ) u_sram (
+          .i_clk          (i_write_clk        ),
+          .i_enable       (enable             ),
+          .i_write        (write_enable[i]    ),
+          .i_pointer      (ram_pointer        ),
+          .i_write_data   (port_if.write_data ),
+          .o_read_data    (read_data[i]       ),
+          .i_sram_config  (i_sram_config      )
+        );
+      end
+      else begin
+        pzbcm_sram_1rw_wrapper_default #(
+          .WORDS          (RAM_WORDS          ),
+          .DATA_WIDTH     (DATA_WIDTH         ),
+          .POINTER_WIDTH  (RAM_POINTER_WIDTH  ),
+          .SRAM_CONFIG    (SRAM_CONFIG        ),
+          .SRAM_ID        (SRAM_ID            )
+        ) u_sram (
+          .i_clk          (i_write_clk        ),
+          .i_enable       (enable             ),
+          .i_write        (write_enable[i]    ),
+          .i_pointer      (ram_pointer        ),
+          .i_write_data   (port_if.write_data ),
+          .o_read_data    (read_data[i]       ),
+          .i_sram_config  (i_sram_config      )
+        );
+      end
     end
     else begin : g
-      `PZBCM_SRAM_1R1W_WRAPPER #(
-        .WORDS          (RAM_WORDS          ),
-        .DATA_WIDTH     (DATA_WIDTH         ),
-        .POINTER_WIDTH  (RAM_POINTER_WIDTH  ),
-        .SINGLE_CLOCK   (SINGLE_CLOCK       ),
-        .SRAM_CONFIG    (SRAM_CONFIG        ),
-        .SRAM_ID        (SRAM_ID            )
-      ) u_sram (
-        .i_write_clk      (i_write_clk        ),
-        .i_write_enable   (write_enable[i]    ),
-        .i_write_pointer  (write_pointer      ),
-        .i_write_data     (port_if.write_data ),
-        .i_read_clk       (i_read_clk         ),
-        .i_read_enable    (read_enable[i]     ),
-        .i_read_pointer   (read_pointer       ),
-        .o_read_data      (read_data[i]       ),
-        .i_sram_config    (i_sram_config      )
-      );
+      if (SRAM_ID >= 0) begin : g
+        `PZBCM_SRAM_1R1W_WRAPPER #(
+          .WORDS          (RAM_WORDS          ),
+          .DATA_WIDTH     (DATA_WIDTH         ),
+          .POINTER_WIDTH  (RAM_POINTER_WIDTH  ),
+          .SINGLE_CLOCK   (SINGLE_CLOCK       ),
+          .SRAM_CONFIG    (SRAM_CONFIG        ),
+          .SRAM_ID        (SRAM_ID            )
+        ) u_sram (
+          .i_write_clk      (i_write_clk        ),
+          .i_write_enable   (write_enable[i]    ),
+          .i_write_pointer  (write_pointer      ),
+          .i_write_data     (port_if.write_data ),
+          .i_read_clk       (i_read_clk         ),
+          .i_read_enable    (read_enable[i]     ),
+          .i_read_pointer   (read_pointer       ),
+          .o_read_data      (read_data[i]       ),
+          .i_sram_config    (i_sram_config      )
+        );
+      end
+      else begin : g
+        pzbcm_sram_1r1w_wrapper_default #(
+          .WORDS          (RAM_WORDS          ),
+          .DATA_WIDTH     (DATA_WIDTH         ),
+          .POINTER_WIDTH  (RAM_POINTER_WIDTH  ),
+          .SINGLE_CLOCK   (SINGLE_CLOCK       ),
+          .SRAM_CONFIG    (SRAM_CONFIG        ),
+          .SRAM_ID        (SRAM_ID            )
+        ) u_sram (
+          .i_write_clk      (i_write_clk        ),
+          .i_write_enable   (write_enable[i]    ),
+          .i_write_pointer  (write_pointer      ),
+          .i_write_data     (port_if.write_data ),
+          .i_read_clk       (i_read_clk         ),
+          .i_read_enable    (read_enable[i]     ),
+          .i_read_pointer   (read_pointer       ),
+          .o_read_data      (read_data[i]       ),
+          .i_sram_config    (i_sram_config      )
+        );
+      end
     end
   end
 
@@ -192,6 +234,11 @@ module pzbcm_sram #(
     end
 
     always_comb begin
+      port_if.read_busy = read_busy;
+    end
+
+    always_comb begin
+      read_busy       = delay != '0;
       read_data_valid = delay[READ_LATENCY-1];
     end
   end
@@ -227,6 +274,7 @@ module pzbcm_sram #(
     localparam  int FIFO_DEPTH      = 2 + READ_LATENCY;
 
     logic                       empty;
+    logic                       almost_full;
     logic                       full;
     logic                       push;
     logic [FIFO_DATA_WIDTH-1:0] push_data;
@@ -234,7 +282,13 @@ module pzbcm_sram #(
     logic [FIFO_DATA_WIDTH-1:0] pop_data;
 
     always_comb begin
-      fifo_ready  = !full;
+      port_if.fifo_empty        = empty;
+      port_if.fifo_almost_full  = almost_full;
+      port_if.fifo_full         = full;
+    end
+
+    always_comb begin
+      fifo_ready  = (!almost_full) || ((!read_busy) && (!full));
     end
 
     always_comb begin
@@ -251,8 +305,8 @@ module pzbcm_sram #(
       .i_rst_n        (i_read_rst_n ),
       .i_clear        (i_clear      ),
       .o_empty        (empty        ),
-      .o_almost_full  (full         ),
-      .o_full         (),
+      .o_almost_full  (almost_full  ),
+      .o_full         (full         ),
       .o_word_count   (),
       .i_push         (push         ),
       .i_data         (push_data    ),
@@ -274,7 +328,10 @@ module pzbcm_sram #(
   end
   else begin : g_output_data
     always_comb begin
-      fifo_ready  = '1;
+      fifo_ready                = '1;
+      port_if.fifo_empty        = '1;
+      port_if.fifo_almost_full  = '0;
+      port_if.fifo_full         = '0;
     end
 
     always_comb begin

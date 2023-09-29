@@ -26,6 +26,10 @@ interface pzbcm_sram_if #(
   logic                     read_data_ready;
   logic                     read_data_valid;
   pzbcm_sram_read_data      read_data;
+  logic                     read_busy;
+  logic                     fifo_empty;
+  logic                     fifo_almost_full;
+  logic                     fifo_full;
 
   function automatic logic write_ack();
     return write_ready && write_valid;
@@ -71,6 +75,10 @@ interface pzbcm_sram_if #(
     input   read_data_ready,
     output  read_data_valid,
     output  read_data,
+    output  read_busy,
+    output  fifo_empty,
+    output  fifo_almost_full,
+    output  fifo_full,
     import  write_ack,
     import  read_ack,
     import  read_data_ack
@@ -88,6 +96,10 @@ interface pzbcm_sram_if #(
     input   read_data_ready,
     input   read_data_valid,
     input   read_data,
+    input   read_busy,
+    input   fifo_empty,
+    input   fifo_almost_full,
+    input   fifo_full,
     import  write_ack,
     import  read_ack,
     import  read_data_ack

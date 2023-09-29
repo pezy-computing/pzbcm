@@ -10,18 +10,20 @@ module pzcorebus_packer
   parameter pzcorebus_config  BUS_CONFIG      = '0,
   parameter int               COMMAND_DEPTH   = 1,
   parameter int               DATA_DEPTH      = get_max_burst_length(BUS_CONFIG),
-  parameter bit [1:0]         MASTER_SLICER   = '0
+  parameter bit [1:0]         MASTER_SLICER   = '0,
+  parameter type              SRAM_CONFIG     = logic,
+  parameter int               READ_LATENCY    = 1,
+  parameter int               SRAM_ID         = 0
 )(
-  input   var         i_clk,
-  input   var         i_rst_n,
-  input   var         i_clear,
-  output  var [1:0]   o_fifo_empty,
-  output  var [1:0]   o_fifo_full,
-  pzcorebus_if.slave  slave_if,
-  pzcorebus_if.master master_if
+  input   var             i_clk,
+  input   var             i_rst_n,
+  input   var             i_clear,
+  output  var [1:0]       o_fifo_empty,
+  output  var [1:0]       o_fifo_full,
+  input   var SRAM_CONFIG i_sram_config,
+  pzcorebus_if.slave      slave_if,
+  pzcorebus_if.master     master_if
 );
-  typedef logic [get_packed_command_width(BUS_CONFIG)-1:0]  pzcorebus_packed_command;
-
   pzcorebus_if #(BUS_CONFIG)  bus_if[4]();
 
   pzcorebus_connector u_connector (
@@ -37,62 +39,38 @@ module pzcorebus_packer
 //--------------------------------------------------------------
 //  Command FIFO
 //--------------------------------------------------------------
-  logic                           command_fifo_push;
-  logic                           command_fifo_pop;
-  pzcorebus_packed_command  [1:0] command_fifo_data;
-  logic                           command_fifo_empty;
-  logic                           command_fifo_full;
-
-  always_comb begin
-    o_fifo_empty[0] = command_fifo_empty;
-    o_fifo_full[0]  = command_fifo_full;
-  end
-
-  always_comb begin
-    bus_if[0].scmd_accept = !command_fifo_full;
-    command_fifo_push     = bus_if[0].command_ack();
-    command_fifo_data[0]  = bus_if[0].get_packed_command();
-  end
-
-  always_comb begin
-    command_fifo_pop      = bus_if[1].command_ack();
-    bus_if[1].mcmd_valid  = !command_fifo_empty;
-    bus_if[1].put_packed_command(command_fifo_data[1]);
-  end
-
-  pzbcm_fifo #(
-    .TYPE         (pzcorebus_packed_command ),
-    .DEPTH        (COMMAND_DEPTH            ),
-    .FLAG_FF_OUT  (1                        ),
-    .DATA_FF_OUT  (1                        )
+  pzcorebus_command_fifo #(
+    .BUS_CONFIG (BUS_CONFIG     ),
+    .DEPTH      (COMMAND_DEPTH  )
   ) u_command_fifo (
-    .i_clk          (i_clk                ),
-    .i_rst_n        (i_rst_n              ),
-    .i_clear        (i_clear              ),
-    .o_empty        (command_fifo_empty   ),
+    .i_clk          (i_clk            ),
+    .i_rst_n        (i_rst_n          ),
+    .i_clear        (i_clear          ),
+    .o_empty        (o_fifo_empty[0]  ),
     .o_almost_full  (),
-    .o_full         (command_fifo_full    ),
-    .o_word_count   (),
-    .i_push         (command_fifo_push    ),
-    .i_data         (command_fifo_data[0] ),
-    .i_pop          (command_fifo_pop     ),
-    .o_data         (command_fifo_data[1] )
+    .o_full         (o_fifo_full[0]   ),
+    .slave_if       (bus_if[0]        ),
+    .master_if      (bus_if[1]        )
   );
 
 //--------------------------------------------------------------
 //  Write Data FIFO
 //--------------------------------------------------------------
   pzcorebus_packer_data_fifo #(
-    .BUS_CONFIG (BUS_CONFIG ),
-    .DEPTH      (DATA_DEPTH )
+    .BUS_CONFIG   (BUS_CONFIG   ),
+    .DEPTH        (DATA_DEPTH   ),
+    .SRAM_CONFIG  (SRAM_CONFIG  ),
+    .READ_LATENCY (READ_LATENCY ),
+    .SRAM_ID      (SRAM_ID      )
   ) u_data_fifo (
-    .i_clk        (i_clk            ),
-    .i_rst_n      (i_rst_n          ),
-    .i_clear      (i_clear          ),
-    .o_fifo_empty (o_fifo_empty[1]  ),
-    .o_fifo_full  (o_fifo_full[1]   ),
-    .slave_if     (bus_if[0]        ),
-    .master_if    (bus_if[1]        )
+    .i_clk          (i_clk            ),
+    .i_rst_n        (i_rst_n          ),
+    .i_clear        (i_clear          ),
+    .o_fifo_empty   (o_fifo_empty[1]  ),
+    .o_fifo_full    (o_fifo_full[1]   ),
+    .i_sram_config  (i_sram_config    ),
+    .slave_if       (bus_if[0]        ),
+    .master_if      (bus_if[1]        )
   );
 
 //--------------------------------------------------------------
