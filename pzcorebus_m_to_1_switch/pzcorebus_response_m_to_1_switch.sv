@@ -34,9 +34,9 @@ module pzcorebus_response_m_to_1_switch
 //--------------------------------------------------------------
   for (genvar i = 0;i < SLAVES;++i) begin : g_slave_fifo
     pzcorebus_response_fifo #(
-      .BUS_CONFIG     (BUS_CONFIG     ),
-      .RESPONSE_DEPTH (RESPONSE_DEPTH ),
-      .RESPONSE_VALID (SLAVE_FIFO     )
+      .BUS_CONFIG (BUS_CONFIG     ),
+      .DEPTH      (RESPONSE_DEPTH ),
+      .VALID      (SLAVE_FIFO     )
     ) u_slave_fifo (
       .i_clk          (i_clk        ),
       .i_rst_n        (i_rst_n      ),
@@ -92,9 +92,9 @@ module pzcorebus_response_m_to_1_switch
 //  Master FIFO
 //--------------------------------------------------------------
   pzcorebus_response_fifo #(
-    .BUS_CONFIG     (BUS_CONFIG     ),
-    .RESPONSE_DEPTH (RESPONSE_DEPTH ),
-    .RESPONSE_VALID (MASTER_FIFO    )
+    .BUS_CONFIG (BUS_CONFIG     ),
+    .DEPTH      (RESPONSE_DEPTH ),
+    .VALID      (MASTER_FIFO    )
   ) u_slave_fifo (
     .i_clk          (i_clk      ),
     .i_rst_n        (i_rst_n    ),

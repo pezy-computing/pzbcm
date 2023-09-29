@@ -1,10 +1,10 @@
 //========================================
 //
-// Copyright (c) 2022 PEZY Computing, K.K.
+// Copyright (c) 2023 PEZY Computing, K.K.
 //                    All Rights Reserved.
 //
 //========================================
-module pzcorebus_response_fifo
+module pzcorebus_command_fifo
   import  pzcorebus_pkg::*;
 #(
   parameter pzcorebus_config  BUS_CONFIG  = '0,
@@ -20,28 +20,28 @@ module pzcorebus_response_fifo
   output  var               o_empty,
   output  var               o_almost_full,
   output  var               o_full,
-  interface.response_slave  slave_if,
-  interface.response_master master_if
+  interface.command_slave   slave_if,
+  interface.command_master  master_if
 );
-  localparam  int WIDTH = get_packed_response_width(BUS_CONFIG);
+  parameter int WIDTH = get_packed_command_width(BUS_CONFIG);
 
-  logic [1:0]             mresp_accept;
-  logic [1:0]             sresp_valid;
-  logic [1:0][WIDTH-1:0]  sresp;
+  logic [1:0]             scmd_accept;
+  logic [1:0]             mcmd_valid;
+  logic [1:0][WIDTH-1:0]  mcmd;
 
   always_comb begin
-    master_if.mresp_accept  = mresp_accept[0];
-    sresp_valid[0]          = master_if.sresp_valid;
-    sresp[0]                = master_if.get_packed_response();
+    slave_if.scmd_accept  = scmd_accept[0];
+    mcmd_valid[0]         = slave_if.mcmd_valid;
+    mcmd[0]               = slave_if.get_packed_command();
   end
 
   always_comb begin
-    mresp_accept[1]       = slave_if.mresp_accept;
-    slave_if.sresp_valid  = sresp_valid[1];
-    slave_if.put_packed_response(sresp[1]);
+    scmd_accept[1]        = master_if.scmd_accept;
+    master_if.mcmd_valid  = mcmd_valid[1];
+    master_if.put_packed_command(mcmd[1]);
   end
 
-  if (VALID && (DEPTH >= 1)) begin : g
+  if (VALID && (DEPTH >= 2)) begin : g
     logic empty;
     logic almost_full;
     logic full;
@@ -53,8 +53,8 @@ module pzcorebus_response_fifo
     end
 
     always_comb begin
-      mresp_accept[0] = !full;
-      sresp_valid[1]  = !empty;
+      scmd_accept[0]  = !full;
+      mcmd_valid[1]   = !empty;
     end
 
     pzbcm_fifo #(
@@ -64,20 +64,20 @@ module pzcorebus_response_fifo
       .FLAG_FF_OUT  (FLAG_FF_OUT  ),
       .DATA_FF_OUT  (DATA_FF_OUT  )
     ) u_fifo (
-      .i_clk          (i_clk            ),
-      .i_rst_n        (i_rst_n          ),
-      .i_clear        (i_clear          ),
-      .o_empty        (empty            ),
-      .o_almost_full  (almost_full      ),
-      .o_full         (full             ),
+      .i_clk          (i_clk          ),
+      .i_rst_n        (i_rst_n        ),
+      .i_clear        (i_clear        ),
+      .o_empty        (empty          ),
+      .o_almost_full  (almost_full    ),
+      .o_full         (full           ),
       .o_word_count   (),
-      .i_push         (sresp_valid[0]   ),
-      .i_data         (sresp[0]         ),
-      .i_pop          (mresp_accept[1]  ),
-      .o_data         (sresp[1]         )
+      .i_push         (mcmd_valid[0]  ),
+      .i_data         (mcmd[0]        ),
+      .i_pop          (scmd_accept[1] ),
+      .o_data         (mcmd[1]        )
     );
   end
-  else begin : g_response
+  else begin : g
     always_comb begin
       o_empty       = '1;
       o_almost_full = '0;
@@ -85,9 +85,9 @@ module pzcorebus_response_fifo
     end
 
     always_comb begin
-      mresp_accept[0] = mresp_accept[1];
-      sresp_valid[1]  = sresp_valid[0];
-      sresp[1]        = sresp[0];
+      scmd_accept[0]  = scmd_accept[1];
+      mcmd_valid[1]   = mcmd_valid[0];
+      mcmd[1]         = mcmd[0];
     end
   end
 endmodule

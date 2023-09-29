@@ -48,9 +48,9 @@ module pzcorebus_command_data_aligner
   );
 
   pzcorebus_response_fifo #(
-    .BUS_CONFIG     (BUS_CONFIG     ),
-    .RESPONSE_DEPTH (RESPONSE_DEPTH ),
-    .RESPONSE_VALID (SLAVE_FIFO     )
+    .BUS_CONFIG (BUS_CONFIG     ),
+    .DEPTH      (RESPONSE_DEPTH ),
+    .VALID      (SLAVE_FIFO     )
   ) u_response_fifo (
     .i_clk          (i_clk      ),
     .i_rst_n        (i_rst_n    ),

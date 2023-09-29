@@ -1,10 +1,10 @@
 //========================================
 //
-// Copyright (c) 2022 PEZY Computing, K.K.
+// Copyright (c) 2023 PEZY Computing, K.K.
 //                    All Rights Reserved.
 //
 //========================================
-module pzcorebus_response_fifo
+module pzcorebus_write_data_fifo
   import  pzcorebus_pkg::*;
 #(
   parameter pzcorebus_config  BUS_CONFIG  = '0,
@@ -14,34 +14,34 @@ module pzcorebus_response_fifo
   parameter bit               FLAG_FF_OUT = 1,
   parameter bit               DATA_FF_OUT = 1
 )(
-  input   var               i_clk,
-  input   var               i_rst_n,
-  input   var               i_clear,
-  output  var               o_empty,
-  output  var               o_almost_full,
-  output  var               o_full,
-  interface.response_slave  slave_if,
-  interface.response_master master_if
+  input   var                 i_clk,
+  input   var                 i_rst_n,
+  input   var                 i_clear,
+  output  var                 o_empty,
+  output  var                 o_almost_full,
+  output  var                 o_full,
+  interface.write_data_slave  slave_if,
+  interface.write_data_master master_if
 );
-  localparam  int WIDTH = get_packed_response_width(BUS_CONFIG);
+  localparam  int WIDTH = get_packed_write_data_width(BUS_CONFIG, 1);
 
-  logic [1:0]             mresp_accept;
-  logic [1:0]             sresp_valid;
-  logic [1:0][WIDTH-1:0]  sresp;
+  logic [1:0]             sdata_accept;
+  logic [1:0]             mdata_valid;
+  logic [1:0][WIDTH-1:0]  mdata;
 
   always_comb begin
-    master_if.mresp_accept  = mresp_accept[0];
-    sresp_valid[0]          = master_if.sresp_valid;
-    sresp[0]                = master_if.get_packed_response();
+    slave_if.sdata_accept = sdata_accept[0];
+    mdata_valid[0]        = slave_if.mdata_valid;
+    mdata[0]              = slave_if.get_packed_write_data();
   end
 
   always_comb begin
-    mresp_accept[1]       = slave_if.mresp_accept;
-    slave_if.sresp_valid  = sresp_valid[1];
-    slave_if.put_packed_response(sresp[1]);
+    sdata_accept[1] = master_if.sdata_accept;
+    master_if.mdata_valid = mdata_valid[1];
+    master_if.put_packed_write_data(mdata[1]);
   end
 
-  if (VALID && (DEPTH >= 1)) begin : g
+  if (VALID && (DEPTH >= 2) && (BUS_CONFIG.profile != PZCOREBUS_CSR)) begin : g
     logic empty;
     logic almost_full;
     logic full;
@@ -53,8 +53,8 @@ module pzcorebus_response_fifo
     end
 
     always_comb begin
-      mresp_accept[0] = !full;
-      sresp_valid[1]  = !empty;
+      sdata_accept[0] = !full;
+      mdata_valid[1]  = !empty;
     end
 
     pzbcm_fifo #(
@@ -71,13 +71,13 @@ module pzcorebus_response_fifo
       .o_almost_full  (almost_full      ),
       .o_full         (full             ),
       .o_word_count   (),
-      .i_push         (sresp_valid[0]   ),
-      .i_data         (sresp[0]         ),
-      .i_pop          (mresp_accept[1]  ),
-      .o_data         (sresp[1]         )
+      .i_push         (mdata_valid[0]   ),
+      .i_data         (mdata[0]         ),
+      .i_pop          (sdata_accept[1]  ),
+      .o_data         (mdata[1]         )
     );
   end
-  else begin : g_response
+  else begin : g
     always_comb begin
       o_empty       = '1;
       o_almost_full = '0;
@@ -85,9 +85,9 @@ module pzcorebus_response_fifo
     end
 
     always_comb begin
-      mresp_accept[0] = mresp_accept[1];
-      sresp_valid[1]  = sresp_valid[0];
-      sresp[1]        = sresp[0];
+      sdata_accept[0] = sdata_accept[1];
+      mdata_valid[1]  = mdata_valid[0];
+      mdata[1]        = mdata[0];
     end
   end
 endmodule
