@@ -146,7 +146,7 @@ module pzbcm_sram #(
           .i_sram_config  (i_sram_config      )
         );
       end
-      else begin
+      else begin : g
         pzbcm_sram_1rw_wrapper_default #(
           .WORDS          (RAM_WORDS          ),
           .DATA_WIDTH     (DATA_WIDTH         ),
