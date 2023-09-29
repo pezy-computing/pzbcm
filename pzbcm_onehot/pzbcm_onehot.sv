@@ -7,17 +7,18 @@
 interface pzbcm_onehot #(
   parameter int N = 1
 );
+  localparam  int REDUCER_WIDTH = (N >= 2) ? N         : 2;
   localparam  int BINARY_WIDTH  = (N >= 2) ? $clog2(N) : 1;
 
   function automatic logic [N-1:0] __onehot(
-    int           n,
-    int           step,
-    logic [N-1:0] bits,
-    logic [N-1:0] bits_reduced
+    int                       n,
+    int                       step,
+    logic [N-1:0]             bits,
+    logic [REDUCER_WIDTH-1:0] reducer
   );
-    int           next_n;
-    logic [N-1:0] next_bits;
-    logic [N-1:0] next_bits_reduced;
+    int                       next_n;
+    logic [N-1:0]             next_bits;
+    logic [REDUCER_WIDTH-1:0] next_reducer;
 
     next_n  = (n / 2) + (n % 2);
     for (int i = 0;i < next_n;++i) begin
@@ -25,10 +26,10 @@ interface pzbcm_onehot #(
       logic [1:0] or_result;
 
       if (((i + 1) == next_n) && ((n % 2) == 1)) begin
-        or_bits = {1'b0, bits_reduced[2*i]};
+        or_bits = {1'b0, reducer[2*i]};
       end
       else begin
-        or_bits = bits_reduced[2*i+:2];
+        or_bits = reducer[2*i+:2];
       end
 
       if (or_bits[0]) begin
@@ -38,7 +39,7 @@ interface pzbcm_onehot #(
         or_result = 2'b10;
       end
 
-      next_bits_reduced[i]  = |or_bits;
+      next_reducer[i] = |or_bits;
       for (int j = 0;j < (2 * step);++j) begin
         int index = (2 * step * i) + j;
         if (index < N) begin
@@ -51,13 +52,13 @@ interface pzbcm_onehot #(
       return next_bits;
     end
     else begin
-      return __onehot(next_n, 2 * step, next_bits, next_bits_reduced);
+      return __onehot(next_n, 2 * step, next_bits, next_reducer);
     end
   endfunction
 
   function automatic logic [N-1:0] to_onehot(logic [N-1:0] bits);
     if (N > 1) begin
-      return __onehot(N, 1, bits, bits);
+      return __onehot(N, 1, bits, REDUCER_WIDTH'(bits));
     end
     else begin
       return bits;
