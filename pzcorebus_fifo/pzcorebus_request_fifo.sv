@@ -26,51 +26,127 @@ module pzcorebus_request_fifo
   interface.request_slave   slave_if,
   interface.request_master  master_if
 );
-  pzcorebus_request_if #(BUS_CONFIG)  bus_if[2]();
+  localparam  int COMMAND_WIDTH = get_packed_command_width(BUS_CONFIG);
+  localparam  int DATA_WIDTH    = get_packed_write_data_width(BUS_CONFIG, 1);
 
-  pzcorebus_request_connector u_slave_connector (
-    .slave_if   (slave_if   ),
-    .master_if  (bus_if[0]  )
-  );
+  logic [1:0]                     scmd_accept;
+  logic [1:0]                     mcmd_valid;
+  logic [1:0][COMMAND_WIDTH-1:0]  mcmd;
+  logic [1:0]                     sdata_accept;
+  logic [1:0]                     mdata_valid;
+  logic [1:0][DATA_WIDTH-1:0]     mdata;
 
-  pzcorebus_command_fifo #(
-    .BUS_CONFIG   (BUS_CONFIG         ),
-    .DEPTH        (COMMAND_DEPTH      ),
-    .THRESHOLD    (COMMAND_THRESHOLD  ),
-    .VALID        (COMMAND_VALID      ),
-    .FLAG_FF_OUT  (FLAG_FF_OUT        ),
-    .DATA_FF_OUT  (DATA_FF_OUT        )
-  ) u_command_fifo (
-    .i_clk          (i_clk            ),
-    .i_rst_n        (i_rst_n          ),
-    .i_clear        (i_clear          ),
-    .o_empty        (o_empty[0]       ),
-    .o_almost_full  (o_almost_full[0] ),
-    .o_full         (o_full[0]        ),
-    .slave_if       (bus_if[0]        ),
-    .master_if      (bus_if[1]        )
-  );
+  always_comb begin
+    slave_if.scmd_accept  = scmd_accept[0];
+    slave_if.sdata_accept = sdata_accept[0];
+    mcmd_valid[0]         = slave_if.mcmd_valid;
+    mdata_valid[0]        = slave_if.mdata_valid;
+    mcmd[0]               = slave_if.get_packed_command();
+    mdata[0]              = slave_if.get_packed_write_data();
+  end
 
-  pzcorebus_write_data_fifo #(
-    .BUS_CONFIG   (BUS_CONFIG     ),
-    .DEPTH        (DATA_DEPTH     ),
-    .THRESHOLD    (DATA_THRESHOLD ),
-    .VALID        (DATA_VALID     ),
-    .FLAG_FF_OUT  (FLAG_FF_OUT    ),
-    .DATA_FF_OUT  (DATA_FF_OUT    )
-  ) u_write_data_fifo (
-    .i_clk          (i_clk            ),
-    .i_rst_n        (i_rst_n          ),
-    .i_clear        (i_clear          ),
-    .o_empty        (o_empty[1]       ),
-    .o_almost_full  (o_almost_full[1] ),
-    .o_full         (o_full[1]        ),
-    .slave_if       (bus_if[0]        ),
-    .master_if      (bus_if[1]        )
-  );
+  always_comb begin
+    scmd_accept[1]        = master_if.scmd_accept;
+    sdata_accept[1]       = master_if.sdata_accept;
+    master_if.mcmd_valid  = mcmd_valid[1];
+    master_if.mdata_valid = mdata_valid[1];
+    master_if.put_packed_command(mcmd[1]);
+    master_if.put_packed_write_data(mdata[1]);
+  end
 
-  pzcorebus_request_connector u_master_connector (
-    .slave_if   (bus_if[1]  ),
-    .master_if  (master_if  )
-  );
+  if (COMMAND_VALID && (COMMAND_DEPTH >= 2)) begin : g_command
+    logic [2:0] status;
+
+    always_comb begin
+      o_empty[0]        = status[0];
+      o_almost_full[0]  = status[1];
+      o_full[0]         = status[2];
+    end
+
+    always_comb begin
+      scmd_accept[0]  = !status[2];
+      mcmd_valid[1]   = !status[0];
+    end
+
+    pzbcm_fifo #(
+      .WIDTH        (COMMAND_WIDTH      ),
+      .DEPTH        (COMMAND_DEPTH      ),
+      .THRESHOLD    (COMMAND_THRESHOLD  ),
+      .FLAG_FF_OUT  (FLAG_FF_OUT        ),
+      .DATA_FF_OUT  (DATA_FF_OUT        )
+    ) u_fifo (
+      .i_clk          (i_clk          ),
+      .i_rst_n        (i_rst_n        ),
+      .i_clear        (i_clear        ),
+      .o_empty        (status[0]      ),
+      .o_almost_full  (status[1]      ),
+      .o_full         (status[2]      ),
+      .o_word_count   (),
+      .i_push         (mcmd_valid[0]  ),
+      .i_data         (mcmd[0]        ),
+      .i_pop          (scmd_accept[1] ),
+      .o_data         (mcmd[1]        )
+    );
+  end
+  else begin : g_command
+    always_comb begin
+      o_empty[0]        = '1;
+      o_almost_full[0]  = '0;
+      o_full[0]         = '0;
+    end
+
+    always_comb begin
+      scmd_accept[0]  = scmd_accept[1];
+      mcmd_valid[1]   = mcmd_valid[0];
+      mcmd[1]         = mcmd[0];
+    end
+  end
+
+  if (DATA_VALID && (DATA_DEPTH >= 2) && (BUS_CONFIG.profile != PZCOREBUS_CSR)) begin : g_write_data
+    logic [2:0] status;
+
+    always_comb begin
+      o_empty[1]        = status[0];
+      o_almost_full[1]  = status[1];
+      o_full[1]         = status[2];
+    end
+
+    always_comb begin
+      sdata_accept[0] = !status[2];
+      mdata_valid[1]  = !status[0];
+    end
+
+    pzbcm_fifo #(
+      .WIDTH        (DATA_WIDTH     ),
+      .DEPTH        (DATA_DEPTH     ),
+      .THRESHOLD    (DATA_THRESHOLD ),
+      .FLAG_FF_OUT  (FLAG_FF_OUT    ),
+      .DATA_FF_OUT  (DATA_FF_OUT    )
+    ) u_fifo (
+      .i_clk          (i_clk            ),
+      .i_rst_n        (i_rst_n          ),
+      .i_clear        (i_clear          ),
+      .o_empty        (status[0]        ),
+      .o_almost_full  (status[1]        ),
+      .o_full         (status[2]        ),
+      .o_word_count   (),
+      .i_push         (mdata_valid[0]   ),
+      .i_data         (mdata[0]         ),
+      .i_pop          (sdata_accept[1]  ),
+      .o_data         (mdata[1]         )
+    );
+  end
+  else begin : g_write_data
+    always_comb begin
+      o_empty[1]        = '1;
+      o_almost_full[1]  = '0;
+      o_full[1]         = '0;
+    end
+
+    always_comb begin
+      sdata_accept[0] = sdata_accept[1];
+      mdata_valid[1]  = mdata_valid[0];
+      mdata[1]        = mdata[0];
+    end
+  end
 endmodule
