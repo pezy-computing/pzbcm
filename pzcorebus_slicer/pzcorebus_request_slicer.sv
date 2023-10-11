@@ -20,7 +20,7 @@ module pzcorebus_request_slicer
 );
   localparam  int COMMAND_WIDTH     = get_packed_command_width(BUS_CONFIG);
   localparam  int WRITE_DATA_WIDTH  = get_packed_write_data_width(BUS_CONFIG, 1);
-  localparam  int WRITE_DATA_STAGES = (BUS_CONFIG.profile != PZCOREBUS_CSR) ? STAGES : 0;
+  localparam  int WRITE_DATA_STAGES = (is_memory_profile(BUS_CONFIG)) ? STAGES : 0;
 
   logic [COMMAND_WIDTH-1:0]     slave_mcmd;
   logic [COMMAND_WIDTH-1:0]     master_mcmd;

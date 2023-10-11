@@ -84,7 +84,7 @@ module pzcorebus_request_async_fifo
     );
   end
 
-  if (BUS_CONFIG.profile != PZCOREBUS_CSR) begin : g_data
+  if (is_memory_profile(BUS_CONFIG)) begin : g_data
     pzbcm_async_fifo #(
       .WIDTH  (PAKCED_WRITE_DATA_WIDTH  ),
       .DEPTH  (DATA_DEPTH               ),

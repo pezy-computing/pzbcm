@@ -20,7 +20,7 @@ module pzcorebus_rmw_converter
   pzcorebus_if.master                 master_if
 );
   initial begin
-    assume (BUS_CONFIG.profile != PZCOREBUS_CSR);
+    assume (is_memory_profile(BUS_CONFIG));
   end
 
   localparam  int COUNTER_WIDTH   = $clog2(MAX_NP_REQUESTS + 1);

@@ -121,7 +121,7 @@ module pzcorebus_fifo
     end
   end
 
-  if (DATA_VALID && (DATA_DEPTH >= 2) && (BUS_CONFIG.profile != PZCOREBUS_CSR)) begin : g_write_data
+  if (DATA_VALID && (DATA_DEPTH >= 2) && is_memory_profile(BUS_CONFIG)) begin : g_write_data
     logic [2:0] status;
 
     always_comb begin

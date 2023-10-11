@@ -36,7 +36,7 @@
 
 `ifndef PZCOREBUS_MAX_LENGTH_WIDTH
   `define PZCOREBUS_MAX_LENGTH_WIDTH \
-  ((`PZCOREBUS_MAX_LENGTH == 1) ? 1 : myclog2(`PZCOREBUS_MAX_LENGTH))
+  ((`PZCOREBUS_MAX_LENGTH == 1) ? 1 : pzcorebus_clog2(`PZCOREBUS_MAX_LENGTH))
 `endif
 
 `ifndef PZCOREBUS_MAX_REQUEST_INFO_WIDTH
@@ -141,7 +141,7 @@ package pzcorebus_pkg;
 
   localparam  pzcorebus_config  DEFAULT_CONFIG  = '0;
 
-  function automatic int myclog2(bit [31:0] n);
+  function automatic int pzcorebus_clog2(bit [31:0] n);
     int result;
 
     result  = 0;
@@ -160,8 +160,24 @@ package pzcorebus_pkg;
     end
   endfunction
 
+  function automatic bit is_csr_profile(pzcorebus_config bus_config);
+    return bus_config.profile == PZCOREBUS_CSR;
+  endfunction
+
+  function automatic bit is_memory_h_profile(pzcorebus_config bus_config);
+    return bus_config.profile == PZCOREBUS_MEMORY_H;
+  endfunction
+
+  function automatic bit is_memory_l_profile(pzcorebus_config bus_config);
+    return bus_config.profile == PZCOREBUS_MEMORY_L;
+  endfunction
+
+  function automatic bit is_memory_profile(pzcorebus_config bus_config);
+    return !is_csr_profile(bus_config);
+  endfunction
+
   function automatic int get_unit_data_width(pzcorebus_config bus_config);
-    if (bus_config.profile == PZCOREBUS_MEMORY_H) begin
+    if (is_memory_profile(bus_config)) begin
       return bus_config.unit_data_width;
     end
     else begin
@@ -176,11 +192,8 @@ package pzcorebus_pkg;
   endfunction
 
   function automatic int get_max_burst_length(pzcorebus_config bus_config);
-    if (bus_config.profile == PZCOREBUS_MEMORY_H) begin
-      return bus_config.max_length / (bus_config.data_width / bus_config.unit_data_width);
-    end
-    else if (bus_config.profile == PZCOREBUS_MEMORY_L) begin
-      return bus_config.max_length;
+    if (is_memory_profile(bus_config)) begin
+      return bus_config.max_length / get_data_size(bus_config);
     end
     else begin
       return 1;
@@ -191,39 +204,32 @@ package pzcorebus_pkg;
     pzcorebus_config  bus_config,
     bit               typedef_width
   );
-    if (bus_config.profile == PZCOREBUS_CSR) begin
+    if (is_csr_profile(bus_config)) begin
       return (typedef_width) ? 1 : 0;
     end
     else if (bus_config.max_length == 1) begin
       return 1;
     end
     else begin
-      return myclog2(bus_config.max_length);
+      return pzcorebus_clog2(bus_config.max_length);
     end
   endfunction
 
   function automatic int get_unpacked_length_width(
     pzcorebus_config  bus_config
   );
-    if (bus_config.profile == PZCOREBUS_CSR) begin
+    if (is_csr_profile(bus_config)) begin
       return 1;
     end
     else begin
-      return myclog2(bus_config.max_length + 1);
+      return pzcorebus_clog2(bus_config.max_length + 1);
     end
   endfunction
 
   function automatic int get_burst_length_width(
     pzcorebus_config  bus_config
   );
-    if (bus_config.profile == PZCOREBUS_MEMORY_H) begin
-      int max_burst;
-      max_burst = get_max_burst_length(bus_config);
-      return myclog2(max_burst + 1);
-    end
-    else begin
-      return get_unpacked_length_width(bus_config);
-    end
+    return pzcorebus_clog2(get_max_burst_length(bus_config) + 1);
   endfunction
 
   function automatic int get_request_info_width(
@@ -242,7 +248,7 @@ package pzcorebus_pkg;
     pzcorebus_config  bus_config,
     bit               typedef_width
   );
-    if (bus_config.profile == PZCOREBUS_CSR) begin
+    if (is_csr_profile(bus_config)) begin
       return (typedef_width) ? 1 : 0;
     end
     else begin
@@ -254,7 +260,7 @@ package pzcorebus_pkg;
     pzcorebus_config  bus_config,
     bit               typedef_width
   );
-    if (bus_config.profile == PZCOREBUS_MEMORY_H) begin
+    if (is_memory_h_profile(bus_config)) begin
       return bus_config.max_data_width / bus_config.unit_data_width;
     end
     else begin
@@ -278,36 +284,30 @@ package pzcorebus_pkg;
     pzcorebus_config  bus_config,
     bit               typedef_width
   );
-    if (bus_config.profile == PZCOREBUS_MEMORY_H) begin
-      return 2;
-    end
-    else if (bus_config.profile == PZCOREBUS_MEMORY_L) begin
-      return 1;
-    end
-    else begin
-      return (typedef_width) ? 1 : 0;
-    end
+    case (1)
+      is_memory_h_profile(bus_config):  return 2;
+      is_memory_l_profile(bus_config):  return 1;
+      default:                          return (typedef_width) ? 1 : 0;
+    endcase
   endfunction
 
   function automatic int get_response_size_width(
     pzcorebus_config  bus_config
   );
-    if (bus_config.profile != PZCOREBUS_MEMORY_H) begin
+    if (!is_memory_h_profile(bus_config)) begin
       return 1;
     end
     else if (bus_config.data_width == bus_config.unit_data_width) begin
       return 1;
     end
     else begin
-      int data_size;
-      data_size = bus_config.data_width / bus_config.unit_data_width;
-      return myclog2(data_size + 1);
+      return pzcorebus_clog2(get_data_size(bus_config) + 1);
     end
   endfunction
 
   function automatic int get_response_offset_lsb(pzcorebus_config  bus_config);
-    if (bus_config.profile == PZCOREBUS_MEMORY_H) begin
-      return myclog2(bus_config.unit_data_width / 8);
+    if (is_memory_h_profile(bus_config)) begin
+      return pzcorebus_clog2(bus_config.unit_data_width / 8);
     end
     else begin
       return 0;
@@ -318,14 +318,14 @@ package pzcorebus_pkg;
     pzcorebus_config  bus_config,
     bit               typedef_width
   );
-    if (bus_config.profile != PZCOREBUS_MEMORY_H) begin
+    if (!is_memory_h_profile(bus_config)) begin
       return (typedef_width) ? 1 : 0;
     end
     else if (bus_config.max_data_width == bus_config.unit_data_width) begin
       return (typedef_width) ? 1 : 0;
     end
     else begin
-      return myclog2(bus_config.max_data_width / bus_config.unit_data_width);
+      return pzcorebus_clog2(bus_config.max_data_width / bus_config.unit_data_width);
     end
   endfunction
 
@@ -343,13 +343,13 @@ package pzcorebus_pkg;
     //  minfo
     width += get_request_info_width(bus_config, 0);
     //  mdata
-    width += (bus_config.profile == PZCOREBUS_CSR) ? bus_config.data_width : 0;
+    width += (is_csr_profile(bus_config)) ? bus_config.data_width : 0;
 
     return width;
   endfunction
 
   function automatic int get_packed_write_data_width(pzcorebus_config bus_config, bit typedef_width);
-    if (bus_config.profile == PZCOREBUS_CSR) begin
+    if (is_csr_profile(bus_config)) begin
       return (typedef_width) ? 1 : 0;
     end
     else begin

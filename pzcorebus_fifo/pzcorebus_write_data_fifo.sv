@@ -41,7 +41,7 @@ module pzcorebus_write_data_fifo
     master_if.put_packed_write_data(mdata[1]);
   end
 
-  if (VALID && (DEPTH >= 2) && (BUS_CONFIG.profile != PZCOREBUS_CSR)) begin : g
+  if (VALID && (DEPTH >= 2) && is_memory_profile(BUS_CONFIG)) begin : g
     logic empty;
     logic almost_full;
     logic full;

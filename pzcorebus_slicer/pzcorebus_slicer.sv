@@ -25,7 +25,7 @@ module pzcorebus_slicer
   localparam  int RESPONSE_WIDTH    = get_packed_response_width(BUS_CONFIG);
 
   localparam  int COMMAND_STAGES    = (REQUEST_VALID) ? STAGES : 0;
-  localparam  int WRITE_DATA_STAGES = (REQUEST_VALID && (BUS_CONFIG.profile != PZCOREBUS_CSR)) ? STAGES : 0;
+  localparam  int WRITE_DATA_STAGES = (REQUEST_VALID && is_memory_profile(BUS_CONFIG)) ? STAGES : 0;
   localparam  int RESPONSE_STAGES   = (RESPONSE_VALID) ? STAGES : 0;
 
   logic [COMMAND_WIDTH-1:0]     slave_command;

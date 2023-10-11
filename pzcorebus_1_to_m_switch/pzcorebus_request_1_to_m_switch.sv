@@ -34,7 +34,7 @@ module pzcorebus_request_1_to_m_switch
   interface.request_slave                     slave_if,
   interface.request_master                    master_if[MASTERS]
 );
-  localparam  bit BROADCAST = (BUS_CONFIG.profile == PZCOREBUS_CSR) && ENABLE_BROADCAST;
+  localparam  bit BROADCAST = is_csr_profile(BUS_CONFIG) && ENABLE_BROADCAST;
 
   pzcorebus_request_if #(BUS_CONFIG)  aligner_if();
   pzcorebus_request_if #(BUS_CONFIG)  switch_if[MASTERS]();
@@ -42,7 +42,7 @@ module pzcorebus_request_1_to_m_switch
 //--------------------------------------------------------------
 //  Slave Command/Data Alignment
 //--------------------------------------------------------------
-  if (BUS_CONFIG.profile != PZCOREBUS_CSR) begin : g_slave_aligner
+  if (is_memory_profile(BUS_CONFIG)) begin : g_slave_aligner
     pzcorebus_command_data_aligner_core #(
       .BUS_CONFIG     (BUS_CONFIG     ),
       .WAIT_FOR_DATA  (WAIT_FOR_DATA  ),
@@ -127,7 +127,7 @@ module pzcorebus_request_1_to_m_switch
     end
   end
 
-  if (BUS_CONFIG.profile != PZCOREBUS_CSR) begin : g_data_select
+  if (is_memory_profile(BUS_CONFIG)) begin : g_data_select
     logic [MASTERS-1:0] select_latched;
 
     always_comb begin
@@ -236,7 +236,7 @@ module pzcorebus_request_1_to_m_switch
 //  Master Command/Data Alignment
 //--------------------------------------------------------------
   for (genvar i = 0;i < MASTERS;++i) begin : g_master_aligner
-    if ((BUS_CONFIG.profile != PZCOREBUS_CSR) && ALIGN_OUT && MASTER_FIFO) begin : g
+    if (is_memory_profile(BUS_CONFIG) && ALIGN_OUT && MASTER_FIFO) begin : g
       pzcorebus_command_data_aligner #(
         .BUS_CONFIG     (BUS_CONFIG     ),
         .RELAX_MODE     (1              ),

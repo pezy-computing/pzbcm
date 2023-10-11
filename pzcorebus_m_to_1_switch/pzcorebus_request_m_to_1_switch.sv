@@ -38,7 +38,7 @@ module pzcorebus_request_m_to_1_switch
 //  Slave Command/Data Aligner
 //--------------------------------------------------------------
   for (genvar i = 0;i < SLAVES;++i) begin : g_slave_aligner
-    if (BUS_CONFIG.profile != PZCOREBUS_CSR) begin : g
+    if (is_memory_profile(BUS_CONFIG)) begin : g
       pzcorebus_command_data_aligner_core #(
         .BUS_CONFIG     (BUS_CONFIG     ),
         .WAIT_FOR_DATA  (WAIT_FOR_DATA  ),
@@ -105,7 +105,7 @@ module pzcorebus_request_m_to_1_switch
     end
   end
 
-  if (BUS_CONFIG.profile != PZCOREBUS_CSR) begin : g_request_free
+  if (is_memory_profile(BUS_CONFIG)) begin : g_request_free
     logic [3:0] access_done;
     logic       command_done;
     logic       data_done;
@@ -212,7 +212,7 @@ module pzcorebus_request_m_to_1_switch
 //--------------------------------------------------------------
 //  Master Command/Data Alignment
 //--------------------------------------------------------------
-  if ((BUS_CONFIG.profile != PZCOREBUS_CSR) && ALIGN_OUT && MASTER_FIFO) begin : g_master_aligner
+  if (is_memory_profile(BUS_CONFIG) && ALIGN_OUT && MASTER_FIFO) begin : g_master_aligner
     pzcorebus_command_data_aligner #(
       .BUS_CONFIG     (BUS_CONFIG     ),
       .RELAX_MODE     (1              ),

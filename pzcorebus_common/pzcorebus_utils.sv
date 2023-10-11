@@ -9,6 +9,8 @@ interface pzcorebus_utils
 #(
   parameter pzcorebus_config  BUS_CONFIG  = '0
 );
+  `include  "pzcorebus_macros.svh"
+
   localparam  int DATA_SIZE     = BUS_CONFIG.data_width / BUS_CONFIG.unit_data_width;
   localparam  int MAX_DATA_SIZE = BUS_CONFIG.max_data_width / BUS_CONFIG.unit_data_width;
 
@@ -54,7 +56,7 @@ interface pzcorebus_utils
   endfunction
 
   function automatic logic is_full_write_command(pzcorebus_command_type command_type);
-    if (BUS_CONFIG.profile != PZCOREBUS_CSR) begin
+    if (`pzcorebus_memoy_profile(BUS_CONFIG)) begin
       return pzcorebus_command_kind'(command_type) == PZCOREBUS_FULL_WRITE_COMMAND;
     end
     else begin
@@ -63,7 +65,7 @@ interface pzcorebus_utils
   endfunction
 
   function automatic logic is_broadcast_command(pzcorebus_command_type command_type);
-    if (BUS_CONFIG.profile == PZCOREBUS_CSR) begin
+    if (`pzcorebus_csr_profile(BUS_CONFIG)) begin
       return pzcorebus_command_kind'(command_type) == PZCOREBUS_BROADCAST_COMMAND;
     end
     else begin
@@ -84,7 +86,7 @@ interface pzcorebus_utils
   endfunction
 
   function automatic logic is_atomic_command(pzcorebus_command_type command_type);
-    if (BUS_CONFIG.profile != PZCOREBUS_CSR) begin
+    if (`pzcorebus_memoy_profile(BUS_CONFIG)) begin
       return pzcorebus_command_kind'(command_type) == PZCOREBUS_ATOMIC_COMMAND;
     end
     else begin
@@ -93,7 +95,7 @@ interface pzcorebus_utils
   endfunction
 
   function automatic logic is_message_command(pzcorebus_command_type command_type);
-    if (BUS_CONFIG.profile != PZCOREBUS_CSR) begin
+    if (`pzcorebus_memoy_profile(BUS_CONFIG)) begin
       return pzcorebus_command_kind'(command_type) == PZCOREBUS_MESSAGE_COMMAND;
     end
     else begin
@@ -122,18 +124,12 @@ interface pzcorebus_utils
     pzcorebus_command_type  command_type,
     pzcorebus_length        length
   );
-    if (BUS_CONFIG.profile == PZCOREBUS_CSR) begin
-      return pzcorebus_unpacked_length'(1);
-    end
-    else if (is_atomic_command(command_type)) begin
-      return pzcorebus_unpacked_length'(DATA_SIZE);
-    end
-    else if (is_message_command(command_type)) begin
-      return pzcorebus_unpacked_length'(0);
-    end
-    else begin
-      return unpack_length(length);
-    end
+    case (1'b1)
+      `pzcorebus_csr_profile(BUS_CONFIG): return pzcorebus_unpacked_length'(1);
+      is_atomic_command(command_type):    return pzcorebus_unpacked_length'(DATA_SIZE);
+      is_message_command(command_type):   return pzcorebus_unpacked_length'(0);
+      default:                            return unpack_length(length);
+    endcase
   endfunction
 
   localparam  int LENGTH_OFFSET_LSB   = $clog2(BUS_CONFIG.unit_data_width) - 3;
@@ -147,7 +143,7 @@ interface pzcorebus_utils
     pzcorebus_unpacked_length offset;
     logic [3:0]               no_offset;
 
-    no_offset[0]  = BUS_CONFIG.profile != PZCOREBUS_MEMORY_H;
+    no_offset[0]  = !`pzcorebus_memoy_h_profile(BUS_CONFIG);
     no_offset[1]  = DATA_SIZE == 1;
     no_offset[2]  = is_atomic_command(command_type);
     no_offset[3]  = is_message_command(command_type);
@@ -169,7 +165,7 @@ interface pzcorebus_utils
     pzcorebus_addrss        address,
     pzcorebus_length        length
   );
-    if (BUS_CONFIG.profile == PZCOREBUS_MEMORY_H) begin
+    if (`pzcorebus_memoy_h_profile(BUS_CONFIG)) begin
       pzcorebus_unpacked_length length;
       length  = get_aligned_length(command_type, address, length)
               + pzcorebus_unpacked_length'(BURST_OFFSET);
@@ -207,7 +203,7 @@ interface pzcorebus_utils
   function automatic pzcorebus_burst_length get_burst_index(
     pzcorebus_length  index
   );
-    if (BUS_CONFIG.profile == PZCOREBUS_MEMORY_H) begin
+    if (`pzcorebus_memoy_h_profile(BUS_CONFIG)) begin
       return pzcorebus_burst_length'(index >> BURST_SHIFT);
     end
     else begin
@@ -222,7 +218,7 @@ interface pzcorebus_utils
     pzcorebus_command_type  command,
     pzcorebus_addrss        address
   );
-    if (BUS_CONFIG.profile != PZCOREBUS_MEMORY_H) begin
+    if (!`pzcorebus_memoy_h_profile(BUS_CONFIG)) begin
       return pzcorebus_response_offset'(0);
     end
     else if (BUS_CONFIG.max_data_width == BUS_CONFIG.unit_data_width) begin
@@ -250,7 +246,7 @@ interface pzcorebus_utils
     pzcorebus_unpacked_length remaining_size,
     pzcorebus_response_offset current_offset
   );
-    if (BUS_CONFIG.profile != PZCOREBUS_MEMORY_H) begin
+    if (!`pzcorebus_memoy_h_profile(BUS_CONFIG)) begin
       return pzcorebus_response_size'(1);
     end
     else if (BUS_CONFIG.data_width == BUS_CONFIG.unit_data_width) begin
@@ -275,7 +271,7 @@ interface pzcorebus_utils
     pzcorebus_response_offset current_offset,
     pzcorebus_response_size   response_size
   );
-    if (BUS_CONFIG.profile != PZCOREBUS_MEMORY_H) begin
+    if (!`pzcorebus_memoy_h_profile(BUS_CONFIG)) begin
       return '0;
     end
     else begin

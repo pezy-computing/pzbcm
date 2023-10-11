@@ -5,6 +5,8 @@
 //
 //========================================
 package pzcorebus_if_pkg;
+  `include  "pzcorebus_macros.svh"
+
   import  pzcorebus_pkg::*;
 
   typedef struct {
@@ -57,7 +59,7 @@ package pzcorebus_if_pkg;
     list.minfo.lsb      = calc_next_lsb(list.mlength);
     list.minfo.width    = get_request_info_width(bus_config, 0);
     list.mdata.lsb      = calc_next_lsb(list.minfo);
-    if (bus_config.profile == PZCOREBUS_CSR) begin
+    if (`pzcorebus_csr_profile(bus_config)) begin
       list.mdata.width  = bus_config.data_width;
     end
     else begin
@@ -72,7 +74,7 @@ package pzcorebus_if_pkg;
   );
     pzcorebus_if_write_data_position_list list;
 
-    if (bus_config.profile != PZCOREBUS_CSR) begin
+    if (`pzcorebus_memoy_profile(bus_config)) begin
       list.mdata.lsb          = 0;
       list.mdata.width        = bus_config.data_width;
       list.mdata_byteen.lsb   = calc_next_lsb(list.mdata);

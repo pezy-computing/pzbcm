@@ -22,10 +22,12 @@ module pzcorebus_axi2corebus_simple_bridge
   pzaxi_if.slave      axi_if,
   pzcorebus_if.master corebus_if
 );
+  `include  "pzcorebus_macros.svh"
+
   localparam  int UNIT_WIDTH  = 32;
 
   initial begin
-    if (COREBUS_CONFIG.profile == PZCOREBUS_MEMORY_H) begin
+    if (is_memory_h_profile(COREBUS_CONFIG)) begin
       assume (COREBUS_CONFIG.unit_data_width == UNIT_WIDTH);
     end
   end
@@ -70,7 +72,7 @@ module pzcorebus_axi2corebus_simple_bridge
     logic [UNPACKED_LENGTH_WIDTH-1:0] offset;
 
     burst_length  = pzaxi_burst_length_unpacked'(axlen) + pzaxi_burst_length_unpacked'(1);
-    if (COREBUS_CONFIG.profile == PZCOREBUS_MEMORY_L) begin
+    if (`pzcorebus_memoy_l_profile(COREBUS_CONFIG)) begin
       return LENGTH_WIDTH'(burst_length);
     end
     else if (is_4bytes_access(axlen, axsize)) begin

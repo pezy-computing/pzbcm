@@ -23,10 +23,12 @@ module pzcorebus_membus2csrbus_adapter
   pzcorebus_if.slave                      membus_slave_if,
   pzcorebus_if.master                     csrbus_master_if
 );
+  `include  "pzcorebus_macros.svh"
+
   initial begin
     assume (CSRBUS_CONFIG.data_width == 32);
     assume (VALID_ADDRESS_WIDTH inside {[1:CSRBUS_CONFIG.address_width]});
-    if (MEMBUS_CONFIG.profile == PZCOREBUS_MEMORY_H) begin
+    if (is_memory_h_profile(MEMBUS_CONFIG)) begin
       assume (MEMBUS_CONFIG.unit_data_width == 32);
     end
   end
@@ -55,21 +57,12 @@ module pzcorebus_membus2csrbus_adapter
     end
   endfunction
 
-  function automatic int get_length_count_width();
-    if (MEMBUS_CONFIG.profile == PZCOREBUS_MEMORY_H) begin
-      return get_unpacked_length_width(MEMBUS_CONFIG);
-    end
-    else begin
-      return get_burst_length_width(MEMBUS_CONFIG) + $clog2(UNIT_SIZE);
-    end
-  endfunction
-
   function automatic int get_data_count_width();
     return $clog2(UNIT_SIZE);
   endfunction
 
   function automatic int get_uniten_count_width();
-    if (MEMBUS_CONFIG.profile == PZCOREBUS_MEMORY_H) begin
+    if (is_memory_h_profile(MEMBUS_CONFIG)) begin
       return $clog2(MEMBUS_CONFIG.max_data_width / UNIT_WIDTH);
     end
     else begin
@@ -78,7 +71,7 @@ module pzcorebus_membus2csrbus_adapter
   endfunction
 
   function automatic int get_word_size();
-    if (MEMBUS_CONFIG.profile == PZCOREBUS_MEMORY_H) begin
+    if (is_memory_h_profile(MEMBUS_CONFIG)) begin
       return MEMBUS_CONFIG.max_data_width / MEMBUS_CONFIG.data_width;
     end
     else begin
@@ -93,7 +86,7 @@ module pzcorebus_membus2csrbus_adapter
 
   localparam  int MINFO_WIDTH           = get_minfo_width();
   localparam  int UNPACKED_LENGTH_WIDTH = get_unpacked_length_width(MEMBUS_CONFIG);
-  localparam  int LENGTH_COUNT_WIDTH    = get_length_count_width();
+  localparam  int LENGTH_COUNT_WIDTH    = UNPACKED_LENGTH_WIDTH;
   localparam  int DATA_COUNT_WIDTH      = get_data_count_width();
   localparam  int UNITEN_COUNT_WIDTH    = get_uniten_count_width();
   localparam  int UNIT_OFFSET_LSB       = $clog2(UNIT_WIDTH / 8);
@@ -206,7 +199,7 @@ module pzcorebus_membus2csrbus_adapter
 
     always_comb begin
       if (!busy) begin
-        length_count[0] = get_aligned_length(slicer_if.maddr, slicer_if.get_length());
+        length_count[0] = slicer_if.get_length();
         data_count[0]   = slicer_if.maddr[UNIT_OFFSET_LSB+:UNIT_OFFSET_WIDTH];
         maddr[0]        = get_initial_maddr(slicer_if.maddr);
       end
@@ -315,25 +308,6 @@ module pzcorebus_membus2csrbus_adapter
       end
     end
   end
-
-  function automatic logic [LENGTH_COUNT_WIDTH-1:0] get_aligned_length(
-    logic [MEMBUS_CONFIG.address_width-1:0] maddr,
-    logic [UNPACKED_LENGTH_WIDTH-1:0]       mlength
-  );
-    logic [LENGTH_COUNT_WIDTH-1:0]  length;
-    logic [UNIT_OFFSET_WIDTH-1:0]   offset;
-
-    if (MEMBUS_CONFIG.profile == PZCOREBUS_MEMORY_H) begin
-      length  = mlength;
-      offset  = UNIT_OFFSET_WIDTH'(0);
-    end
-    else begin
-      length  = {mlength, UNIT_OFFSET_WIDTH'(0)};
-      offset  = maddr[UNIT_OFFSET_LSB+:UNIT_OFFSET_WIDTH];
-    end
-
-    return length - LENGTH_COUNT_WIDTH'(offset);
-  endfunction
 
   function automatic logic [CSRBUS_CONFIG.address_width-1:0] get_initial_maddr(
     logic [MEMBUS_CONFIG.address_width-1:0] maddr
@@ -582,7 +556,7 @@ module pzcorebus_membus2csrbus_adapter
   );
     logic [UNITEN_WIDTH-1:0]  uniten;
 
-    if (MEMBUS_CONFIG.profile == PZCOREBUS_MEMORY_H) begin
+    if (`pzcorebus_memoy_h_profile(MEMBUS_CONFIG)) begin
       for (int i = 0;i < UNITEN_WIDTH;++i) begin
         uniten[i] = UNITEN_COUNT_WIDTH'(i) inside {[start_count:end_count]};
       end

@@ -10,7 +10,7 @@ module pzcorebus_dummy_slave
   parameter pzcorebus_config                BUS_CONFIG      = '0,
   parameter bit                             TIE_OFF         = 0,
   parameter bit                             ERROR           = '1,
-  parameter bit [31:0]                      ERROR_DATA      = (BUS_CONFIG.profile == PZCOREBUS_CSR) ? 32'hdead_dead : 32'hdead_beaf,
+  parameter bit [31:0]                      ERROR_DATA      = (is_csr_profile(BUS_CONFIG)) ? 32'hdead_dead : 32'hdead_beaf,
   parameter bit [BUS_CONFIG.data_width-1:0] READ_DATA       = {BUS_CONFIG.data_width/32{ERROR_DATA}},
   parameter bit                             ENABLE_WARNING  = 1
 )(
@@ -58,7 +58,7 @@ module pzcorebus_dummy_slave
 
     pzcorebus_slicer #(
       .BUS_CONFIG     (BUS_CONFIG                           ),
-      .FIFO_SLICER    (BUS_CONFIG.profile != PZCOREBUS_CSR  ),
+      .FIFO_SLICER    (`pzcorebus_memoy_profile(BUS_CONFIG) ),
       .REQUEST_VALID  (0                                    ),
       .RESPONSE_VALID (1                                    )
     ) u_slicer (
@@ -99,7 +99,7 @@ module pzcorebus_dummy_slave
       end
     end
 
-    if (BUS_CONFIG.profile == PZCOREBUS_CSR) begin : g_csrbus
+    if (is_csr_profile(BUS_CONFIG)) begin : g_csrbus
       always_comb begin
         scmd_accept     = !sresp_valid[0];
         sdata_accept    = '0;
@@ -168,7 +168,7 @@ module pzcorebus_dummy_slave
         end
       end
 
-      if (BUS_CONFIG.profile == PZCOREBUS_MEMORY_L) begin : g_membus_l
+      if (is_memory_l_profile(BUS_CONFIG)) begin : g_membus_l
         pzcorebus_unpacked_length sresp_count;
 
         always_comb begin

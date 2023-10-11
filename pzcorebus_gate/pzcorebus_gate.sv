@@ -17,7 +17,7 @@ module pzcorebus_gate
   pzcorebus_if.slave  slave_if,
   pzcorebus_if.master master_if
 );
-  localparam  bit TIE_OFF = (BUS_CONFIG.profile != PZCOREBUS_CSR) && (!RETURN_RESPONSE);
+  localparam  bit TIE_OFF = (is_memory_profile(BUS_CONFIG)) && (!RETURN_RESPONSE);
 
   pzcorebus_if #(BUS_CONFIG)  bus_if[2]();
 

@@ -10,6 +10,9 @@ interface pzcorebus_if
 #(
   parameter pzcorebus_config  BUS_CONFIG  = '0
 );
+  `include  "pzcorebus_if_internal_macros.svh"
+  `include  "pzcorebus_macros.svh"
+
 //--------------------------------------------------------------
 //  Type Definitions
 //--------------------------------------------------------------

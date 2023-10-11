@@ -8,6 +8,17 @@
 `define INCLUDED_PZCOREBUS_MACROS_SVH
 
 //----------------------------------------------------------
+//  Utilities
+//----------------------------------------------------------
+`define pzcorebus_csr_profile(BUS_CONFIG) (BUS_CONFIG.profile == pzcorebus_pkg::PZCOREBUS_CSR)
+
+`define pzcorebus_memoy_h_profile(BUS_CONFIG) (BUS_CONFIG.profile == pzcorebus_pkg::PZCOREBUS_MEMORY_H)
+
+`define pzcorebus_memoy_l_profile(BUS_CONFIG) (BUS_CONFIG.profile == pzcorebus_pkg::PZCOREBUS_MEMORY_L)
+
+`define pzcorebus_memoy_profile(BUS_CONFIG) (!`pzcorebus_csr_profile(BUS_CONFIG))
+
+//----------------------------------------------------------
 //  CSR bus slave
 //----------------------------------------------------------
 `define pzcorebus_define_csrbus_slave_ports(PREFIX, IF_CONFIG, N) \

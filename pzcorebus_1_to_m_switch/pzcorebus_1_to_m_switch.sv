@@ -44,7 +44,7 @@ module pzcorebus_1_to_m_switch
 );
   pzcorebus_if #(BUS_CONFIG)  bus_if[1+MASTERS]();
 
-  if (ENABLE_BROADCAST && ENABLE_BROADCAST_NON_POSTED && (BUS_CONFIG.profile == PZCOREBUS_CSR)) begin : g
+  if (ENABLE_BROADCAST && ENABLE_BROADCAST_NON_POSTED && is_csr_profile(BUS_CONFIG)) begin : g
     pzcorebus_1_to_m_switch_response_filter #(
       .BUS_CONFIG                     (BUS_CONFIG                     ),
       .MASTERS                        (MASTERS                        ),
