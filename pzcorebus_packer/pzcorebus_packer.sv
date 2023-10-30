@@ -132,7 +132,6 @@ module pzcorebus_packer
 
   pzcorebus_command_data_aligner #(
     .BUS_CONFIG (BUS_CONFIG ),
-    .RELAX_MODE (0          ),
     .SLAVE_FIFO (0          )
   ) u_aligner (
     .i_clk      (i_clk      ),
