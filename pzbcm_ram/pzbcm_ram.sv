@@ -49,7 +49,7 @@ module pzbcm_ram #(
   end
 
   always_comb begin
-    o_qb  = q;
+    o_qb  = DATA_TYPE'(q);
   end
 
   if (!BUFFER_OUT) begin : g_out
