@@ -7,13 +7,14 @@
 module pzcorebus_command_data_aligner
   import  pzcorebus_pkg::*;
 #(
-  parameter pzcorebus_config  BUS_CONFIG      = '0,
-  parameter bit               WAIT_FOR_DATA   = 0,
-  parameter bit               RELAX_MODE      = 1,
-  parameter bit               SLAVE_FIFO      = 0,
-  parameter int               COMMAND_DEPTH   = 2,
-  parameter int               DATA_DEPTH      = 2,
-  parameter int               RESPONSE_DEPTH  = 0
+  parameter pzcorebus_config  BUS_CONFIG              = '0,
+  parameter bit               WAIT_FOR_DATA           = 0,
+  parameter bit               THROUGH_NO_DATA_COMMAND = 0,
+  parameter bit               RELAX_MODE              = 1,
+  parameter bit               SLAVE_FIFO              = 0,
+  parameter int               COMMAND_DEPTH           = 2,
+  parameter int               DATA_DEPTH              = 2,
+  parameter int               RESPONSE_DEPTH          = 0
 )(
   input var           i_clk,
   input var           i_rst_n,
@@ -28,12 +29,13 @@ module pzcorebus_command_data_aligner
   );
 
   pzcorebus_command_data_aligner_core #(
-    .BUS_CONFIG     (BUS_CONFIG     ),
-    .WAIT_FOR_DATA  (WAIT_FOR_DATA  ),
-    .RELAX_MODE     (RELAX_MODE     ),
-    .SLAVE_FIFO     (SLAVE_FIFO     ),
-    .COMMAND_DEPTH  (COMMAND_DEPTH  ),
-    .DATA_DEPTH     (DATA_DEPTH     )
+    .BUS_CONFIG               (BUS_CONFIG               ),
+    .WAIT_FOR_DATA            (WAIT_FOR_DATA            ),
+    .THROUGH_NO_DATA_COMMAND  (THROUGH_NO_DATA_COMMAND  ),
+    .RELAX_MODE               (RELAX_MODE               ),
+    .SLAVE_FIFO               (SLAVE_FIFO               ),
+    .COMMAND_DEPTH            (COMMAND_DEPTH            ),
+    .DATA_DEPTH               (DATA_DEPTH               )
   ) u_aligner_core (
     .i_clk        (i_clk      ),
     .i_rst_n      (i_rst_n    ),

@@ -7,13 +7,14 @@
 module pzcorebus_command_data_aligner_core
   import  pzcorebus_pkg::*;
 #(
-  parameter   pzcorebus_config  BUS_CONFIG    = '0,
-  parameter   bit               WAIT_FOR_DATA = 0,
-  parameter   bit               RELAX_MODE    = 1,
-  parameter   bit               SLAVE_FIFO    = 0,
-  parameter   int               COMMAND_DEPTH = 2,
-  parameter   int               DATA_DEPTH    = 2,
-  localparam  int               INFO_WIDTH    = get_request_info_width(BUS_CONFIG, 1)
+  parameter   pzcorebus_config  BUS_CONFIG              = '0,
+  parameter   bit               WAIT_FOR_DATA           = 0,
+  parameter   bit               THROUGH_NO_DATA_COMMAND = 0,
+  parameter   bit               RELAX_MODE              = 1,
+  parameter   bit               SLAVE_FIFO              = 0,
+  parameter   int               COMMAND_DEPTH           = 2,
+  parameter   int               DATA_DEPTH              = 2,
+  localparam  int               INFO_WIDTH              = get_request_info_width(BUS_CONFIG, 1)
 )(
   input   var                                 i_clk,
   input   var                                 i_rst_n,
@@ -53,45 +54,42 @@ module pzcorebus_command_data_aligner_core
 //--------------------------------------------------------------
 //  State Machine
 //--------------------------------------------------------------
-  typedef enum logic {
-    COMMAND_IDLE,
-    COMMAND_DONE
-  } pzcorebus_command_data_aligner_command_state;
-
   typedef enum logic [1:0] {
-    DATA_IDLE,
-    DATA_ACTIVE,
-    DATA_DONE
-  } pzcorebus_command_data_aligner_data_state;
+    IDLE,
+    ACTIVE,
+    DONE
+  } pzcorebus_state;
 
-  pzcorebus_command_data_aligner_command_state  command_state;
-  pzcorebus_command_data_aligner_data_state     data_state;
-  logic                                         data_arrived;
+  pzcorebus_state command_state;
+  pzcorebus_state data_state;
+  logic           commad_done;
+  logic           data_done;
 
   always_comb begin
-    o_mcmd_done   = command_state == COMMAND_DONE;
-    o_mdata_done  = data_state    == DATA_DONE;
+    o_mcmd_done   = command_state == DONE;
+    o_mdata_done  = data_state == DONE;
+  end
+
+  always_comb begin
+    commad_done = (command_state == DONE) || fifo_if.command_with_data_ack();
+    data_done   = (data_state == DONE) || fifo_if.write_data_last_ack();
   end
 
   always_ff @(posedge i_clk, negedge i_rst_n) begin
     if (!i_rst_n) begin
-      command_state <= COMMAND_IDLE;
+      command_state <= IDLE;
     end
     else begin
       case (command_state)
-        COMMAND_IDLE: begin
-          if (fifo_if.command_with_data_ack()) begin
-            command_state <= (
-              (data_state == DATA_DONE) ||
-              fifo_if.write_data_last_ack()
-            ) ? COMMAND_IDLE : COMMAND_DONE;
+        IDLE: begin
+          if (commad_done && (!data_done)) begin
+            command_state <= DONE;
           end
         end
-        COMMAND_DONE: begin
-          command_state <= (
-            (data_state == DATA_DONE) ||
-            fifo_if.write_data_last_ack()
-          ) ? COMMAND_IDLE : COMMAND_DONE;
+        DONE: begin
+          if (data_done) begin
+            command_state <= IDLE;
+          end
         end
       endcase
     end
@@ -99,49 +97,41 @@ module pzcorebus_command_data_aligner_core
 
   always_ff @(posedge i_clk, negedge i_rst_n) begin
     if (!i_rst_n) begin
-      data_state  <= DATA_IDLE;
+      data_state  <= IDLE;
     end
     else begin
       case (data_state)
-        DATA_IDLE: begin
-          if (fifo_if.command_with_data_ack()) begin
-            data_state  <= (
-              fifo_if.write_data_last_ack()
-            ) ? DATA_IDLE : DATA_ACTIVE;
+        IDLE: begin
+          if (commad_done) begin
+            if (!data_done) begin
+              data_state  <= ACTIVE;
+            end
           end
           else if (RELAX_MODE && fifo_if.command_with_data_valid()) begin
-            data_state  <= (
-              fifo_if.write_data_last_ack()
-            ) ? DATA_DONE : DATA_ACTIVE;
+            if (data_done) begin
+              data_state  <= DONE;
+            end
+            else if ((!WAIT_FOR_DATA) || fifo_if.mdata_valid) begin
+              data_state  <= ACTIVE;
+            end
           end
         end
-        DATA_ACTIVE: begin
-          if (fifo_if.write_data_last_ack()) begin
-            data_state  <= (
-              STRICT_MODE ||
-              (command_state == COMMAND_DONE) ||
-              fifo_if.command_with_data_ack()
-            ) ? DATA_IDLE : DATA_DONE;
+        ACTIVE: begin
+          if (data_done) begin
+            if (STRICT_MODE || commad_done) begin
+              data_state  <= IDLE;
+            end
+            else begin
+              data_state  <= DONE;
+            end
           end
         end
-        DATA_DONE: begin
-          data_state  <= (
-            fifo_if.command_with_data_ack()
-          ) ? DATA_IDLE : DATA_DONE;
+        DONE: begin
+          if (commad_done) begin
+            data_state  <= IDLE;
+          end
         end
       endcase
-    end
-  end
-
-  always_ff @(posedge i_clk, negedge i_rst_n) begin
-    if (!i_rst_n) begin
-      data_arrived  <= '0;
-    end
-    else if (fifo_if.write_data_last_ack()) begin
-      data_arrived  <= '0;
-    end
-    else if (fifo_if.write_data_ack()) begin
-      data_arrived  <= '1;
     end
   end
 
@@ -149,32 +139,26 @@ module pzcorebus_command_data_aligner_core
 //  Master Port Connection
 //--------------------------------------------------------------
   logic command_ready;
+  logic data_ready;
 
   always_comb begin
-    command_ready =
-      (command_state == COMMAND_IDLE) &&
-      ((!WAIT_FOR_DATA) || fifo_if.is_command_no_data() || fifo_if.mdata_valid || data_arrived || (data_state == DATA_DONE));
+    case (command_state)
+      IDLE:     command_ready = (!WAIT_FOR_DATA) || fifo_if.is_command_no_data() || fifo_if.mdata_valid || (data_state != IDLE);
+      default:  command_ready = THROUGH_NO_DATA_COMMAND && fifo_if.is_command_no_data();
+    endcase
 
-    master_if.mcmd_valid  = command_ready && fifo_if.mcmd_valid;
+    case (data_state)
+      IDLE:     data_ready  = (RELAX_MODE) ? fifo_if.command_with_data_valid() : fifo_if.command_with_data_ack();
+      ACTIVE:   data_ready  = '1;
+      default:  data_ready  = '0;
+    endcase
+
     fifo_if.scmd_accept   = command_ready && master_if.scmd_accept;
+    master_if.mcmd_valid  = command_ready && fifo_if.mcmd_valid;
     master_if.put_command(fifo_if.get_command());
 
-    master_if.mdata_valid = '0;
-    fifo_if.sdata_accept  = '0;
-    if (data_state == DATA_ACTIVE) begin
-      master_if.mdata_valid = fifo_if.mdata_valid;
-      fifo_if.sdata_accept  = master_if.sdata_accept;
-    end
-    else if (data_state == DATA_IDLE) begin
-      if (
-        (RELAX_MODE  && fifo_if.command_with_data_valid()) ||
-        (STRICT_MODE && fifo_if.command_with_data_ack()  )
-      ) begin
-        master_if.mdata_valid = fifo_if.mdata_valid;
-        fifo_if.sdata_accept  = master_if.sdata_accept;
-      end
-    end
-
+    fifo_if.sdata_accept  = data_ready && master_if.sdata_accept;
+    master_if.mdata_valid = data_ready && fifo_if.mdata_valid;
     master_if.put_write_data(fifo_if.get_write_data());
   end
 
@@ -187,7 +171,7 @@ module pzcorebus_command_data_aligner_core
   logic [INFO_WIDTH-1:0]                minfo;
 
   always_comb begin
-    if (command_state == COMMAND_IDLE) begin
+    if (command_state == IDLE) begin
       o_mcmd  = fifo_if.mcmd;
       o_mid   = fifo_if.mid;
       o_maddr = fifo_if.maddr;
@@ -208,7 +192,7 @@ module pzcorebus_command_data_aligner_core
       maddr <= '0;
       minfo <= '0;
     end
-    else if (fifo_if.command_ack()) begin
+    else if (fifo_if.command_with_data_ack()) begin
       mcmd  <= fifo_if.mcmd;
       mid   <= fifo_if.mid;
       maddr <= fifo_if.maddr;

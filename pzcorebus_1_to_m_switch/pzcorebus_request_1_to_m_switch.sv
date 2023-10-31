@@ -44,12 +44,13 @@ module pzcorebus_request_1_to_m_switch
 //--------------------------------------------------------------
   if (is_memory_profile(BUS_CONFIG)) begin : g_slave_aligner
     pzcorebus_command_data_aligner_core #(
-      .BUS_CONFIG     (BUS_CONFIG     ),
-      .WAIT_FOR_DATA  (WAIT_FOR_DATA  ),
-      .RELAX_MODE     (1              ),
-      .SLAVE_FIFO     (SLAVE_FIFO     ),
-      .COMMAND_DEPTH  (COMMAND_DEPTH  ),
-      .DATA_DEPTH     (DATA_DEPTH     )
+      .BUS_CONFIG               (BUS_CONFIG     ),
+      .WAIT_FOR_DATA            (WAIT_FOR_DATA  ),
+      .RELAX_MODE               (1              ),
+      .THROUGH_NO_DATA_COMMAND  (1              ),
+      .SLAVE_FIFO               (SLAVE_FIFO     ),
+      .COMMAND_DEPTH            (COMMAND_DEPTH  ),
+      .DATA_DEPTH               (DATA_DEPTH     )
     ) u_aligner (
       .i_clk        (i_clk      ),
       .i_rst_n      (i_rst_n    ),
@@ -131,7 +132,7 @@ module pzcorebus_request_1_to_m_switch
     logic [MASTERS-1:0] select_latched;
 
     always_comb begin
-      if (aligner_if.mcmd_valid) begin
+      if (aligner_if.command_with_data_valid()) begin
         data_select = command_select;
       end
       else begin
@@ -143,7 +144,7 @@ module pzcorebus_request_1_to_m_switch
       if (!i_rst_n) begin
         select_latched  <= '0;
       end
-      else if (aligner_if.command_ack()) begin
+      else if (aligner_if.command_with_data_valid()) begin
         select_latched  <= command_select;
       end
     end
