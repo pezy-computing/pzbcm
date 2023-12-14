@@ -4,20 +4,24 @@
 //                    All Rights Reserved.
 //
 //========================================
-module pzbcm_sram #(
-  parameter int   WORDS             = 2,
-  parameter int   DATA_WIDTH        = 8,
-  parameter int   BANKS             = 1,
-  parameter bit   BANK_LSB          = 1,
-  parameter bit   SINGLE_PORT_RAM   = 1,
-  parameter bit   SINGLE_CLOCK      = 1,
-  parameter bit   READ_INFO_ENABLE  = 0,
-  parameter type  READ_INFO         = logic,
-  parameter bit   OUTPUT_FIFO       = 1,
-  parameter type  SRAM_CONFIG       = logic,
-  parameter bit   WRITE_FIRST       = 1,
-  parameter int   READ_LATENCY      = 1,
-  parameter int   SRAM_ID           = 0
+module pzbcm_sram
+  import  pzbcm_sram_pkg::*;
+#(
+  parameter pzbcm_sram_params PARAMS            = '0,
+  parameter bit               FF_RAM            = 0,
+  parameter bit               READ_INFO_ENABLE  = 0,
+  parameter type              READ_INFO         = logic,
+  parameter bit               OUTPUT_FIFO       = 1,
+  parameter type              SRAM_CONFIG       = logic,
+  parameter bit               WRITE_FIRST       = 1,
+  parameter shortint          WORDS             = PARAMS.words,
+  parameter shortint          DATA_WIDTH        = PARAMS.data_width,
+  parameter shortint          BANKS             = PARAMS.banks,
+  parameter bit               BANK_LSB          = PARAMS.bank_lsb,
+  parameter bit               SINGLE_PORT_RAM   = PARAMS.single_port_ram,
+  parameter bit               SINGLE_CLOCK      = PARAMS.single_clock,
+  parameter shortint          READ_LATENCY      = PARAMS.read_latency,
+  parameter int               SRAM_ID           = PARAMS.id
 )(
   input var             i_write_clk,
   input var             i_read_clk,
@@ -26,36 +30,12 @@ module pzbcm_sram #(
   input var SRAM_CONFIG i_sram_config,
   pzbcm_sram_if.sram    port_if
 );
-  function automatic int calc_pointer_width(int width);
-    if (width > 1) begin
-      return $clog2(width);
-    end
-    else begin
-      return 1;
-    end
-  endfunction
-
-  localparam  int POINTER_WIDTH     = calc_pointer_width(WORDS);
-  localparam  int BANK_WIDTH        = calc_pointer_width(BANKS);
-  localparam  int RAM_WORDS         = WORDS / BANKS;
-  localparam  int RAM_POINTER_WIDTH = calc_pointer_width(RAM_WORDS);
-  localparam  int RAM_POINTER_LSB   = (BANK_LSB && (BANKS > 1)) ? BANK_WIDTH : 0;
-  localparam  int INFO_WIDTH        = (READ_INFO_ENABLE) ? $bits(READ_INFO) : 0;
-
-  function automatic logic match_bank(
-    int                       bank_index,
-    logic [POINTER_WIDTH-1:0] pointer
-  );
-    if (BANKS == 1) begin
-      return '1;
-    end
-    else if (BANK_LSB) begin
-      return pointer[0+:BANK_WIDTH] == BANK_WIDTH'(bank_index);
-    end
-    else begin
-      return pointer[POINTER_WIDTH-1-:BANK_WIDTH] == BANK_WIDTH'(bank_index);
-    end
-  endfunction
+  localparam  shortint  POINTER_WIDTH     = calc_pointer_width(WORDS);
+  localparam  shortint  BANK_WIDTH        = calc_bank_width(BANKS);
+  localparam  shortint  RAM_WORDS         = calc_ram_words(WORDS, BANKS);
+  localparam  shortint  RAM_POINTER_WIDTH = calc_ram_pointer_width(WORDS, BANKS);
+  localparam  shortint  RAM_POINTER_LSB   = get_ram_pointer_lsb(BANKS, BANK_LSB);
+  localparam  shortint  INFO_WIDTH        = (READ_INFO_ENABLE) ? $bits(READ_INFO) : 0;
 
   logic [BANKS-1:0]                 write_ready;
   logic [BANKS-1:0]                 write_enable;
@@ -129,13 +109,10 @@ module pzbcm_sram #(
         end
       end
 
-      if (SRAM_ID >= 0) begin : g
+      if ((!FF_RAM) && (SRAM_ID >= 0)) begin : g
         `PZBCM_SRAM_1RW_WRAPPER #(
-          .WORDS          (RAM_WORDS          ),
-          .DATA_WIDTH     (DATA_WIDTH         ),
-          .POINTER_WIDTH  (RAM_POINTER_WIDTH  ),
-          .SRAM_CONFIG    (SRAM_CONFIG        ),
-          .SRAM_ID        (SRAM_ID            )
+          .PARAMS       (PARAMS       ),
+          .SRAM_CONFIG  (SRAM_CONFIG  )
         ) u_sram (
           .i_clk          (i_write_clk        ),
           .i_enable       (enable             ),
@@ -150,29 +127,22 @@ module pzbcm_sram #(
         pzbcm_sram_1rw_wrapper_default #(
           .WORDS          (RAM_WORDS          ),
           .DATA_WIDTH     (DATA_WIDTH         ),
-          .POINTER_WIDTH  (RAM_POINTER_WIDTH  ),
-          .SRAM_CONFIG    (SRAM_CONFIG        ),
-          .SRAM_ID        (SRAM_ID            )
+          .POINTER_WIDTH  (RAM_POINTER_WIDTH  )
         ) u_sram (
-          .i_clk          (i_write_clk        ),
-          .i_enable       (enable             ),
-          .i_write        (write_enable[i]    ),
-          .i_pointer      (ram_pointer        ),
-          .i_write_data   (port_if.write_data ),
-          .o_read_data    (read_data[i]       ),
-          .i_sram_config  (i_sram_config      )
+          .i_clk        (i_write_clk        ),
+          .i_enable     (enable             ),
+          .i_write      (write_enable[i]    ),
+          .i_pointer    (ram_pointer        ),
+          .i_write_data (port_if.write_data ),
+          .o_read_data  (read_data[i]       )
         );
       end
     end
     else begin : g
-      if (SRAM_ID >= 0) begin : g
+      if ((!FF_RAM) && (SRAM_ID >= 0)) begin : g
         `PZBCM_SRAM_1R1W_WRAPPER #(
-          .WORDS          (RAM_WORDS          ),
-          .DATA_WIDTH     (DATA_WIDTH         ),
-          .POINTER_WIDTH  (RAM_POINTER_WIDTH  ),
-          .SINGLE_CLOCK   (SINGLE_CLOCK       ),
-          .SRAM_CONFIG    (SRAM_CONFIG        ),
-          .SRAM_ID        (SRAM_ID            )
+          .PARAMS       (PARAMS       ),
+          .SRAM_CONFIG  (SRAM_CONFIG  )
         ) u_sram (
           .i_write_clk      (i_write_clk        ),
           .i_write_enable   (write_enable[i]    ),
@@ -190,9 +160,7 @@ module pzbcm_sram #(
           .WORDS          (RAM_WORDS          ),
           .DATA_WIDTH     (DATA_WIDTH         ),
           .POINTER_WIDTH  (RAM_POINTER_WIDTH  ),
-          .SINGLE_CLOCK   (SINGLE_CLOCK       ),
-          .SRAM_CONFIG    (SRAM_CONFIG        ),
-          .SRAM_ID        (SRAM_ID            )
+          .SINGLE_CLOCK   (SINGLE_CLOCK       )
         ) u_sram (
           .i_write_clk      (i_write_clk        ),
           .i_write_enable   (write_enable[i]    ),
@@ -207,6 +175,21 @@ module pzbcm_sram #(
       end
     end
   end
+
+  function automatic logic match_bank(
+    int                       bank_index,
+    logic [POINTER_WIDTH-1:0] pointer
+  );
+    if (BANKS == 1) begin
+      return '1;
+    end
+    else if (BANK_LSB) begin
+      return pointer[0+:BANK_WIDTH] == BANK_WIDTH'(bank_index);
+    end
+    else begin
+      return pointer[POINTER_WIDTH-1-:BANK_WIDTH] == BANK_WIDTH'(bank_index);
+    end
+  endfunction
 
 //--------------------------------------------------------------
 //  Read Data

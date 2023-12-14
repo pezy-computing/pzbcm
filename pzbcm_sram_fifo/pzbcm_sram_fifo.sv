@@ -4,14 +4,15 @@
 //                    All Rights Reserved.
 //
 //========================================
-module pzbcm_sram_fifo #(
-  parameter int   WIDTH         = 8,
-  parameter type  TYPE          = logic [WIDTH-1:0],
-  parameter int   DEPTH         = 8,
-  parameter int   THRESHOLD     = DEPTH,
-  parameter type  SRAM_CONFIG   = logic,
-  parameter int   READ_LATENCY  = 1,
-  parameter int   SRAM_ID       = 0
+module pzbcm_sram_fifo
+  import  pzbcm_sram_pkg::*;
+#(
+  parameter pzbcm_sram_params SRAM_PARAMS = '0,
+  parameter int               WIDTH       = SRAM_PARAMS.data_width,
+  parameter type              TYPE        = logic [WIDTH-1:0],
+  parameter int               DEPTH       = SRAM_PARAMS.words,
+  parameter int               THRESHOLD   = DEPTH,
+  parameter type              SRAM_CONFIG = logic
 )(
   input   var             i_clk,
   input   var             i_rst_n,
@@ -27,17 +28,16 @@ module pzbcm_sram_fifo #(
   input   var             i_pop,
   output  var TYPE        o_data
 );
-  localparam  int DATA_WIDTH    = $bits(TYPE);
   localparam  int POINTER_WIDTH = $clog2(DEPTH);
 
-  logic                               empty;
-  logic                               almost_full;
-  logic                               full;
-  logic                               write_ack;
-  logic                               read_ack;
-  logic [POINTER_WIDTH-1:0]           wp;
-  logic [POINTER_WIDTH-1:0]           rp;
-  pzbcm_sram_if #(DEPTH, DATA_WIDTH)  sram_if();
+  logic                         empty;
+  logic                         almost_full;
+  logic                         full;
+  logic                         write_ack;
+  logic                         read_ack;
+  logic [POINTER_WIDTH-1:0]     wp;
+  logic [POINTER_WIDTH-1:0]     rp;
+  pzbcm_sram_if #(SRAM_PARAMS)  sram_if();
 
   always_comb begin
     o_empty             = sram_if.fifo_empty;
@@ -104,16 +104,10 @@ module pzbcm_sram_fifo #(
   end
 
   pzbcm_sram #(
-    .WORDS            (DEPTH        ),
-    .DATA_WIDTH       (DATA_WIDTH   ),
-    .BANKS            (1            ),
-    .SINGLE_PORT_RAM  (0            ),
-    .SINGLE_CLOCK     (1            ),
+    .PARAMS           (SRAM_PARAMS  ),
     .READ_INFO_ENABLE (0            ),
     .OUTPUT_FIFO      (1            ),
-    .SRAM_CONFIG      (SRAM_CONFIG  ),
-    .READ_LATENCY     (READ_LATENCY ),
-    .SRAM_ID          (SRAM_ID      )
+    .SRAM_CONFIG      (SRAM_CONFIG  )
   ) u_sram (
     .i_write_clk    (i_clk          ),
     .i_read_clk     (i_clk          ),

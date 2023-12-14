@@ -5,19 +5,16 @@
 //
 //========================================
 module pzbcm_sram_1rw_wrapper_default #(
-  parameter int   WORDS         = 2,
-  parameter int   DATA_WIDTH    = 8,
-  parameter int   POINTER_WIDTH = 2,
-  parameter type  SRAM_CONFIG   = logic,
-  parameter int   SRAM_ID       = 0
+  parameter int WORDS         = 2,
+  parameter int DATA_WIDTH    = 8,
+  parameter int POINTER_WIDTH = 2
 )(
   input   var                     i_clk,
   input   var                     i_enable,
   input   var                     i_write,
   input   var [POINTER_WIDTH-1:0] i_pointer,
   input   var [DATA_WIDTH-1:0]    i_write_data,
-  output  var [DATA_WIDTH-1:0]    o_read_data,
-  input   var SRAM_CONFIG         i_sram_config
+  output  var [DATA_WIDTH-1:0]    o_read_data
 );
   logic mea;
   logic meb;

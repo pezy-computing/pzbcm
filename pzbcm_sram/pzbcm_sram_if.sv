@@ -4,11 +4,14 @@
 //                    All Rights Reserved.
 //
 //========================================
-interface pzbcm_sram_if #(
-  parameter int   WORDS         = 2,
-  parameter int   DATA_WIDTH    = 8,
-  parameter type  READ_INFO     = logic,
-  parameter int   POINTER_WIDTH = (WORDS > 0) ? $clog2(WORDS) : 1
+interface pzbcm_sram_if
+  import  pzbcm_sram_pkg::*;
+#(
+  parameter pzbcm_sram_params PARAMS        = '0,
+  parameter type              READ_INFO     = logic,
+  parameter shortint          WORDS         = PARAMS.words,
+  parameter shortint          DATA_WIDTH    = PARAMS.data_width,
+  parameter shortint          POINTER_WIDTH = calc_pointer_width(WORDS)
 );
   typedef struct packed {
     READ_INFO               info;

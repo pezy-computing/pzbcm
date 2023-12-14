@@ -5,13 +5,12 @@
 //
 //========================================
 module pzcorebus_packer_data_fifo
-  import  pzcorebus_pkg::*;
+  import  pzcorebus_pkg::*,
+          pzbcm_sram_pkg::*;
 #(
-  parameter pzcorebus_config  BUS_CONFIG    = '0,
-  parameter int               DEPTH         = get_max_burst_length(BUS_CONFIG),
-  parameter int               READ_LATENCY  = 1,
-  parameter type              SRAM_CONFIG   = logic,
-  parameter int               SRAM_ID       = 0
+  parameter pzcorebus_config  BUS_CONFIG  = '0,
+  parameter pzbcm_sram_params SRAM_PARAMS = '0,
+  parameter type              SRAM_CONFIG = logic
 )(
   input   var                     i_clk,
   input   var                     i_rst_n,
@@ -44,11 +43,8 @@ module pzcorebus_packer_data_fifo
   end
 
   pzbcm_sram_fifo #(
-    .WIDTH        (WIDTH        ),
-    .DEPTH        (DEPTH        ),
-    .SRAM_CONFIG  (SRAM_CONFIG  ),
-    .READ_LATENCY (READ_LATENCY ),
-    .SRAM_ID      (SRAM_ID      )
+    .SRAM_PARAMS  (SRAM_PARAMS  ),
+    .SRAM_CONFIG  (SRAM_CONFIG  )
   ) u_fifo (
     .i_clk              (i_clk          ),
     .i_rst_n            (i_rst_n        ),

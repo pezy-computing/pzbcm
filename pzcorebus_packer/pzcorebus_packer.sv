@@ -5,15 +5,15 @@
 //
 //========================================
 module pzcorebus_packer
-  import  pzcorebus_pkg::*;
+  import  pzcorebus_pkg::*,
+          pzbcm_sram_pkg::*;
 #(
-  parameter pzcorebus_config  BUS_CONFIG      = '0,
-  parameter int               COMMAND_DEPTH   = 1,
-  parameter int               DATA_DEPTH      = get_max_burst_length(BUS_CONFIG),
-  parameter bit [1:0]         MASTER_SLICER   = '0,
-  parameter type              SRAM_CONFIG     = logic,
-  parameter int               READ_LATENCY    = 1,
-  parameter int               SRAM_ID         = 0
+  parameter pzcorebus_config  BUS_CONFIG    = '0,
+  parameter int               COMMAND_DEPTH = 1,
+  parameter int               DATA_DEPTH    = get_max_burst_length(BUS_CONFIG),
+  parameter bit [1:0]         MASTER_SLICER = '0,
+  parameter pzbcm_sram_params SRAM_PARAMS   = '0,
+  parameter type              SRAM_CONFIG   = logic
 )(
   input   var             i_clk,
   input   var             i_rst_n,
@@ -56,22 +56,37 @@ module pzcorebus_packer
 //--------------------------------------------------------------
 //  Write Data FIFO
 //--------------------------------------------------------------
-  pzcorebus_packer_data_fifo #(
-    .BUS_CONFIG   (BUS_CONFIG   ),
-    .DEPTH        (DATA_DEPTH   ),
-    .SRAM_CONFIG  (SRAM_CONFIG  ),
-    .READ_LATENCY (READ_LATENCY ),
-    .SRAM_ID      (SRAM_ID      )
-  ) u_data_fifo (
-    .i_clk          (i_clk            ),
-    .i_rst_n        (i_rst_n          ),
-    .i_clear        (i_clear          ),
-    .o_fifo_empty   (o_fifo_empty[1]  ),
-    .o_fifo_full    (o_fifo_full[1]   ),
-    .i_sram_config  (i_sram_config    ),
-    .slave_if       (bus_if[0]        ),
-    .master_if      (bus_if[1]        )
-  );
+  if (SRAM_PARAMS != '0) begin : g_data_fifo
+    pzcorebus_packer_data_fifo #(
+      .BUS_CONFIG   (BUS_CONFIG   ),
+      .SRAM_PARAMS  (SRAM_PARAMS  ),
+      .SRAM_CONFIG  (SRAM_CONFIG  )
+    ) u_data_fifo (
+      .i_clk          (i_clk            ),
+      .i_rst_n        (i_rst_n          ),
+      .i_clear        (i_clear          ),
+      .o_fifo_empty   (o_fifo_empty[1]  ),
+      .o_fifo_full    (o_fifo_full[1]   ),
+      .i_sram_config  (i_sram_config    ),
+      .slave_if       (bus_if[0]        ),
+      .master_if      (bus_if[1]        )
+    );
+  end
+  else begin : g_write_data_fifo
+    pzcorebus_write_data_fifo #(
+      .BUS_CONFIG (BUS_CONFIG ),
+      .DEPTH      (DATA_DEPTH )
+    ) u_data_fifo (
+      .i_clk          (i_clk            ),
+      .i_rst_n        (i_rst_n          ),
+      .i_clear        (i_clear          ),
+      .o_empty        (o_fifo_empty[1]  ),
+      .o_almost_full  (),
+      .o_full         (o_fifo_full[1]   ),
+      .slave_if       (bus_if[0]        ),
+      .master_if      (bus_if[1]        )
+    );
+  end
 
 //--------------------------------------------------------------
 //  Output Control

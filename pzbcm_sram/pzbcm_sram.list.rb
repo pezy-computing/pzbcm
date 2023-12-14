@@ -10,6 +10,7 @@
   file_list "#{bcm}/#{bcm}.list.rb", from: :local_root
 end
 
+source_file 'pzbcm_sram_pkg.sv'
 source_file 'pzbcm_sram_if.sv'
 source_file 'pzbcm_sram_1rw_wrapper_default.sv'
 source_file 'pzbcm_sram_1r1w_wrapper_default.sv'
