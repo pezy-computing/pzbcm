@@ -4,11 +4,13 @@
 //                    All Rights Reserved.
 //
 //========================================
-module pzbcm_sram_1r1w_wrapper_default #(
-  parameter int WORDS         = 2,
-  parameter int DATA_WIDTH    = 8,
-  parameter int POINTER_WIDTH = 2,
-  parameter bit SINGLE_CLOCK  = 1
+module pzbcm_sram_1r1w_wrapper_default
+  import  pzbcm_sram_pkg::*;
+#(
+  parameter pzbcm_sram_params SRAM_PARAMS   = 0,
+  parameter type              SRAM_CONFIG   = logic,
+  parameter int               DATA_WIDTH    = SRAM_PARAMS.data_width,
+  parameter int               POINTER_WIDTH = get_ram_pointer_width(SRAM_PARAMS)
 )(
   input   var                     i_write_clk,
   input   var                     i_write_enable,
@@ -17,13 +19,14 @@ module pzbcm_sram_1r1w_wrapper_default #(
   input   var                     i_read_clk,
   input   var                     i_read_enable,
   input   var [POINTER_WIDTH-1:0] i_read_pointer,
-  output  var [DATA_WIDTH-1:0]    o_read_data
+  output  var [DATA_WIDTH-1:0]    o_read_data,
+  input   var SRAM_CONFIG         i_sram_config
 );
   pzbcm_ram #(
-    .WORD_SIZE      (WORDS            ),
-    .ADDRESS_WIDTH  (POINTER_WIDTH    ),
-    .DATA_WIDTH     (DATA_WIDTH       ),
-    .BUFFER_OUT     (1                )
+    .WORD_SIZE      (SRAM_PARAMS.words  ),
+    .ADDRESS_WIDTH  (POINTER_WIDTH      ),
+    .DATA_WIDTH     (DATA_WIDTH         ),
+    .BUFFER_OUT     (1                  )
   ) u_ram (
     .i_clk    (i_write_clk      ),
     .i_rst_n  ('0               ),

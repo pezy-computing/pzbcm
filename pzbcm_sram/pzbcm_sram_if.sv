@@ -7,12 +7,13 @@
 interface pzbcm_sram_if
   import  pzbcm_sram_pkg::*;
 #(
-  parameter pzbcm_sram_params PARAMS        = '0,
-  parameter type              READ_INFO     = logic,
-  parameter shortint          WORDS         = PARAMS.words,
-  parameter shortint          DATA_WIDTH    = PARAMS.data_width,
-  parameter shortint          POINTER_WIDTH = calc_pointer_width(WORDS)
+  parameter pzbcm_sram_params SRAM_PARAMS = '0,
+  parameter int               BANKS       = 1,
+  parameter type              READ_INFO   = logic
 );
+  localparam  int DATA_WIDTH    = SRAM_PARAMS.data_width;
+  localparam  int POINTER_WIDTH = get_pointer_width(SRAM_PARAMS, BANKS);
+
   typedef struct packed {
     READ_INFO               info;
     logic [DATA_WIDTH-1:0]  data;

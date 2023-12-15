@@ -8,10 +8,8 @@ module pzbcm_sram_fifo
   import  pzbcm_sram_pkg::*;
 #(
   parameter pzbcm_sram_params SRAM_PARAMS = '0,
-  parameter int               WIDTH       = SRAM_PARAMS.data_width,
-  parameter type              TYPE        = logic [WIDTH-1:0],
-  parameter int               DEPTH       = SRAM_PARAMS.words,
-  parameter int               THRESHOLD   = DEPTH,
+  parameter type              TYPE        = logic [SRAM_PARAMS.data_width-1:0],
+  parameter int               THRESHOLD   = SRAM_PARAMS.words,
   parameter type              SRAM_CONFIG = logic
 )(
   input   var             i_clk,
@@ -28,7 +26,7 @@ module pzbcm_sram_fifo
   input   var             i_pop,
   output  var TYPE        o_data
 );
-  localparam  int POINTER_WIDTH = $clog2(DEPTH);
+  localparam  int POINTER_WIDTH = get_pointer_width(SRAM_PARAMS, 1);
 
   logic                         empty;
   logic                         almost_full;
@@ -56,15 +54,15 @@ module pzbcm_sram_fifo
   end
 
   pzbcm_fifo_controller #(
-    .TYPE               (TYPE           ),
-    .DEPTH              (DEPTH          ),
-    .THRESHOLD          (THRESHOLD      ),
-    .FLAG_FF_OUT        (1              ),
-    .DATA_FF_OUT        (0              ),
-    .PUSH_ON_CLEAR      (0              ),
-    .RAM_WORDS          (DEPTH          ),
-    .RAM_POINTER_WIDTH  (POINTER_WIDTH  ),
-    .MATCH_COUNT_WIDTH  (0              )
+    .TYPE               (TYPE               ),
+    .DEPTH              (SRAM_PARAMS.words  ),
+    .THRESHOLD          (THRESHOLD          ),
+    .FLAG_FF_OUT        (1                  ),
+    .DATA_FF_OUT        (0                  ),
+    .PUSH_ON_CLEAR      (0                  ),
+    .RAM_WORDS          (SRAM_PARAMS.words  ),
+    .RAM_POINTER_WIDTH  (POINTER_WIDTH      ),
+    .MATCH_COUNT_WIDTH  (0                  )
   ) u_controller (
     .i_clk            (i_clk        ),
     .i_rst_n          (i_rst_n      ),
@@ -104,7 +102,7 @@ module pzbcm_sram_fifo
   end
 
   pzbcm_sram #(
-    .PARAMS           (SRAM_PARAMS  ),
+    .SRAM_PARAMS      (SRAM_PARAMS  ),
     .READ_INFO_ENABLE (0            ),
     .OUTPUT_FIFO      (1            ),
     .SRAM_CONFIG      (SRAM_CONFIG  )

@@ -4,13 +4,13 @@
 //                    All Rights Reserved.
 //
 //========================================
-module pzhsbus_sram_fifo #(
-  parameter type  PAYLOAD       = logic,
-  parameter int   DEPTH         = 8,
-  parameter int   THRESHOLD     = DEPTH,
-  parameter type  SRAM_CONFIG   = logic,
-  parameter int   READ_LATENCY  = 1,
-  parameter int   SRAM_ID       = 0
+module pzhsbus_sram_fifo
+  import  pzbcm_sram_pkg::*;
+#(
+  parameter type              PAYLOAD     = logic,
+  parameter pzbcm_sram_params SRAM_PARAMS = '0,
+  parameter int               THRESHOLD   = SRAM_PARAMS.words,
+  parameter type              SRAM_CONFIG = logic
 )(
   input   var             i_clk,
   input   var             i_rst_n,
@@ -54,11 +54,9 @@ module pzhsbus_sram_fifo #(
 
   pzbcm_sram_fifo #(
     .TYPE         (PAYLOAD      ),
-    .DEPTH        (DEPTH        ),
+    .SRAM_PARAMS  (SRAM_PARAMS  ),
     .THRESHOLD    (THRESHOLD    ),
-    .SRAM_CONFIG  (SRAM_CONFIG  ),
-    .READ_LATENCY (READ_LATENCY ),
-    .SRAM_ID      (SRAM_ID      )
+    .SRAM_CONFIG  (SRAM_CONFIG  )
   ) u_fifo (
     .i_clk              (i_clk          ),
     .i_rst_n            (i_rst_n        ),

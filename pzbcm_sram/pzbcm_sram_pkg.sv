@@ -8,24 +8,27 @@ package pzbcm_sram_pkg;
   typedef struct packed {
     shortint  words;
     shortint  data_width;
-    shortint  banks;
-    bit       bank_lsb;
     bit       single_port_ram;
-    bit       single_clock;
+    bit       dual_clock;
     shortint  read_latency;
     int       id;
   } pzbcm_sram_params;
 
-  function automatic shortint calc_pointer_width(shortint words);
-    if (words > 1) begin
-      return $clog2(words);
+  function automatic int get_total_words(pzbcm_sram_params sram_prams, int banks);
+    return sram_prams.words * banks;
+  endfunction
+
+  function automatic int get_pointer_width(pzbcm_sram_params sram_prams, int banks);
+    int total_words = get_total_words(sram_prams, banks);
+    if (total_words > 1) begin
+      return $clog2(total_words);
     end
     else begin
       return 1;
     end
   endfunction
 
-  function automatic shortint calc_bank_width(shortint banks);
+  function automatic int get_bank_width(int banks);
     if (banks > 1) begin
       return $clog2(banks);
     end
@@ -34,23 +37,18 @@ package pzbcm_sram_pkg;
     end
   endfunction
 
-  function automatic shortint calc_ram_words(shortint words, shortint banks);
-    return words / banks;
-  endfunction
-
-  function automatic shortint calc_ram_pointer_width(shortint words, shortint banks);
-    shortint  ram_words = calc_ram_words(words, banks);
-    if (ram_words > 1) begin
-      return $clog2(ram_words);
+  function automatic int get_ram_pointer_width(pzbcm_sram_params sram_prams);
+    if (sram_prams.words > 1) begin
+      return $clog2(sram_prams.words);
     end
     else begin
       return 1;
     end
   endfunction
 
-  function automatic shortint get_ram_pointer_lsb(shortint banks, bit bank_lsb);
+  function automatic int get_ram_pointer_lsb(int banks, bit bank_lsb);
     if (bank_lsb && (banks > 1)) begin
-      return calc_bank_width(banks);
+      return get_bank_width(banks);
     end
     else begin
       return 0;
