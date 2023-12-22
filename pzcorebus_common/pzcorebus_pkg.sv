@@ -101,6 +101,7 @@ package pzcorebus_pkg;
     logic [`PZCOREBUS_MAX_LENGTH_WIDTH-1:0]       length;
     logic [`PZCOREBUS_MAX_REQUEST_INFO_WIDTH-1:0] info;
     logic [`PZCOREBUS_MAX_DATA_WIDTH-1:0]         data;
+    logic [`PZCOREBUS_MAX_BYTE_ENABLE_WIDTH-1:0]  byte_enable;
   } pzcorebus_command;
 
   typedef struct packed {
@@ -132,6 +133,7 @@ package pzcorebus_pkg;
     shortint          id_width;
     shortint          address_width;
     shortint          data_width;
+    bit               use_byte_enable;
     shortint          max_length;
     shortint          request_info_width;
     shortint          response_info_width;
@@ -248,11 +250,14 @@ package pzcorebus_pkg;
     pzcorebus_config  bus_config,
     bit               typedef_width
   );
-    if (is_csr_profile(bus_config)) begin
-      return (typedef_width) ? 1 : 0;
+    if (bus_config.use_byte_enable) begin
+      return bus_config.data_width / 8;
+    end
+    else if (typedef_width) begin
+      return 1;
     end
     else begin
-      return bus_config.data_width / 8;
+      return 0;
     end
   endfunction
 

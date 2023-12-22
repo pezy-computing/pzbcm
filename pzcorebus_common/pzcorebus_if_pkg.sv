@@ -21,6 +21,7 @@ package pzcorebus_if_pkg;
     pzcorebus_if_position_info  mlength;
     pzcorebus_if_position_info  minfo;
     pzcorebus_if_position_info  mdata;
+    pzcorebus_if_position_info  mdata_byteen;
   } pzcorebus_if_command_position_list;
 
   typedef struct {
@@ -58,12 +59,23 @@ package pzcorebus_if_pkg;
     list.mlength.width  = get_length_width(bus_config, 0);
     list.minfo.lsb      = calc_next_lsb(list.mlength);
     list.minfo.width    = get_request_info_width(bus_config, 0);
-    list.mdata.lsb      = calc_next_lsb(list.minfo);
+
     if (`pzcorebus_csr_profile(bus_config)) begin
+      list.mdata.lsb    = calc_next_lsb(list.minfo);
       list.mdata.width  = bus_config.data_width;
     end
     else begin
+      list.mdata.lsb    = 0;
       list.mdata.width  = 0;
+    end
+
+    if (`pzcorebus_csr_profile(bus_config) && bus_config.use_byte_enable) begin
+      list.mdata_byteen.lsb   = calc_next_lsb(list.mdata);
+      list.mdata_byteen.width = get_byte_enable_width(bus_config, 0);
+    end
+    else begin
+      list.mdata_byteen.lsb   = 0;
+      list.mdata_byteen.width = 0;
     end
 
     return list;
@@ -75,20 +87,20 @@ package pzcorebus_if_pkg;
     pzcorebus_if_write_data_position_list list;
 
     if (`pzcorebus_memoy_profile(bus_config)) begin
-      list.mdata.lsb          = 0;
+      list.mdata_last.lsb     = 0;
+      list.mdata_last.width   = 1;
+      list.mdata.lsb          = calc_next_lsb(list.mdata_last);
       list.mdata.width        = bus_config.data_width;
       list.mdata_byteen.lsb   = calc_next_lsb(list.mdata);
       list.mdata_byteen.width = get_byte_enable_width(bus_config, 0);
-      list.mdata_last.lsb     = calc_next_lsb(list.mdata_byteen);
-      list.mdata_last.width   = 1;
     end
     else begin
+      list.mdata_last.lsb     = 0;
+      list.mdata_last.width   = 0;
       list.mdata.lsb          = 0;
       list.mdata.width        = 0;
       list.mdata_byteen.lsb   = 0;
       list.mdata_byteen.width = 0;
-      list.mdata_last.lsb     = 0;
-      list.mdata_last.width   = 0;
     end
 
     return list;
@@ -127,6 +139,7 @@ package pzcorebus_if_pkg;
     width += list.mlength.width;
     width += list.minfo.width;
     width += list.mdata.width;
+    width += list.mdata_byteen.width;
     width += 1;
     return width;
   endfunction

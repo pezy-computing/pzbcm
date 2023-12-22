@@ -66,7 +66,6 @@ module pzcorebus_membus2csrbus_adapter_response_buffer
   always_comb begin
     slave_if.sdata_accept   = '0;
     csrbus_if.mdata_valid   = '0;
-    csrbus_if.mdata_byteen  = '0;
     csrbus_if.mdata_last    = '0;
   end
 

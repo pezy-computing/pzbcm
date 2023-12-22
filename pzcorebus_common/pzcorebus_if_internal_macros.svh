@@ -75,6 +75,9 @@ function automatic pzcorebus_packed_command get_packed_command(); \
   if (COMMAND_POSITION_LIST.mdata.width > 0) begin \
     `pzcorebus_if_get_packer(packer, COMMAND_POSITION_LIST.mdata) = mdata; \
   end \
+  if (COMMAND_POSITION_LIST.mdata_byteen.width > 0) begin \
+    `pzcorebus_if_get_packer(packer, COMMAND_POSITION_LIST.mdata_byteen)  = mdata_byteen; \
+  end \
   return pzcorebus_packed_command'(packer); \
 endfunction \
 \
@@ -98,17 +101,44 @@ function automatic void put_packed_command(pzcorebus_packed_command command); \
   end \
   if (`pzcorebus_csr_profile(BUS_CONFIG)) begin \
     mdata = `pzcorebus_if_get_packer(packer, COMMAND_POSITION_LIST.mdata); \
+    if (BUS_CONFIG.use_byte_enable) begin \
+      mdata_byteen  = `pzcorebus_if_get_packer(packer, COMMAND_POSITION_LIST.mdata_byteen); \
+    end \
+    else begin \
+      mdata_byteen  = '0; \
+    end \
   end \
 endfunction \
 \
 function automatic pzcorebus_command get_command(); \
   pzcorebus_command command; \
-  command.command = mcmd; \
-  command.id      = mid; \
-  command.address = maddr; \
-  command.length  = (`pzcorebus_memoy_profile(BUS_CONFIG)) ? mlength : '0; \
-  command.info    = (BUS_CONFIG.request_info_width > 0   ) ? minfo   : '0; \
-  command.data    = (`pzcorebus_csr_profile(BUS_CONFIG)  ) ? mdata   : '0; \
+  command.command     = mcmd; \
+  command.id          = mid; \
+  command.address     = maddr; \
+  if (`pzcorebus_memoy_profile(BUS_CONFIG)) begin \
+    command.length  = mlength; \
+  end \
+  else begin \
+    command.length  = '0; \
+  end \
+  if (BUS_CONFIG.request_info_width > 0) begin \
+    command.info  = minfo; \
+  end \
+  else begin \
+    command.info  = '0; \
+  end \
+  if (`pzcorebus_csr_profile(BUS_CONFIG)) begin \
+    command.data  = mdata; \
+  end \
+  else begin \
+    command.data  = '0; \
+  end \
+  if (`pzcorebus_csr_profile(BUS_CONFIG) && BUS_CONFIG.use_byte_enable) begin \
+    command.byte_enable = mdata_byteen; \
+  end \
+  else begin \
+    command.byte_enable = '0; \
+  end \
   return command; \
 endfunction \
 \
@@ -130,15 +160,23 @@ function automatic void put_command(pzcorebus_command command); \
   end \
   if (`pzcorebus_csr_profile(BUS_CONFIG)) begin \
     mdata = command.data; \
+    if (BUS_CONFIG.use_byte_enable) begin \
+      mdata_byteen  = command.byte_enable; \
+    end \
+    else begin \
+      mdata_byteen  = '0; \
+    end \
   end \
 endfunction \
 \
 function automatic pzcorebus_packed_write_data get_packed_write_data(); \
   if (`pzcorebus_memoy_profile(BUS_CONFIG)) begin \
     logic [WRITE_DATA_PACKER_WIDTH-1:0] packer; \
-    `pzcorebus_if_get_packer(packer, WRITE_DATA_POSITION_LIST.mdata)        = mdata; \
-    `pzcorebus_if_get_packer(packer, WRITE_DATA_POSITION_LIST.mdata_byteen) = mdata_byteen; \
-    `pzcorebus_if_get_packer(packer, WRITE_DATA_POSITION_LIST.mdata_last)   = mdata_last; \
+    `pzcorebus_if_get_packer(packer, WRITE_DATA_POSITION_LIST.mdata_last) = mdata_last; \
+    `pzcorebus_if_get_packer(packer, WRITE_DATA_POSITION_LIST.mdata)      = mdata; \
+    if (BUS_CONFIG.use_byte_enable) begin \
+      `pzcorebus_if_get_packer(packer, WRITE_DATA_POSITION_LIST.mdata_byteen) = mdata_byteen; \
+    end \
     return pzcorebus_packed_write_data'(packer); \
   end \
   else begin \
@@ -149,41 +187,54 @@ endfunction \
 function automatic void put_packed_write_data(pzcorebus_packed_write_data write_data); \
   if (`pzcorebus_memoy_profile(BUS_CONFIG)) begin \
     logic [WRITE_DATA_PACKER_WIDTH-1:0] packer; \
-    packer        = WRITE_DATA_PACKER_WIDTH'(write_data); \
-    mdata         = `pzcorebus_if_get_packer(packer, WRITE_DATA_POSITION_LIST.mdata); \
-    mdata_byteen  = `pzcorebus_if_get_packer(packer, WRITE_DATA_POSITION_LIST.mdata_byteen); \
-    mdata_last    = `pzcorebus_if_get_packer(packer, WRITE_DATA_POSITION_LIST.mdata_last); \
+    packer      = WRITE_DATA_PACKER_WIDTH'(write_data); \
+    mdata_last  = `pzcorebus_if_get_packer(packer, WRITE_DATA_POSITION_LIST.mdata_last); \
+    mdata       = `pzcorebus_if_get_packer(packer, WRITE_DATA_POSITION_LIST.mdata); \
+    if (BUS_CONFIG.use_byte_enable) begin \
+      mdata_byteen  = `pzcorebus_if_get_packer(packer, WRITE_DATA_POSITION_LIST.mdata_byteen); \
+    end \
+    else begin \
+      mdata_byteen  = '0; \
+    end \
   end \
   else begin \
-    mdata_byteen  = '0; \
-    mdata_last    = '0; \
+    mdata_last  = '0; \
   end \
 endfunction \
 \
 function automatic pzcorebus_write_data get_write_data(); \
   pzcorebus_write_data  write_data; \
   if (`pzcorebus_memoy_profile(BUS_CONFIG)) begin \
-    write_data.data         = mdata; \
-    write_data.byte_enable  = mdata_byteen; \
-    write_data.last         = mdata_last; \
+    write_data.last = mdata_last; \
+    write_data.data = mdata; \
+    if (BUS_CONFIG.use_byte_enable) begin \
+      write_data.byte_enable  = mdata_byteen; \
+    end \
+    else begin \
+      write_data.byte_enable  = '0; \
+    end \
   end \
   else begin \
+    write_data.last         = '0; \
     write_data.data         = '0; \
     write_data.byte_enable  = '0; \
-    write_data.last         = '0; \
   end \
   return write_data; \
 endfunction \
 \
 function automatic void put_write_data(pzcorebus_write_data write_data); \
   if (`pzcorebus_memoy_profile(BUS_CONFIG)) begin \
-    mdata         = write_data.data; \
-    mdata_byteen  = write_data.byte_enable; \
     mdata_last    = write_data.last; \
+    mdata         = write_data.data; \
+    if (BUS_CONFIG.use_byte_enable) begin \
+      mdata_byteen  = write_data.byte_enable; \
+    end \
+    else begin \
+      mdata_byteen  = '0; \
+    end \
   end \
   else begin \
-    mdata_byteen  = '0; \
-    mdata_last    = '0; \
+    mdata_last  = '0; \
   end \
 endfunction \
 \

@@ -107,6 +107,7 @@ module pzcorebus_membus2csrbus_adapter
     id_width:             MEMBUS_CONFIG.id_width,
     address_width:        MEMBUS_CONFIG.address_width,
     data_width:           MEMBUS_CONFIG.data_width,
+    use_byte_enable:      MEMBUS_CONFIG.use_byte_enable,
     max_length:           MEMBUS_CONFIG.max_length,
     request_info_width:   MINFO_WIDTH,
     response_info_width:  MEMBUS_CONFIG.response_info_width,
@@ -259,8 +260,14 @@ module pzcorebus_membus2csrbus_adapter
       csrbus_if.mcmd  = get_mcmd(slicer_if.mcmd, sideband_info);
       csrbus_if.mid   = '0;
       csrbus_if.maddr = maddr[0];
-      csrbus_if.mdata = slicer_if.mdata[UNIT_WIDTH*data_count[0]+:UNIT_WIDTH];
       csrbus_if.minfo = sideband_info.minfo;
+      csrbus_if.mdata = slicer_if.mdata[UNIT_WIDTH*data_count[0]+:UNIT_WIDTH];
+      if (CSRBUS_CONFIG.use_byte_enable) begin
+        csrbus_if.mdata_byteen  = slicer_if.mdata_byteen[UNIT_BYTE_SIZE*data_count[0]+:UNIT_BYTE_SIZE];
+      end
+      else begin
+        csrbus_if.mdata_byteen  = '0;
+      end
 
       non_posted_ready    = busy || (!info_fifo_full);
       write_data_inactive = slicer_if.mdata_byteen[UNIT_BYTE_SIZE*data_count[0]+:UNIT_BYTE_SIZE] == '0;
@@ -287,10 +294,9 @@ module pzcorebus_membus2csrbus_adapter
     end
 
     always_comb begin
-      csrbus_if.mlength       = '0;
-      csrbus_if.mdata_valid   = '0;
-      csrbus_if.mdata_byteen  = '0;
-      csrbus_if.mdata_last    = '0;
+      csrbus_if.mlength     = '0;
+      csrbus_if.mdata_valid = '0;
+      csrbus_if.mdata_last  = '0;
     end
 
     always_comb begin
