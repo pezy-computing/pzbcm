@@ -23,3 +23,27 @@ module pzcorebus_dummy_master
     master_if.mresp_accept  = '1;
   end
 endmodule
+
+module pzcorebus_array_dummy_master
+  import  pzcorebus_pkg::*;
+#(
+  parameter int MASTERS = 2
+)(
+  pzcorebus_if.master master_if[MASTERS]
+);
+  for (genvar i = 0;i < MASTERS;++i) begin
+    always_comb begin
+      master_if[i].mcmd_valid   = '0;
+      master_if[i].mcmd         = PZCOREBUS_NULL_COMMAND;
+      master_if[i].mid          = '0;
+      master_if[i].maddr        = '0;
+      master_if[i].mlength      = '0;
+      master_if[i].minfo        = '0;
+      master_if[i].mdata_valid  = '0;
+      master_if[i].mdata        = '0;
+      master_if[i].mdata_byteen = '0;
+      master_if[i].mdata_last   = '0;
+      master_if[i].mresp_accept = '1;
+    end
+  end
+endmodule
