@@ -31,7 +31,7 @@ module pzcorebus_array_dummy_master
 )(
   pzcorebus_if.master master_if[MASTERS]
 );
-  for (genvar i = 0;i < MASTERS;++i) begin
+  for (genvar i = 0;i < MASTERS;++i) begin : g
     always_comb begin
       master_if[i].mcmd_valid   = '0;
       master_if[i].mcmd         = PZCOREBUS_NULL_COMMAND;
