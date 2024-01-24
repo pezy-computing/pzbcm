@@ -4,16 +4,17 @@
 //                    All Rights Reserved.
 //
 //========================================
-interface pzbcm_priority_encoder #(
+interface pzbcm_priority_encoder
+  import  pzbcm_selector_pkg::*;
+#(
   parameter int WIDTH = 2
 );
   localparam  int OUT_WIDTH = (WIDTH > 1) ? $clog2(WIDTH) : 1;
 
   pzbcm_selector #(
-    .WIDTH    (OUT_WIDTH  ),
-    .ENTRIES  (WIDTH      ),
-    .BINARY   (0          ),
-    .PRIORITY (1          )
+    .WIDTH          (OUT_WIDTH            ),
+    .ENTRIES        (WIDTH                ),
+    .SELECTOR_TYPE  (PZBCM_SELECTOR_BINARY)
   ) u_mux();
 
   function automatic logic [$clog2(WIDTH)-1:0] encode(
