@@ -18,7 +18,8 @@ module pzcorebus_fifo
   parameter int               RESPONSE_THRESHOLD  = RESPONSE_DEPTH,
   parameter bit               RESPONSE_VALID      = 1,
   parameter bit               FLAG_FF_OUT         = 1,
-  parameter bit               DATA_FF_OUT         = 1
+  parameter bit               DATA_FF_OUT         = 1,
+  parameter bit               RESET_DATA_FF       = 1
 )(
   input   var         i_clk,
   input   var         i_rst_n,
@@ -88,11 +89,12 @@ module pzcorebus_fifo
     end
 
     pzbcm_fifo #(
-      .WIDTH        (COMMAND_WIDTH      ),
-      .DEPTH        (COMMAND_DEPTH      ),
-      .THRESHOLD    (COMMAND_THRESHOLD  ),
-      .FLAG_FF_OUT  (FLAG_FF_OUT        ),
-      .DATA_FF_OUT  (DATA_FF_OUT        )
+      .WIDTH          (COMMAND_WIDTH      ),
+      .DEPTH          (COMMAND_DEPTH      ),
+      .THRESHOLD      (COMMAND_THRESHOLD  ),
+      .FLAG_FF_OUT    (FLAG_FF_OUT        ),
+      .DATA_FF_OUT    (DATA_FF_OUT        ),
+      .RESET_DATA_FF  (RESET_DATA_FF      )
     ) u_fifo (
       .i_clk          (i_clk          ),
       .i_rst_n        (i_rst_n        ),
@@ -136,11 +138,12 @@ module pzcorebus_fifo
     end
 
     pzbcm_fifo #(
-      .WIDTH        (DATA_WIDTH     ),
-      .DEPTH        (DATA_DEPTH     ),
-      .THRESHOLD    (DATA_THRESHOLD ),
-      .FLAG_FF_OUT  (FLAG_FF_OUT    ),
-      .DATA_FF_OUT  (DATA_FF_OUT    )
+      .WIDTH          (DATA_WIDTH     ),
+      .DEPTH          (DATA_DEPTH     ),
+      .THRESHOLD      (DATA_THRESHOLD ),
+      .FLAG_FF_OUT    (FLAG_FF_OUT    ),
+      .DATA_FF_OUT    (DATA_FF_OUT    ),
+      .RESET_DATA_FF  (RESET_DATA_FF  )
     ) u_fifo (
       .i_clk          (i_clk            ),
       .i_rst_n        (i_rst_n          ),
@@ -184,11 +187,12 @@ module pzcorebus_fifo
     end
 
     pzbcm_fifo #(
-      .WIDTH        (RESPONSE_WIDTH     ),
-      .DEPTH        (RESPONSE_DEPTH     ),
-      .THRESHOLD    (RESPONSE_THRESHOLD ),
-      .FLAG_FF_OUT  (FLAG_FF_OUT        ),
-      .DATA_FF_OUT  (DATA_FF_OUT        )
+      .WIDTH          (RESPONSE_WIDTH     ),
+      .DEPTH          (RESPONSE_DEPTH     ),
+      .THRESHOLD      (RESPONSE_THRESHOLD ),
+      .FLAG_FF_OUT    (FLAG_FF_OUT        ),
+      .DATA_FF_OUT    (DATA_FF_OUT        ),
+      .RESET_DATA_FF  (RESET_DATA_FF      )
     ) u_fifo (
       .i_clk          (i_clk            ),
       .i_rst_n        (i_rst_n          ),

@@ -6,7 +6,8 @@
 //========================================
 module pzbcm_slicer_unit_full_bandwidth #(
   parameter int WIDTH         = 1,
-  parameter bit DISABLE_MBFF  = 0
+  parameter bit DISABLE_MBFF  = 0,
+  parameter bit USE_RESET     = 1
 )(
   input   var             i_clk,
   input   var             i_rst_n,
@@ -53,16 +54,30 @@ module pzbcm_slicer_unit_full_bandwidth #(
   end
 
   if (!DISABLE_MBFF) begin : g
-    always_ff @(posedge i_clk, negedge i_rst_n) begin
-      if (!i_rst_n) begin
-        data_0  <= '0;
-      end
-      else if ((!valid_0) || i_ready) begin
-        if (valid_1) begin
-          data_0  <= data_1;
+    if (USE_RESET) begin : g
+      always_ff @(posedge i_clk, negedge i_rst_n) begin
+        if (!i_rst_n) begin
+          data_0  <= '0;
         end
-        else if (i_valid) begin
-          data_0  <= i_data;
+        else if ((!valid_0) || i_ready) begin
+          if (valid_1) begin
+            data_0  <= data_1;
+          end
+          else if (i_valid) begin
+            data_0  <= i_data;
+          end
+        end
+      end
+    end
+    else begin : g
+      always_ff @(posedge i_clk) begin
+        if ((!valid_0) || i_ready) begin
+          if (valid_1) begin
+            data_0  <= data_1;
+          end
+          else if (i_valid) begin
+            data_0  <= i_data;
+          end
         end
       end
     end
@@ -83,16 +98,30 @@ module pzbcm_slicer_unit_full_bandwidth #(
         data_1[i] = d_1;
       end
 
-      always_ff @(posedge i_clk, negedge i_rst_n) begin
-        if (!i_rst_n) begin
-          d_0 <= '0;
-        end
-        else if ((!valid_0) || i_ready) begin
-          if (valid_1) begin
-            d_0 <= d_1;
+      if (USE_RESET) begin : g
+        always_ff @(posedge i_clk, negedge i_rst_n) begin
+          if (!i_rst_n) begin
+            d_0 <= '0;
           end
-          else if (i_valid) begin
-            d_0 <= i_data[i];
+          else if ((!valid_0) || i_ready) begin
+            if (valid_1) begin
+              d_0 <= d_1;
+            end
+            else if (i_valid) begin
+              d_0 <= i_data[i];
+            end
+          end
+        end
+      end
+      else begin : g
+        always_ff @(posedge i_clk) begin
+          if ((!valid_0) || i_ready) begin
+            if (valid_1) begin
+              d_0 <= d_1;
+            end
+            else if (i_valid) begin
+              d_0 <= i_data[i];
+            end
           end
         end
       end

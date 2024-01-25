@@ -9,7 +9,8 @@ module pzhsbus_slicer #(
   parameter int   STAGES          = 1,
   parameter bit   ASCENDING_ORDER = 1,
   parameter bit   USE_FIFO        = 1,
-  parameter bit   DISABLE_MBFF    = 0
+  parameter bit   DISABLE_MBFF    = 0,
+  parameter bit   USE_RESET       = 1
 )(
   input var         i_clk,
   input var         i_rst_n,
@@ -22,7 +23,8 @@ module pzhsbus_slicer #(
     .STAGES           (STAGES           ),
     .ASCENDING_ORDER  (ASCENDING_ORDER  ),
     .FULL_BANDWIDTH   (USE_FIFO         ),
-    .DISABLE_MBFF     (DISABLE_MBFF     )
+    .DISABLE_MBFF     (DISABLE_MBFF     ),
+    .USE_RESET        (USE_RESET        )
   ) u_slicer (
     .i_clk    (i_clk              ),
     .i_rst_n  (i_rst_n            ),

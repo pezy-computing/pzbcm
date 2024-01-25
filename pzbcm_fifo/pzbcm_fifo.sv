@@ -12,6 +12,7 @@ module pzbcm_fifo #(
   parameter   bit   FLAG_FF_OUT       = 1,
   parameter   bit   DATA_FF_OUT       = 1,
   parameter   bit   RESET_RAM         = 0,
+  parameter   bit   RESET_DATA_FF     = 1,
   parameter   bit   CLEAR_DATA        = 0,
   parameter   bit   PUSH_ON_CLEAR     = 0,
   parameter   int   MATCH_COUNT_WIDTH = 0,
@@ -121,18 +122,33 @@ module pzbcm_fifo #(
       o_data  = data_out;
     end
 
-    always_ff @(posedge i_clk, negedge i_rst_n) begin
-      if (!i_rst_n) begin
-        data_out  <= TYPE'(0);
+    if (RESET_DATA_FF) begin : g
+      always_ff @(posedge i_clk, negedge i_rst_n) begin
+        if (!i_rst_n) begin
+          data_out  <= TYPE'(0);
+        end
+        else if (clear_data) begin
+          data_out  <= TYPE'(0);
+        end
+        else if (write_to_ff) begin
+          data_out  <= i_data;
+        end
+        else if (read_from_ram) begin
+          data_out  <= ram_read_data;
+        end
       end
-      else if (clear_data) begin
-        data_out  <= TYPE'(0);
-      end
-      else if (write_to_ff) begin
-        data_out  <= i_data;
-      end
-      else if (read_from_ram) begin
-        data_out  <= ram_read_data;
+    end
+    else begin : g
+      always_ff @(posedge i_clk) begin
+        if (clear_data) begin
+          data_out  <= TYPE'(0);
+        end
+        else if (write_to_ff) begin
+          data_out  <= i_data;
+        end
+        else if (read_from_ram) begin
+          data_out  <= ram_read_data;
+        end
       end
     end
   end

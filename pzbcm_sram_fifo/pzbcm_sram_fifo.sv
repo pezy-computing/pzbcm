@@ -7,10 +7,11 @@
 module pzbcm_sram_fifo
   import  pzbcm_sram_pkg::*;
 #(
-  parameter pzbcm_sram_params SRAM_PARAMS = '0,
-  parameter type              TYPE        = logic [SRAM_PARAMS.data_width-1:0],
-  parameter int               THRESHOLD   = SRAM_PARAMS.words,
-  parameter type              SRAM_CONFIG = logic
+  parameter pzbcm_sram_params SRAM_PARAMS     = '0,
+  parameter type              TYPE            = logic [SRAM_PARAMS.data_width-1:0],
+  parameter int               THRESHOLD       = SRAM_PARAMS.words,
+  parameter type              SRAM_CONFIG     = logic,
+  parameter bit               RESET_DATA_PATH = 1
 )(
   input   var             i_clk,
   input   var             i_rst_n,
@@ -102,10 +103,11 @@ module pzbcm_sram_fifo
   end
 
   pzbcm_sram #(
-    .SRAM_PARAMS      (SRAM_PARAMS  ),
-    .READ_INFO_ENABLE (0            ),
-    .OUTPUT_FIFO      (1            ),
-    .SRAM_CONFIG      (SRAM_CONFIG  )
+    .SRAM_PARAMS      (SRAM_PARAMS      ),
+    .READ_INFO_ENABLE (0                ),
+    .OUTPUT_FIFO      (1                ),
+    .SRAM_CONFIG      (SRAM_CONFIG      ),
+    .RESET_DATA_PATH  (RESET_DATA_PATH  )
   ) u_sram (
     .i_write_clk    (i_clk          ),
     .i_read_clk     (i_clk          ),

@@ -8,7 +8,8 @@ module pzbcm_delay #(
   parameter int   DELAY         = 1,
   parameter int   WIDTH         = 1,
   parameter type  TYPE          = logic[WIDTH-1:0],
-  parameter TYPE  INITIAL_VALUE = TYPE'(0)
+  parameter TYPE  INITIAL_VALUE = TYPE'(0),
+  parameter bit   USE_RESET     = 1
 )(
   input   var       i_clk,
   input   var       i_rst_n,
@@ -18,12 +19,25 @@ module pzbcm_delay #(
   if (DELAY >= 1) begin : g_delay
     TYPE  delay[DELAY];
 
-    assign  o_d = delay[DELAY-1];
-    always_ff @(posedge i_clk, negedge i_rst_n) begin
-      if (!i_rst_n) begin
-        delay <= '{default: INITIAL_VALUE};
+    always_comb begin
+      o_d = delay[DELAY-1];
+    end
+
+    if (USE_RESET) begin : g
+      always_ff @(posedge i_clk, negedge i_rst_n) begin
+        if (!i_rst_n) begin
+          delay <= '{default: INITIAL_VALUE};
+        end
+        else begin
+          delay[0]  <= i_d;
+          for (int i = 1;i < DELAY;++i) begin
+            delay[i]  <= delay[i-1];
+          end
+        end
       end
-      else begin
+    end
+    else begin : g
+      always_ff @(posedge i_clk) begin
         delay[0]  <= i_d;
         for (int i = 1;i < DELAY;++i) begin
           delay[i]  <= delay[i-1];
@@ -32,6 +46,8 @@ module pzbcm_delay #(
     end
   end
   else begin : g_no_delay
-    assign  o_d = i_d;
+    always_comb begin
+      o_d = i_d;
+    end
   end
 endmodule

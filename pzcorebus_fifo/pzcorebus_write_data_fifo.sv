@@ -7,12 +7,13 @@
 module pzcorebus_write_data_fifo
   import  pzcorebus_pkg::*;
 #(
-  parameter pzcorebus_config  BUS_CONFIG  = '0,
-  parameter int               DEPTH       = 2,
-  parameter int               THRESHOLD   = DEPTH,
-  parameter bit               VALID       = 1,
-  parameter bit               FLAG_FF_OUT = 1,
-  parameter bit               DATA_FF_OUT = 1
+  parameter pzcorebus_config  BUS_CONFIG    = '0,
+  parameter int               DEPTH         = 2,
+  parameter int               THRESHOLD     = DEPTH,
+  parameter bit               VALID         = 1,
+  parameter bit               FLAG_FF_OUT   = 1,
+  parameter bit               DATA_FF_OUT   = 1,
+  parameter bit               RESET_DATA_FF = 1
 )(
   input   var                 i_clk,
   input   var                 i_rst_n,
@@ -58,11 +59,12 @@ module pzcorebus_write_data_fifo
     end
 
     pzbcm_fifo #(
-      .WIDTH        (WIDTH        ),
-      .DEPTH        (DEPTH        ),
-      .THRESHOLD    (THRESHOLD    ),
-      .FLAG_FF_OUT  (FLAG_FF_OUT  ),
-      .DATA_FF_OUT  (DATA_FF_OUT  )
+      .WIDTH          (WIDTH          ),
+      .DEPTH          (DEPTH          ),
+      .THRESHOLD      (THRESHOLD      ),
+      .FLAG_FF_OUT    (FLAG_FF_OUT    ),
+      .DATA_FF_OUT    (DATA_FF_OUT    ),
+      .RESET_DATA_FF  (RESET_DATA_FF  )
     ) u_fifo (
       .i_clk          (i_clk            ),
       .i_rst_n        (i_rst_n          ),

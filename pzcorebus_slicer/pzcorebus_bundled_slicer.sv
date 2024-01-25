@@ -14,6 +14,7 @@ module pzcorebus_bundled_slicer
   parameter bit               ASCENDING_ORDER   = 1,
   parameter bit               FIFO_SLICER       = 1,
   parameter bit               DISABLE_MBFF      = 0,
+  parameter bit               USE_RESET         = 1,
   parameter bit               REQUEST_VALID     = 1,
   parameter bit               RESPONSE_VALID    = 1
 )(
@@ -43,7 +44,8 @@ module pzcorebus_bundled_slicer
       .STAGES           (COMMAND_STAGES       ),
       .ASCENDING_ORDER  (ASCENDING_ORDER      ),
       .FULL_BANDWIDTH   (FIFO_SLICER          ),
-      .DISABLE_MBFF     (DISABLE_MBFF         )
+      .DISABLE_MBFF     (DISABLE_MBFF         ),
+      .USE_RESET        (USE_RESET            )
     ) u_command_slicer (
       .i_clk    (i_clk                    ),
       .i_rst_n  (i_rst_n                  ),
@@ -60,7 +62,8 @@ module pzcorebus_bundled_slicer
       .STAGES           (WRITE_DATA_STAGES        ),
       .ASCENDING_ORDER  (ASCENDING_ORDER          ),
       .FULL_BANDWIDTH   (FIFO_SLICER              ),
-      .DISABLE_MBFF     (DISABLE_MBFF             )
+      .DISABLE_MBFF     (DISABLE_MBFF             ),
+      .USE_RESET        (USE_RESET                )
     ) u_write_data_slicer (
       .i_clk    (i_clk                      ),
       .i_rst_n  (i_rst_n                    ),
@@ -79,7 +82,8 @@ module pzcorebus_bundled_slicer
       .STAGES           (RESPONSE_STAGES        ),
       .ASCENDING_ORDER  (ASCENDING_ORDER        ),
       .FULL_BANDWIDTH   (FIFO_SLICER            ),
-      .DISABLE_MBFF     (DISABLE_MBFF           )
+      .DISABLE_MBFF     (DISABLE_MBFF           ),
+      .USE_RESET        (USE_RESET              )
     ) u_response_slicer (
       .i_clk    (i_clk                      ),
       .i_rst_n  (i_rst_n                    ),

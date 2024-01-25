@@ -7,7 +7,8 @@
 module pzbcm_slicer_unit #(
   parameter int WIDTH           = 1,
   parameter bit FULL_BANDWIDTH  = 1,
-  parameter bit DISABLE_MBFF    = 0
+  parameter bit DISABLE_MBFF    = 0,
+  parameter bit USE_RESET       = 1
 )(
   input   var             i_clk,
   input   var             i_rst_n,
@@ -21,7 +22,8 @@ module pzbcm_slicer_unit #(
   if (FULL_BANDWIDTH) begin : g
     pzbcm_slicer_unit_full_bandwidth #(
       .WIDTH        (WIDTH        ),
-      .DISABLE_MBFF (DISABLE_MBFF )
+      .DISABLE_MBFF (DISABLE_MBFF ),
+      .USE_RESET    (USE_RESET    )
     ) u_slicer_unit (
       .i_clk    (i_clk    ),
       .i_rst_n  (i_rst_n  ),
@@ -36,7 +38,8 @@ module pzbcm_slicer_unit #(
   else begin : g
     pzbcm_slicer_unit_half_bandwidth #(
       .WIDTH        (WIDTH        ),
-      .DISABLE_MBFF (DISABLE_MBFF )
+      .DISABLE_MBFF (DISABLE_MBFF ),
+      .USE_RESET    (USE_RESET    )
     ) u_slicer_unit (
       .i_clk    (i_clk    ),
       .i_rst_n  (i_rst_n  ),

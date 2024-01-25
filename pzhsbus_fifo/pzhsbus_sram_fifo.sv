@@ -7,10 +7,11 @@
 module pzhsbus_sram_fifo
   import  pzbcm_sram_pkg::*;
 #(
-  parameter type              PAYLOAD     = logic,
-  parameter pzbcm_sram_params SRAM_PARAMS = '0,
-  parameter int               THRESHOLD   = SRAM_PARAMS.words,
-  parameter type              SRAM_CONFIG = logic
+  parameter type              PAYLOAD         = logic,
+  parameter pzbcm_sram_params SRAM_PARAMS     = '0,
+  parameter int               THRESHOLD       = SRAM_PARAMS.words,
+  parameter type              SRAM_CONFIG     = logic,
+  parameter bit               RESET_DATA_PATH = 1
 )(
   input   var             i_clk,
   input   var             i_rst_n,
@@ -53,10 +54,11 @@ module pzhsbus_sram_fifo
   end
 
   pzbcm_sram_fifo #(
-    .TYPE         (PAYLOAD      ),
-    .SRAM_PARAMS  (SRAM_PARAMS  ),
-    .THRESHOLD    (THRESHOLD    ),
-    .SRAM_CONFIG  (SRAM_CONFIG  )
+    .TYPE             (PAYLOAD          ),
+    .SRAM_PARAMS      (SRAM_PARAMS      ),
+    .THRESHOLD        (THRESHOLD        ),
+    .SRAM_CONFIG      (SRAM_CONFIG      ),
+    .RESET_DATA_PATH  (RESET_DATA_PATH  )
   ) u_fifo (
     .i_clk              (i_clk          ),
     .i_rst_n            (i_rst_n        ),

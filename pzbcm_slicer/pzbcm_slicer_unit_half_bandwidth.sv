@@ -6,7 +6,8 @@
 //========================================
 module pzbcm_slicer_unit_half_bandwidth #(
   parameter int WIDTH         = 1,
-  parameter bit DISABLE_MBFF  = 0
+  parameter bit DISABLE_MBFF  = 0,
+  parameter bit USE_RESET     = 1
 )(
   input   var             i_clk,
   input   var             i_rst_n,
@@ -42,12 +43,21 @@ module pzbcm_slicer_unit_half_bandwidth #(
   end
 
   if (!DISABLE_MBFF) begin : g
-    always_ff @(posedge i_clk, negedge i_rst_n) begin
-      if (!i_rst_n) begin
-        data  <= '0;
+    if (USE_RESET) begin : g
+      always_ff @(posedge i_clk, negedge i_rst_n) begin
+        if (!i_rst_n) begin
+          data  <= '0;
+        end
+        else if ((!valid) && i_valid) begin
+          data  <= i_data;
+        end
       end
-      else if ((!valid) && i_valid) begin
-        data  <= i_data;
+    end
+    else begin : g
+      always_ff @(posedge i_clk) begin
+        if ((!valid) && i_valid) begin
+          data  <= i_data;
+        end
       end
     end
   end
@@ -59,12 +69,21 @@ module pzbcm_slicer_unit_half_bandwidth #(
         data[i] = d;
       end
 
-      always_ff @(posedge i_clk, negedge i_rst_n) begin
-        if (!i_rst_n) begin
-          d <= '0;
+      if (USE_RESET) begin
+        always_ff @(posedge i_clk, negedge i_rst_n) begin
+          if (!i_rst_n) begin
+            d <= '0;
+          end
+          else if ((!valid) && i_valid) begin
+            d <= i_data[i];
+          end
         end
-        else if ((!valid) && i_valid) begin
-          d <= i_data[i];
+      end
+      else begin : g
+        always_ff @(posedge i_clk) begin
+          if ((!valid) && i_valid) begin
+            d <= i_data[i];
+          end
         end
       end
     end

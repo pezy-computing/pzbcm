@@ -5,14 +5,15 @@
 //
 //========================================
 module pzhsbus_fifo #(
-  parameter   type  PAYLOAD     = logic,
-  parameter   int   DEPTH       = 8,
-  parameter   int   THRESHOLD   = DEPTH,
-  parameter   bit   FLAG_FF_OUT = 1,
-  parameter   bit   DATA_FF_OUT = 1,
-  parameter   bit   RESET_RAM   = 0,
-  parameter   bit   CLEAR_DATA  = 0,
-  localparam  type  COUNTER     = logic [$clog2(DEPTH+1)-1:0]
+  parameter   type  PAYLOAD       = logic,
+  parameter   int   DEPTH         = 8,
+  parameter   int   THRESHOLD     = DEPTH,
+  parameter   bit   FLAG_FF_OUT   = 1,
+  parameter   bit   DATA_FF_OUT   = 1,
+  parameter   bit   RESET_RAM     = 0,
+  parameter   bit   CLEAR_DATA    = 0,
+  parameter   bit   RESET_DATA_FF = 1,
+  localparam  type  COUNTER       = logic [$clog2(DEPTH+1)-1:0]
 )(
   input   var         i_clk,
   input   var         i_rst_n,
@@ -33,13 +34,14 @@ module pzhsbus_fifo #(
   assign  master_if.valid = ~empty;
 
   pzbcm_fifo #(
-    .TYPE         (PAYLOAD      ),
-    .DEPTH        (DEPTH        ),
-    .THRESHOLD    (THRESHOLD    ),
-    .FLAG_FF_OUT  (FLAG_FF_OUT  ),
-    .DATA_FF_OUT  (DATA_FF_OUT  ),
-    .RESET_RAM    (RESET_RAM    ),
-    .CLEAR_DATA   (CLEAR_DATA   )
+    .TYPE           (PAYLOAD        ),
+    .DEPTH          (DEPTH          ),
+    .THRESHOLD      (THRESHOLD      ),
+    .FLAG_FF_OUT    (FLAG_FF_OUT    ),
+    .DATA_FF_OUT    (DATA_FF_OUT    ),
+    .RESET_RAM      (RESET_RAM      ),
+    .CLEAR_DATA     (CLEAR_DATA     ),
+    .RESET_DATA_FF  (RESET_DATA_FF  )
   ) u_fifo (
     .i_clk          (i_clk              ),
     .i_rst_n        (i_rst_n            ),

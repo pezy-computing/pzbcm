@@ -14,7 +14,8 @@ module pzbcm_sram
   parameter type              READ_INFO         = logic,
   parameter bit               OUTPUT_FIFO       = 1,
   parameter bit               WRITE_FIRST       = 1,
-  parameter type              SRAM_CONFIG       = logic
+  parameter type              SRAM_CONFIG       = logic,
+  parameter bit               RESET_DATA_PATH   = 1
 )(
   input var             i_write_clk,
   input var             i_read_clk,
@@ -219,8 +220,9 @@ module pzbcm_sram
 
   if (READ_INFO_ENABLE) begin : g_read_info
     pzbcm_delay #(
-      .DELAY  (SRAM_PARAMS.read_latency ),
-      .TYPE   (READ_INFO                )
+      .DELAY      (SRAM_PARAMS.read_latency ),
+      .TYPE       (READ_INFO                ),
+      .USE_RESET  (RESET_DATA_PATH          )
     ) u_read_info_delay (
       .i_clk    (i_read_clk         ),
       .i_rst_n  (i_read_rst_n       ),
@@ -271,9 +273,10 @@ module pzbcm_sram
     end
 
     pzbcm_fifo #(
-      .WIDTH      (FIFO_DATA_WIDTH  ),
-      .DEPTH      (FIFO_DEPTH       ),
-      .THRESHOLD  (2                )
+      .WIDTH          (FIFO_DATA_WIDTH  ),
+      .DEPTH          (FIFO_DEPTH       ),
+      .THRESHOLD      (2                ),
+      .RESET_DATA_FF  (RESET_DATA_PATH  )
     ) u_read_data_fifo (
       .i_clk          (i_read_clk   ),
       .i_rst_n        (i_read_rst_n ),
