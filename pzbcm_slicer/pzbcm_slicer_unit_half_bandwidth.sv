@@ -69,7 +69,7 @@ module pzbcm_slicer_unit_half_bandwidth #(
         data[i] = d;
       end
 
-      if (USE_RESET) begin
+      if (USE_RESET) begin : g
         always_ff @(posedge i_clk, negedge i_rst_n) begin
           if (!i_rst_n) begin
             d <= '0;
