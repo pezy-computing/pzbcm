@@ -4,28 +4,31 @@
 //                    All Rights Reserved.
 //
 //========================================
-interface pzbcm_priority_encoder
-  import  pzbcm_selector_pkg::*;
-#(
+interface pzbcm_priority_encoder #(
   parameter int WIDTH = 2
 );
   localparam  int OUT_WIDTH = (WIDTH > 1) ? $clog2(WIDTH) : 1;
 
-  pzbcm_selector #(
-    .WIDTH          (OUT_WIDTH            ),
-    .ENTRIES        (WIDTH                ),
-    .SELECTOR_TYPE  (PZBCM_SELECTOR_BINARY)
-  ) u_mux();
+  `include  "pzbcm_selector_macros.svh"
+  `pzbcm_define_priority_mux(WIDTH, logic [OUT_WIDTH-1:0])
 
-  function automatic logic [$clog2(WIDTH)-1:0] encode(
+  function automatic logic [OUT_WIDTH-1:0] encode(
     logic [WIDTH-1:0] in
   );
-    logic [WIDTH-1:0][OUT_WIDTH-1:0]  index_value;
+    if (WIDTH > 1) begin
+      pzbcm_priority_mux_entry  entries[WIDTH];
+      pzbcm_priority_mux_entry  result;
 
-    for (int i = 0;i < WIDTH;++i) begin
-      index_value[i]  = (OUT_WIDTH)'(i);
+      for (int i = 0;i < WIDTH;++i) begin
+        entries[i].select = in[i];
+        entries[i].data   = OUT_WIDTH'(i);
+      end
+
+      result  = __priority_mux(WIDTH, entries);
+      return result.data;
     end
-
-    return u_mux.priority_mux(in, index_value);
+    else begin
+      return OUT_WIDTH'(0);
+    end
   endfunction
 endinterface
