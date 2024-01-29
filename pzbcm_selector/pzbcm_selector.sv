@@ -17,8 +17,8 @@ interface pzbcm_selector
 
   localparam  int INDEX_WIDTH   = calc_binary_index_width(ENTRIES);
   localparam  int SELECT_WIDTH  = calc_select_width(SELECTOR_TYPE, ENTRIES);
-  localparam  int DATA_WIDTH    = $bits(TYPE);
 
+  `pzbcm_define_mux_params(ENTRIES)
   `pzbcm_define_priority_mux(ENTRIES, TYPE)
   `pzbcm_define_onehot_mux(ENTRIES, TYPE)
 

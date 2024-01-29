@@ -7,58 +7,65 @@
 interface pzbcm_onehot #(
   parameter int N = 1
 );
+  localparam  int DEPTH         = $clog2(N);
   localparam  int REDUCER_WIDTH = (N >= 2) ? N         : 2;
   localparam  int BINARY_WIDTH  = (N >= 2) ? $clog2(N) : 1;
 
-  function automatic logic [N-1:0] __onehot(
-    int                       n,
-    int                       step,
-    logic [N-1:0]             bits,
-    logic [REDUCER_WIDTH-1:0] reducer
+  function automatic logic [N-1:0] to_onehot(
+    logic [N-1:0] bits
   );
+    int                       step;
+    int                       current_n;
     int                       next_n;
+    logic [N-1:0]             current_bits;
     logic [N-1:0]             next_bits;
+    logic [REDUCER_WIDTH-1:0] current_reducer;
     logic [REDUCER_WIDTH-1:0] next_reducer;
 
-    next_n  = (n / 2) + (n % 2);
-    for (int i = 0;i < next_n;++i) begin
-      logic [1:0] or_bits;
-      logic [1:0] or_result;
-
-      if (((i + 1) == next_n) && ((n % 2) == 1)) begin
-        or_bits = {1'b0, reducer[2*i]};
+    for (int i = 0;i < DEPTH;++i) begin
+      if (i == 0) begin
+        current_n       = N;
+        current_bits    = bits;
+        current_reducer = REDUCER_WIDTH'(bits);
       end
       else begin
-        or_bits = reducer[2*i+:2];
+        current_n       = next_n;
+        current_bits    = next_bits;
+        current_reducer = next_reducer;
       end
 
-      if (or_bits[0]) begin
-        or_result = 2'b01;
-      end
-      else begin
-        or_result = 2'b10;
-      end
+      next_n  = (current_n / 2) + (current_n % 2);
+      step    = 2**i;
+      for (int j = 0;j < next_n;++j) begin
+        logic [1:0] or_bits;
+        logic [1:0] or_result;
 
-      next_reducer[i] = |or_bits;
-      for (int j = 0;j < (2 * step);++j) begin
-        int index = (2 * step * i) + j;
-        if (index < N) begin
-          next_bits[index]  = or_result[j/step] && bits[index];
+        if (((j + 1) == next_n) && (((current_n % 2) == 1))) begin
+          or_bits = 2'(current_reducer[2*j]);
+        end
+        else begin
+          or_bits = current_reducer[2*j+:2];
+        end
+
+        if (or_bits[0]) begin
+          or_result = 2'b01;
+        end
+        else begin
+          or_result = 2'b10;
+        end
+
+        next_reducer[j] = |or_bits;
+        for (int k = 0;k < (2 * step);++k) begin
+          int index = 2 * step * j + k;
+          if (index < N) begin
+            next_bits[index]  = or_result[k/step] && current_bits[index];
+          end
         end
       end
     end
 
-    if (next_n == 1) begin
-      return next_bits;
-    end
-    else begin
-      return __onehot(next_n, 2 * step, next_bits, next_reducer);
-    end
-  endfunction
-
-  function automatic logic [N-1:0] to_onehot(logic [N-1:0] bits);
     if (N > 1) begin
-      return __onehot(N, 1, bits, REDUCER_WIDTH'(bits));
+      return next_bits;
     end
     else begin
       return bits;

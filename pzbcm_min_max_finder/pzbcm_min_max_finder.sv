@@ -11,6 +11,8 @@ interface pzbcm_min_max_finder #(
   parameter type  RESULT        = logic,
   parameter int   COMPARE_WIDTH = $bits(TYPE)
 );
+  localparam  int DEPTH = $clog2(ENTRIES);
+
   function automatic logic [1:0] __do_compare(
     bit   compare_min,
     TYPE  lhs,
@@ -30,59 +32,73 @@ interface pzbcm_min_max_finder #(
 
   function automatic RESULT __find_min_max(
     bit                 compare_min,
-    int                 n,
-    int                 step,
-    TYPE  [ENTRIES-1:0] data,
-    logic [ENTRIES-1:0] location
+    TYPE  [ENTRIES-1:0] data
   );
+    int                 step;
+    int                 current_n;
     int                 next_n;
-    TYPE  [ENTRIES-1:0] next_data;
+    logic [ENTRIES-1:0] current_location;
     logic [ENTRIES-1:0] next_location;
-    logic [1:0]         compare_result;
+    TYPE                current_data[ENTRIES];
+    TYPE                next_data[ENTRIES];
+    RESULT              result;
 
-    next_n  = (n / 2) + (n % 2);
-    for (int i = 0;i < next_n;++i) begin
-      if (((i + 1) == next_n) && ((n % 2) == 1)) begin
-        compare_result  = 2'b01;
+    for (int i = 0;i < DEPTH;++i) begin
+      if (i == 0) begin
+        current_n         = ENTRIES;
+        current_location  = '1;
+        for (int j = 0;j < ENTRIES;++j) begin
+          current_data[j] = data[j];
+        end
       end
       else begin
-        compare_result  = __do_compare(compare_min, data[2*i+0], data[2*i+1]);
+        current_n         = next_n;
+        current_location  = next_location;
+        current_data      = next_data;
       end
 
-      if (compare_result == 2'b01) begin
-        next_data[i]  = data[2*i+0];
-      end
-      else begin
-        next_data[i]  = data[2*i+1];
-      end
+      next_n  = (current_n / 2) + (current_n % 2);
+      step    = 2**i;
+      for (int j = 0;j < next_n;++j) begin
+        logic [1:0] compare_result;
 
-      for (int j = 0;j < (2 * step);++j) begin
-        if (((2 * step * i) + j) < ENTRIES) begin
-          next_location[2*step*i+j] = compare_result[j/step] && location[2*step*i+j];
+        if (((j + 1) == next_n) && ((current_n % 2) == 1)) begin
+          compare_result  = 2'b01;
+        end
+        else begin
+          compare_result  = __do_compare(compare_min, current_data[2*j+0], current_data[2*j+1]);
+        end
+
+        if (compare_result[0]) begin
+          next_data[j]  = current_data[2*j+0];
+        end
+        else begin
+          next_data[j]  = current_data[2*j+1];
+        end
+
+        for (int k = 0;k < (2 * step);++k) begin
+          int index = 2 * step * j + k;
+          if (index < ENTRIES) begin
+            next_location[index]  = compare_result[k/step] && current_location[index];
+          end
         end
       end
     end
 
-    if (next_n == 1) begin
-      RESULT  result;
-      result.data     = next_data[0];
-      result.location = next_location;
-      return result;
-    end
-    else begin
-      return __find_min_max(compare_min, next_n, 2 * step, next_data, next_location);
-    end
+    result.data     = next_data[0];
+    result.location = next_location;
+    return result;
   endfunction
 
   function automatic RESULT find_min(
     TYPE  [ENTRIES-1:0] data
   );
-    return __find_min_max(1, ENTRIES, 1, data, '1);
+    return __find_min_max(1, data);
   endfunction
 
   function automatic RESULT find_max(
     TYPE  [ENTRIES-1:0] data
   );
-    return __find_min_max(0, ENTRIES, 1, data, '1);
+    return __find_min_max(0, data);
   endfunction
 endinterface

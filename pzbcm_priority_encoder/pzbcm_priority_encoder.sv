@@ -10,6 +10,7 @@ interface pzbcm_priority_encoder #(
   localparam  int OUT_WIDTH = (WIDTH > 1) ? $clog2(WIDTH) : 1;
 
   `include  "pzbcm_selector_macros.svh"
+  `pzbcm_define_mux_params(WIDTH)
   `pzbcm_define_priority_mux(WIDTH, logic [OUT_WIDTH-1:0])
 
   function automatic logic [OUT_WIDTH-1:0] encode(
@@ -24,7 +25,7 @@ interface pzbcm_priority_encoder #(
         entries[i].data   = OUT_WIDTH'(i);
       end
 
-      result  = __priority_mux(WIDTH, entries);
+      result  = __priority_mux(entries);
       return result.data;
     end
     else begin
