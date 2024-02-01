@@ -112,7 +112,8 @@ module pzcorebus_membus2csrbus_adapter
     request_info_width:   MINFO_WIDTH,
     response_info_width:  MEMBUS_CONFIG.response_info_width,
     unit_data_width:      MEMBUS_CONFIG.unit_data_width,
-    max_data_width:       MEMBUS_CONFIG.max_data_width
+    max_data_width:       MEMBUS_CONFIG.max_data_width,
+    response_boundary:    MEMBUS_CONFIG.response_boundary
   };
 
   pzcorebus_if #(BUS_CONFIG)          membus_if();

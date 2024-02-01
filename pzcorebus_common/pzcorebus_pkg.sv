@@ -13,7 +13,7 @@
 `endif
 
 `ifndef PZCOREBUS_MAX_DATA_WIDTH
-  `define PZCOREBUS_MAX_DATA_WIDTH  1024
+  `define PZCOREBUS_MAX_DATA_WIDTH  512
 `endif
 
 `ifndef PZCOREBUS_MIN_DATA_WIDTH
@@ -139,6 +139,7 @@ package pzcorebus_pkg;
     shortint          response_info_width;
     shortint          unit_data_width;
     shortint          max_data_width;
+    shortint          response_boundary;
   } pzcorebus_config;
 
   localparam  pzcorebus_config  DEFAULT_CONFIG  = '0;
