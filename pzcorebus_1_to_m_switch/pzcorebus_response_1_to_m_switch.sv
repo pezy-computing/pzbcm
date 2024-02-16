@@ -17,7 +17,8 @@ module pzcorebus_response_1_to_m_switch
   parameter pzbcm_arbiter_weight_list WEIGHT          = '1,
   parameter bit                       SLAVE_FIFO      = 0,
   parameter bit                       MASTER_FIFO     = 0,
-  parameter int                       RESPONSE_DEPTH  = 2
+  parameter int                       RESPONSE_DEPTH  = 2,
+  parameter bit                       SVA_CHECKER     = 1
 )(
   input var                       i_clk,
   input var                       i_rst_n,
@@ -32,9 +33,10 @@ module pzcorebus_response_1_to_m_switch
 //  Slave FIFO
 //--------------------------------------------------------------
   pzcorebus_response_fifo #(
-    .BUS_CONFIG (BUS_CONFIG     ),
-    .DEPTH      (RESPONSE_DEPTH ),
-    .VALID      (SLAVE_FIFO     )
+    .BUS_CONFIG   (BUS_CONFIG     ),
+    .DEPTH        (RESPONSE_DEPTH ),
+    .VALID        (SLAVE_FIFO     ),
+    .SVA_CHECKER  (0              )
   ) u_slave_fifo (
     .i_clk          (i_clk    ),
     .i_rst_n        (i_rst_n  ),
@@ -95,9 +97,10 @@ module pzcorebus_response_1_to_m_switch
 //--------------------------------------------------------------
   for (genvar i = 0;i < MASTERS;++i) begin : g_master_fifo
     pzcorebus_response_fifo #(
-      .BUS_CONFIG (BUS_CONFIG     ),
-      .DEPTH      (RESPONSE_DEPTH ),
-      .VALID      (MASTER_FIFO    )
+      .BUS_CONFIG   (BUS_CONFIG     ),
+      .DEPTH        (RESPONSE_DEPTH ),
+      .VALID        (MASTER_FIFO    ),
+      .SVA_CHECKER  (SVA_CHECKER    )
     ) u_master_fifo (
       .i_clk          (i_clk        ),
       .i_rst_n        (i_rst_n      ),

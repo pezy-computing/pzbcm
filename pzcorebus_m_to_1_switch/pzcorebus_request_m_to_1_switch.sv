@@ -21,7 +21,8 @@ module pzcorebus_request_m_to_1_switch
   parameter bit                       MASTER_FIFO       = '0,
   parameter int                       COMMAND_DEPTH     = 2,
   parameter int                       DATA_DEPTH        = 2,
-  parameter bit                       ALIGN_OUT         = 0
+  parameter bit                       ALIGN_OUT         = 0,
+  parameter bit                       SVA_CHECKER       = 1
 )(
   input   var                       i_clk,
   input   var                       i_rst_n,
@@ -46,7 +47,8 @@ module pzcorebus_request_m_to_1_switch
         .THROUGH_NO_DATA_COMMAND  (1              ),
         .SLAVE_FIFO               (SLAVE_FIFO     ),
         .COMMAND_DEPTH            (COMMAND_DEPTH  ),
-        .DATA_DEPTH               (DATA_DEPTH     )
+        .DATA_DEPTH               (DATA_DEPTH     ),
+        .SVA_CHECKER              (SVA_CHECKER    )
       ) u_aligner (
         .i_clk        (i_clk          ),
         .i_rst_n      (i_rst_n        ),
@@ -66,7 +68,8 @@ module pzcorebus_request_m_to_1_switch
         .COMMAND_DEPTH  (COMMAND_DEPTH  ),
         .COMMAND_VALID  (SLAVE_FIFO     ),
         .DATA_DEPTH     (DATA_DEPTH     ),
-        .DATA_VALID     (SLAVE_FIFO     )
+        .DATA_VALID     (SLAVE_FIFO     ),
+        .SVA_CHECKER    (SVA_CHECKER    )
       ) u_slave_fifo (
         .i_clk          (i_clk          ),
         .i_rst_n        (i_rst_n        ),

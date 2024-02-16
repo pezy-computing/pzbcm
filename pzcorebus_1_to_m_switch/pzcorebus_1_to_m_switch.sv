@@ -29,7 +29,10 @@ module pzcorebus_1_to_m_switch
   parameter int                       DATA_DEPTH                    = 2,
   parameter int                       RESPONSE_DEPTH                = 2,
   parameter bit                       ALIGN_OUT                     = 0,
-  parameter int                       MINFO_WIDTH                   = get_request_info_width(BUS_CONFIG, 1)
+  parameter int                       MINFO_WIDTH                   = get_request_info_width(BUS_CONFIG, 1),
+  parameter bit                       SVA_CHECKER                   = 1,
+  parameter bit                       REQUEST_SVA_CHECKER           = SVA_CHECKER,
+  parameter bit                       RESPONSE_SVA_CHECKER          = SVA_CHECKER
 )(
   input   var                                 i_clk,
   input   var                                 i_rst_n,
@@ -60,23 +63,9 @@ module pzcorebus_1_to_m_switch
     );
   end
   else begin : g
-    pzcorebus_fifo #(
-      .BUS_CONFIG     (BUS_CONFIG     ),
-      .COMMAND_DEPTH  (COMMAND_DEPTH  ),
-      .COMMAND_VALID  (SLAVE_FIFO[0]  ),
-      .DATA_DEPTH     (DATA_DEPTH     ),
-      .DATA_VALID     (SLAVE_FIFO[0]  ),
-      .RESPONSE_DEPTH (RESPONSE_DEPTH ),
-      .RESPONSE_VALID (SLAVE_FIFO[1]  )
-    ) u_slave_fifo (
-      .i_clk          (i_clk      ),
-      .i_rst_n        (i_rst_n    ),
-      .i_clear        ('0         ),
-      .o_empty        (),
-      .o_almost_full  (),
-      .o_full         (),
-      .slave_if       (slave_if   ),
-      .master_if      (bus_if[0]  )
+    pzcorebus_connector u_connector (
+      .slave_if   (slave_if   ),
+      .master_if  (bus_if[0]  )
     );
   end
 
@@ -90,11 +79,12 @@ module pzcorebus_1_to_m_switch
     .ENABLE_BROADCAST             (ENABLE_BROADCAST             ),
     .ENABLE_BROADCAST_NON_POSTED  (ENABLE_BROADCAST_NON_POSTED  ),
     .WAIT_FOR_DATA                (WAIT_FOR_DATA                ),
-    .SLAVE_FIFO                   ('0                           ),
+    .SLAVE_FIFO                   (SLAVE_FIFO[0]                ),
     .MASTER_FIFO                  (MASTER_FIFO[0]               ),
     .COMMAND_DEPTH                (COMMAND_DEPTH                ),
     .DATA_DEPTH                   (DATA_DEPTH                   ),
-    .ALIGN_OUT                    (ALIGN_OUT                    )
+    .ALIGN_OUT                    (ALIGN_OUT                    ),
+    .SVA_CHECKER                  (REQUEST_SVA_CHECKER          )
   ) u_request_switch (
     .i_clk      (i_clk              ),
     .i_rst_n    (i_rst_n            ),
@@ -108,15 +98,16 @@ module pzcorebus_1_to_m_switch
   );
 
   pzcorebus_response_1_to_m_switch #(
-    .BUS_CONFIG     (BUS_CONFIG     ),
-    .MASTERS        (MASTERS        ),
-    .ENABLE_ARBITER (ENABLE_ARBITER ),
-    .PRIORITY_WIDTH (PRIORITY_WIDTH ),
-    .WEIGHT_WIDTH   (WEIGHT_WIDTH   ),
-    .WEIGHT         (WEIGHT         ),
-    .SLAVE_FIFO     ('0             ),
-    .MASTER_FIFO    (MASTER_FIFO[1] ),
-    .RESPONSE_DEPTH (RESPONSE_DEPTH )
+    .BUS_CONFIG         (BUS_CONFIG           ),
+    .MASTERS            (MASTERS              ),
+    .ENABLE_ARBITER     (ENABLE_ARBITER       ),
+    .PRIORITY_WIDTH     (PRIORITY_WIDTH       ),
+    .WEIGHT_WIDTH       (WEIGHT_WIDTH         ),
+    .WEIGHT             (WEIGHT               ),
+    .SLAVE_FIFO         (SLAVE_FIFO[1]        ),
+    .MASTER_FIFO        (MASTER_FIFO[1]       ),
+    .RESPONSE_DEPTH     (RESPONSE_DEPTH       ),
+    .SVA_CHECKER        (RESPONSE_SVA_CHECKER )
   ) u_response_switch (
     .i_clk            (i_clk              ),
     .i_rst_n          (i_rst_n            ),

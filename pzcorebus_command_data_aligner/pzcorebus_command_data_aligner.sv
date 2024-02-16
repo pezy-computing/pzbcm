@@ -14,7 +14,10 @@ module pzcorebus_command_data_aligner
   parameter bit               SLAVE_FIFO              = 0,
   parameter int               COMMAND_DEPTH           = 2,
   parameter int               DATA_DEPTH              = 2,
-  parameter int               RESPONSE_DEPTH          = 0
+  parameter int               RESPONSE_DEPTH          = 0,
+  parameter bit               SVA_CHECKER             = 1,
+  parameter bit               REQUEST_SVA_CHECKER     = SVA_CHECKER,
+  parameter bit               RESPONSE_SVA_CHECKER    = SVA_CHECKER
 )(
   input var           i_clk,
   input var           i_rst_n,
@@ -35,7 +38,8 @@ module pzcorebus_command_data_aligner
     .RELAX_MODE               (RELAX_MODE               ),
     .SLAVE_FIFO               (SLAVE_FIFO               ),
     .COMMAND_DEPTH            (COMMAND_DEPTH            ),
-    .DATA_DEPTH               (DATA_DEPTH               )
+    .DATA_DEPTH               (DATA_DEPTH               ),
+    .SVA_CHECKER              (REQUEST_SVA_CHECKER      )
   ) u_aligner_core (
     .i_clk        (i_clk      ),
     .i_rst_n      (i_rst_n    ),
@@ -50,9 +54,10 @@ module pzcorebus_command_data_aligner
   );
 
   pzcorebus_response_fifo #(
-    .BUS_CONFIG (BUS_CONFIG     ),
-    .DEPTH      (RESPONSE_DEPTH ),
-    .VALID      (SLAVE_FIFO     )
+    .BUS_CONFIG   (BUS_CONFIG           ),
+    .DEPTH        (RESPONSE_DEPTH       ),
+    .VALID        (SLAVE_FIFO           ),
+    .SVA_CHECKER  (RESPONSE_SVA_CHECKER )
   ) u_response_fifo (
     .i_clk          (i_clk      ),
     .i_rst_n        (i_rst_n    ),

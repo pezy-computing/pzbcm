@@ -7,13 +7,16 @@
 module pzcorebus_upsizer
   import  pzcorebus_pkg::*;
 #(
-  parameter pzcorebus_config  SLAVE_CONFIG    = '0,
-  parameter pzcorebus_config  MASTER_CONFIG   = '0,
-  parameter bit [1:0]         SLAVE_FIFO      = '0,
-  parameter bit [1:0]         MASTER_FIFO     = '0,
-  parameter int               COMMAND_DEPTH   = 2,
-  parameter int               DATA_DEPTH      = 2,
-  parameter int               RESPONSE_DEPTH  = 2
+  parameter pzcorebus_config  SLAVE_CONFIG          = '0,
+  parameter pzcorebus_config  MASTER_CONFIG         = '0,
+  parameter bit [1:0]         SLAVE_FIFO            = '0,
+  parameter bit [1:0]         MASTER_FIFO           = '0,
+  parameter int               COMMAND_DEPTH         = 2,
+  parameter int               DATA_DEPTH            = 2,
+  parameter int               RESPONSE_DEPTH        = 2,
+  parameter bit               SVA_CHECKER           = 1,
+  parameter bit               REQUEST_SVA_CHECKER   = SVA_CHECKER,
+  parameter bit               RESPONSE_SVA_CHECKER  = SVA_CHECKER
 )(
   input var           i_clk,
   input var           i_rst_n,
@@ -34,10 +37,12 @@ module pzcorebus_upsizer
   localparam  int SLAVE_RESPONSE_DEPTH  = (SLAVE_FIFO[1]) ? RESPONSE_DEPTH : 0;
 
   pzcorebus_fifo #(
-    .BUS_CONFIG     (SLAVE_CONFIG         ),
-    .COMMAND_DEPTH  (SLAVE_COMMAND_DEPTH  ),
-    .DATA_DEPTH     (SLAVE_DATA_DEPTH     ),
-    .RESPONSE_DEPTH (SLAVE_RESPONSE_DEPTH )
+    .BUS_CONFIG           (SLAVE_CONFIG         ),
+    .COMMAND_DEPTH        (SLAVE_COMMAND_DEPTH  ),
+    .DATA_DEPTH           (SLAVE_DATA_DEPTH     ),
+    .RESPONSE_DEPTH       (SLAVE_RESPONSE_DEPTH ),
+    .REQUEST_SVA_CHECKER  (REQUEST_SVA_CHECKER  ),
+    .RESPONSE_SVA_CHECKER (0                    )
   ) u_slave_fifo (
     .i_clk          (i_clk          ),
     .i_rst_n        (i_rst_n        ),
@@ -89,19 +94,17 @@ module pzcorebus_upsizer
 //--------------------------------------------------------------
 //  Master FIFO
 //--------------------------------------------------------------
-  localparam  int MASTER_FIFO_DEPTH[3]  =
-    (MASTER_FIFO) ? '{COMMAND_DEPTH, DATA_DEPTH, RESPONSE_DEPTH}
-                  : '{0            , 0         , 0             };
-
   localparam  int MASTER_COMMAND_DEPTH  = (MASTER_FIFO[0]) ? COMMAND_DEPTH  : 0;
   localparam  int MASTER_DATA_DEPTH     = (MASTER_FIFO[0]) ? DATA_DEPTH     : 0;
   localparam  int MASTER_RESPONSE_DEPTH = (MASTER_FIFO[1]) ? RESPONSE_DEPTH : 0;
 
   pzcorebus_fifo #(
-    .BUS_CONFIG     (MASTER_CONFIG          ),
-    .COMMAND_DEPTH  (MASTER_COMMAND_DEPTH   ),
-    .DATA_DEPTH     (MASTER_DATA_DEPTH      ),
-    .RESPONSE_DEPTH (MASTER_RESPONSE_DEPTH  )
+    .BUS_CONFIG           (MASTER_CONFIG          ),
+    .COMMAND_DEPTH        (MASTER_COMMAND_DEPTH   ),
+    .DATA_DEPTH           (MASTER_DATA_DEPTH      ),
+    .RESPONSE_DEPTH       (MASTER_RESPONSE_DEPTH  ),
+    .REQUEST_SVA_CHECKER  (0                      ),
+    .RESPONSE_SVA_CHECKER (RESPONSE_SVA_CHECKER   )
   ) u_master_fifo (
     .i_clk          (i_clk        ),
     .i_rst_n        (i_rst_n      ),

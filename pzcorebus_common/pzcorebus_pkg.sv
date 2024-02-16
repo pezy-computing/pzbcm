@@ -128,6 +128,15 @@ package pzcorebus_pkg;
 //--------------------------------------------------------------
 //  Configuration
 //--------------------------------------------------------------
+  localparam  bit PZCOREBUS_ENABLE_DEBUG  =
+    `ifndef SYNTHESIS 1
+    `else             0 `endif;
+
+  localparam  bit PZCOREBUS_ENABLE_SVA_CHECKER  =
+    PZCOREBUS_ENABLE_DEBUG  &&
+    `ifndef PZCOREBUS_DISABLE_SVA_CHECKER 1
+    `else                                 0 `endif;
+
   typedef struct packed {
     pzcorebus_profile profile;
     shortint          id_width;

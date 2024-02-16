@@ -13,7 +13,10 @@ module pzcorebus_membus2csrbus_adapter
   parameter int               RESPONSE_INFO_DEPTH     = MAX_NON_POSTED_REQUESTS,
   parameter bit [1:0]         SLAVE_SLICER            = '1,
   parameter bit [1:0]         MASTER_SLICER           = '1,
-  parameter int               VALID_ADDRESS_WIDTH     = CSRBUS_CONFIG.address_width
+  parameter int               VALID_ADDRESS_WIDTH     = CSRBUS_CONFIG.address_width,
+  parameter bit               SVA_CHECKER             = 1,
+  parameter bit               REQUEST_SVA_CHECKER     = SVA_CHECKER,
+  parameter bit               RESPONSE_SVA_CHECKER    = SVA_CHECKER
 )(
   input var                               i_clk,
   input var                               i_rst_n,
@@ -167,9 +170,11 @@ module pzcorebus_membus2csrbus_adapter
   endfunction
 
   pzcorebus_slicer #(
-    .BUS_CONFIG     (BUS_CONFIG       ),
-    .REQUEST_VALID  (SLAVE_SLICER[0]  ),
-    .RESPONSE_VALID (SLAVE_SLICER[1]  )
+    .BUS_CONFIG           (BUS_CONFIG           ),
+    .REQUEST_VALID        (SLAVE_SLICER[0]      ),
+    .RESPONSE_VALID       (SLAVE_SLICER[1]      ),
+    .REQUEST_SVA_CHECKER  (REQUEST_SVA_CHECKER  ),
+    .RESPONSE_SVA_CHECKER (0                    )
   ) u_slicer (
     .i_clk      (i_clk      ),
     .i_rst_n    (i_rst_n    ),
@@ -581,7 +586,8 @@ module pzcorebus_membus2csrbus_adapter
   pzcorebus_membus2csrbus_adapter_response_buffer #(
     .CSRBUS_CONFIG  (CSRBUS_CONFIG            ),
     .ENTRIES        (MAX_NON_POSTED_REQUESTS  ),
-    .MASTER_SLICER  (MASTER_SLICER            )
+    .MASTER_SLICER  (MASTER_SLICER            ),
+    .SVA_CHECKER    (RESPONSE_SVA_CHECKER     )
   ) u_response_buffer (
     .i_clk                    (i_clk                                ),
     .i_rst_n                  (i_rst_n                              ),

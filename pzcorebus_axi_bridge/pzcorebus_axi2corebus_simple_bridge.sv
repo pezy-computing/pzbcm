@@ -15,7 +15,10 @@ module pzcorebus_axi2corebus_simple_bridge
   parameter int               WRITE_DATA_FIFO_DEPTH = 2,
   parameter int               RESPONSE_FIFO_DEPTH   = 0,
   parameter int               BID_FIFO_DEPTH        = 8,
-  parameter bit               SUPPORT_4BYTES_ACCESS = 0
+  parameter bit               SUPPORT_4BYTES_ACCESS = 0,
+  parameter bit               SVA_CHECKER           = 1,
+  parameter bit               REQUEST_SVA_CHECKER   = SVA_CHECKER,
+  parameter bit               RESPONSE_SVA_CHECKER  = SVA_CHECKER
 )(
   input var           i_clk,
   input var           i_rst_n,
@@ -120,10 +123,12 @@ module pzcorebus_axi2corebus_simple_bridge
   end
 
   pzcorebus_fifo #(
-    .BUS_CONFIG     (COREBUS_CONFIG       ),
-    .COMMAND_DEPTH  (COMMAND_FIFO_DEPTH   ),
-    .DATA_DEPTH     (0                    ),
-    .RESPONSE_DEPTH (RESPONSE_FIFO_DEPTH  )
+    .BUS_CONFIG           (COREBUS_CONFIG       ),
+    .COMMAND_DEPTH        (COMMAND_FIFO_DEPTH   ),
+    .DATA_DEPTH           (0                    ),
+    .RESPONSE_DEPTH       (RESPONSE_FIFO_DEPTH  ),
+    .REQUEST_SVA_CHECKER  (REQUEST_SVA_CHECKER  ),
+    .RESPONSE_SVA_CHECKER (0                    )
   ) u_read_fifo (
     .i_clk          (i_clk        ),
     .i_rst_n        (i_rst_n      ),
@@ -216,10 +221,12 @@ module pzcorebus_axi2corebus_simple_bridge
   end
 
   pzcorebus_fifo #(
-    .BUS_CONFIG     (COREBUS_CONFIG         ),
-    .COMMAND_DEPTH  (COMMAND_FIFO_DEPTH     ),
-    .DATA_DEPTH     (WRITE_DATA_FIFO_DEPTH  ),
-    .RESPONSE_DEPTH (0                      )
+    .BUS_CONFIG           (COREBUS_CONFIG         ),
+    .COMMAND_DEPTH        (COMMAND_FIFO_DEPTH     ),
+    .DATA_DEPTH           (WRITE_DATA_FIFO_DEPTH  ),
+    .RESPONSE_DEPTH       (0                      ),
+    .REQUEST_SVA_CHECKER  (REQUEST_SVA_CHECKER    ),
+    .RESPONSE_SVA_CHECKER (0                      )
   ) u_write_fifo (
     .i_clk          (i_clk        ),
     .i_rst_n        (i_rst_n      ),
@@ -235,10 +242,12 @@ module pzcorebus_axi2corebus_simple_bridge
 //  Switch
 //--------------------------------------------------------------
   pzcorebus_m_to_1_switch #(
-    .BUS_CONFIG       (COREBUS_CONFIG ),
-    .SLAVES           (2              ),
-    .EXTERNAL_DECODE  (1              ),
-    .ENABLE_ARBITER   (2'b01          )
+    .BUS_CONFIG           (COREBUS_CONFIG       ),
+    .SLAVES               (2                    ),
+    .EXTERNAL_DECODE      (1                    ),
+    .ENABLE_ARBITER       (2'b01                ),
+    .REQUEST_SVA_CHECKER  (0                    ),
+    .RESPONSE_SVA_CHECKER (RESPONSE_SVA_CHECKER )
   ) u_switch (
     .i_clk            (i_clk                            ),
     .i_rst_n          (i_rst_n                          ),

@@ -12,7 +12,8 @@ module pzcorebus_response_slicer
   parameter bit               ASCENDING_ORDER = 1,
   parameter bit               FIFO_SLICER     = 1,
   parameter bit               DISABLE_MBFF    = 0,
-  parameter bit               USE_RESET       = 1
+  parameter bit               USE_RESET       = 1,
+  parameter bit               SVA_CHECKER     = 1
 )(
   input var                 i_clk,
   input var                 i_rst_n,
@@ -49,4 +50,18 @@ module pzcorebus_response_slicer
     .i_ready  (slave_if.mresp_accept  ),
     .o_data   (slave_sresp            )
   );
+
+//--------------------------------------------------------------
+//  SVA checker
+//--------------------------------------------------------------
+  if (PZCOREBUS_ENABLE_SVA_CHECKER) begin : g_sva
+    pzcorebus_response_sva_checker #(
+      .BUS_CONFIG   (BUS_CONFIG   ),
+      .SVA_CHECKER  (SVA_CHECKER  )
+    ) u_sva_checker (
+      .i_clk    (i_clk      ),
+      .i_rst_n  (i_rst_n    ),
+      .bus_if   (master_if  )
+    );
+  end
 endmodule

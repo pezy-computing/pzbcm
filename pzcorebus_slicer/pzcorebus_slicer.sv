@@ -7,14 +7,17 @@
 module pzcorebus_slicer
   import  pzcorebus_pkg::*;
 #(
-  parameter pzcorebus_config  BUS_CONFIG      = '0,
-  parameter int               STAGES          = 1,
-  parameter bit               ASCENDING_ORDER = 1,
-  parameter bit               FIFO_SLICER     = 1,
-  parameter bit               DISABLE_MBFF    = 0,
-  parameter bit               USE_RESET       = 1,
-  parameter bit               REQUEST_VALID   = 1,
-  parameter bit               RESPONSE_VALID  = 1
+  parameter pzcorebus_config  BUS_CONFIG            = '0,
+  parameter int               STAGES                = 1,
+  parameter bit               ASCENDING_ORDER       = 1,
+  parameter bit               FIFO_SLICER           = 1,
+  parameter bit               DISABLE_MBFF          = 0,
+  parameter bit               USE_RESET             = 1,
+  parameter bit               REQUEST_VALID         = 1,
+  parameter bit               RESPONSE_VALID        = 1,
+  parameter bit               SVA_CHECKER           = 1,
+  parameter bit               REQUEST_SVA_CHECKER   = SVA_CHECKER,
+  parameter bit               RESPONSE_SVA_CHECKER  = SVA_CHECKER
 )(
   input var           i_clk,
   input var           i_rst_n,
@@ -107,4 +110,27 @@ module pzcorebus_slicer
     .i_ready  (slave_if.mresp_accept  ),
     .o_data   (slave_response         )
   );
+
+//--------------------------------------------------------------
+//  SVA checker
+//--------------------------------------------------------------
+  if (PZCOREBUS_ENABLE_SVA_CHECKER) begin : g_sva
+    pzcorebus_request_sva_checker #(
+      .BUS_CONFIG   (BUS_CONFIG           ),
+      .SVA_CHECKER  (REQUEST_SVA_CHECKER  )
+    ) u_request_sva_checker (
+      .i_clk    (i_clk    ),
+      .i_rst_n  (i_rst_n  ),
+      .bus_if   (slave_if )
+    );
+
+    pzcorebus_response_sva_checker #(
+      .BUS_CONFIG   (BUS_CONFIG           ),
+      .SVA_CHECKER  (RESPONSE_SVA_CHECKER )
+    ) u_response_sva_checker (
+      .i_clk    (i_clk      ),
+      .i_rst_n  (i_rst_n    ),
+      .bus_if   (master_if  )
+    );
+  end
 endmodule

@@ -22,7 +22,8 @@ module pzcorebus_request_1_to_m_switch
   parameter int                 COMMAND_DEPTH               = 2,
   parameter int                 DATA_DEPTH                  = 2,
   parameter bit                 ALIGN_OUT                   = 0,
-  parameter int                 MINFO_WIDTH                 = get_request_info_width(BUS_CONFIG, 1)
+  parameter int                 MINFO_WIDTH                 = get_request_info_width(BUS_CONFIG, 1),
+  parameter bit                 SVA_CHECKER                 = 1
 )(
   input   var                                 i_clk,
   input   var                                 i_rst_n,
@@ -50,7 +51,8 @@ module pzcorebus_request_1_to_m_switch
       .THROUGH_NO_DATA_COMMAND  (1              ),
       .SLAVE_FIFO               (SLAVE_FIFO     ),
       .COMMAND_DEPTH            (COMMAND_DEPTH  ),
-      .DATA_DEPTH               (DATA_DEPTH     )
+      .DATA_DEPTH               (DATA_DEPTH     ),
+      .SVA_CHECKER              (SVA_CHECKER    )
     ) u_aligner (
       .i_clk        (i_clk      ),
       .i_rst_n      (i_rst_n    ),
@@ -70,7 +72,8 @@ module pzcorebus_request_1_to_m_switch
       .COMMAND_DEPTH  (COMMAND_DEPTH  ),
       .COMMAND_VALID  (SLAVE_FIFO     ),
       .DATA_DEPTH     (DATA_DEPTH     ),
-      .DATA_VALID     (SLAVE_FIFO     )
+      .DATA_VALID     (SLAVE_FIFO     ),
+      .SVA_CHECKER    (SVA_CHECKER    )
     ) u_fifo (
       .i_clk          (i_clk      ),
       .i_rst_n        (i_rst_n    ),
@@ -238,12 +241,13 @@ module pzcorebus_request_1_to_m_switch
 //--------------------------------------------------------------
   for (genvar i = 0;i < MASTERS;++i) begin : g_master_aligner
     if (is_memory_profile(BUS_CONFIG) && ALIGN_OUT && MASTER_FIFO) begin : g
-      pzcorebus_command_data_aligner #(
+      pzcorebus_command_data_aligner_core #(
         .BUS_CONFIG     (BUS_CONFIG     ),
         .RELAX_MODE     (1              ),
         .SLAVE_FIFO     (1              ),
         .COMMAND_DEPTH  (COMMAND_DEPTH  ),
-        .DATA_DEPTH     (DATA_DEPTH     )
+        .DATA_DEPTH     (DATA_DEPTH     ),
+        .SVA_CHECKER    (0              )
       ) u_aligner (
         .i_clk      (i_clk        ),
         .i_rst_n    (i_rst_n      ),
@@ -257,7 +261,8 @@ module pzcorebus_request_1_to_m_switch
         .COMMAND_DEPTH  (COMMAND_DEPTH  ),
         .COMMAND_VALID  (MASTER_FIFO    ),
         .DATA_DEPTH     (DATA_DEPTH     ),
-        .DATA_VALID     (MASTER_FIFO    )
+        .DATA_VALID     (MASTER_FIFO    ),
+        .SVA_CHECKER    (0              )
       ) u_fifo (
         .i_clk          (i_clk        ),
         .i_rst_n        (i_rst_n      ),

@@ -8,9 +8,12 @@ module pzcorebus_corebus2axi_simple_bridge
   import  pzcorebus_pkg::*,
           pzaxi_pkg::*;
 #(
-  parameter pzcorebus_config  COREBUS_CONFIG      = '0,
-  parameter pzaxi_config      AXI_CONFIG          = '0,
-  parameter int               MAX_WRITE_REQUESTS  = (2**16) - 1
+  parameter pzcorebus_config  COREBUS_CONFIG        = '0,
+  parameter pzaxi_config      AXI_CONFIG            = '0,
+  parameter int               MAX_WRITE_REQUESTS    = (2**16) - 1,
+  parameter bit               SVA_CHECKER           = 1,
+  parameter bit               REQUEST_SVA_CHECKER   = SVA_CHECKER,
+  parameter bit               RESPONSE_SVA_CHECKER  = SVA_CHECKER
 )(
   input var                   i_clk,
   input var                   i_rst_n,
@@ -184,5 +187,28 @@ module pzcorebus_corebus2axi_simple_bridge
     corebus_if.sinfo        = '0;
     corebus_if.sresp_uniten = '1;
     corebus_if.sresp_last   = (axi_if.rlast) ? '1 : '0;
+  end
+
+//--------------------------------------------------------------
+//  SVA checker
+//--------------------------------------------------------------
+  if (PZCOREBUS_ENABLE_SVA_CHECKER) begin : g_sva
+    pzcorebus_request_sva_checker #(
+      .BUS_CONFIG   (COREBUS_CONFIG       ),
+      .SVA_CHECKER  (REQUEST_SVA_CHECKER  )
+    ) u_request_sva_checker (
+      .i_clk    (i_clk      ),
+      .i_rst_n  (i_rst_n    ),
+      .bus_if   (corebus_if )
+    );
+
+    pzcorebus_response_sva_checker #(
+      .BUS_CONFIG   (COREBUS_CONFIG       ),
+      .SVA_CHECKER  (RESPONSE_SVA_CHECKER )
+    ) u_response_sva_checker (
+      .i_clk    (i_clk      ),
+      .i_rst_n  (i_rst_n    ),
+      .bus_if   (corebus_if )
+    );
   end
 endmodule

@@ -29,4 +29,5 @@ include_directory '.'
   'pzcorebus_if_unbundler.sv',
   'pzcorebus_bundled_array_if_packer.sv',
   'pzcorebus_bundled_array_if_unpacker.sv',
+  'pzcorebus_sva_checker.sv'
 ].each { |file| source_file file }

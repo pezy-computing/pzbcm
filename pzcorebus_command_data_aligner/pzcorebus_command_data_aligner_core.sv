@@ -7,14 +7,15 @@
 module pzcorebus_command_data_aligner_core
   import  pzcorebus_pkg::*;
 #(
-  parameter   pzcorebus_config  BUS_CONFIG              = '0,
-  parameter   bit               WAIT_FOR_DATA           = 0,
-  parameter   bit               THROUGH_NO_DATA_COMMAND = 0,
-  parameter   bit               RELAX_MODE              = 1,
-  parameter   bit               SLAVE_FIFO              = 0,
-  parameter   int               COMMAND_DEPTH           = 2,
-  parameter   int               DATA_DEPTH              = 2,
-  localparam  int               INFO_WIDTH              = get_request_info_width(BUS_CONFIG, 1)
+  parameter pzcorebus_config  BUS_CONFIG              = '0,
+  parameter bit               WAIT_FOR_DATA           = 0,
+  parameter bit               THROUGH_NO_DATA_COMMAND = 0,
+  parameter bit               RELAX_MODE              = 1,
+  parameter bit               SLAVE_FIFO              = 0,
+  parameter int               COMMAND_DEPTH           = 2,
+  parameter int               DATA_DEPTH              = 2,
+  parameter int               INFO_WIDTH              = get_request_info_width(BUS_CONFIG, 1),
+  parameter bit               SVA_CHECKER             = 1
 )(
   input   var                                 i_clk,
   input   var                                 i_rst_n,
@@ -39,7 +40,8 @@ module pzcorebus_command_data_aligner_core
     .COMMAND_DEPTH  (COMMAND_DEPTH  ),
     .COMMAND_VALID  (SLAVE_FIFO     ),
     .DATA_DEPTH     (DATA_DEPTH     ),
-    .DATA_VALID     (SLAVE_FIFO     )
+    .DATA_VALID     (SLAVE_FIFO     ),
+    .SVA_CHECKER    (SVA_CHECKER    )
   ) u_slave_fifo (
     .i_clk          (i_clk    ),
     .i_rst_n        (i_rst_n  ),

@@ -9,7 +9,8 @@ module pzcorebus_membus2csrbus_adapter_response_buffer
 #(
   parameter pzcorebus_config  CSRBUS_CONFIG = '0,
   parameter int               ENTRIES       = 2,
-  parameter bit [1:0]         MASTER_SLICER = '0
+  parameter bit [1:0]         MASTER_SLICER = '0,
+  parameter bit               SVA_CHECKER   = 0
 )(
   input var                               i_clk,
   input var                               i_rst_n,
@@ -158,9 +159,11 @@ module pzcorebus_membus2csrbus_adapter_response_buffer
 //  Slicer
 //--------------------------------------------------------------
   pzcorebus_slicer #(
-    .BUS_CONFIG     (CSRBUS_CONFIG    ),
-    .REQUEST_VALID  (MASTER_SLICER[0] ),
-    .RESPONSE_VALID (MASTER_SLICER[1] )
+    .BUS_CONFIG           (CSRBUS_CONFIG    ),
+    .REQUEST_VALID        (MASTER_SLICER[0] ),
+    .RESPONSE_VALID       (MASTER_SLICER[1] ),
+    .REQUEST_SVA_CHECKER  (0                ),
+    .RESPONSE_SVA_CHECKER (SVA_CHECKER      )
   ) u_slicer (
     .i_clk      (i_clk      ),
     .i_rst_n    (i_rst_n    ),

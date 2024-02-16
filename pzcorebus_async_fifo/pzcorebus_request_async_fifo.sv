@@ -13,7 +13,8 @@ module pzcorebus_request_async_fifo
   parameter int               COMMAND_DEPTH     = calc_default_depth(STAGES),
   parameter int               DATA_DEPTH        = calc_default_depth(STAGES),
   parameter bit               MERGE_RESET       = '0,
-  parameter int               RESET_SYNC_STAGES = 2
+  parameter int               RESET_SYNC_STAGES = 2,
+  parameter bit               SVA_CHECKER       = 1
 )(
   input var                 i_slave_clk,
   input var                 i_slave_rst_n,
@@ -112,5 +113,19 @@ module pzcorebus_request_async_fifo
       empty[1]      = '1;
       master_mdata  = '0;
     end
+  end
+
+//--------------------------------------------------------------
+//  SVA checker
+//--------------------------------------------------------------
+  if (PZCOREBUS_ENABLE_SVA_CHECKER) begin : g_sva
+    pzcorebus_request_sva_checker #(
+      .BUS_CONFIG   (BUS_CONFIG   ),
+      .SVA_CHECKER  (SVA_CHECKER  )
+    ) u_sva_checker (
+      .i_clk    (i_slave_clk    ),
+      .i_rst_n  (i_slave_rst_n  ),
+      .bus_if   (slave_if       )
+    );
   end
 endmodule

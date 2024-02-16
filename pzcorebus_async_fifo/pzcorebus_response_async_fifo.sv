@@ -12,7 +12,8 @@ module pzcorebus_response_async_fifo
   parameter int               STAGES            = `PZBCM_SYNCHRONIZER_DEFAULT_STAGES,
   parameter int               RESPONSE_DEPTH    = calc_default_depth(STAGES),
   parameter bit               MERGE_RESET       = '0,
-  parameter int               RESET_SYNC_STAGES = 2
+  parameter int               RESET_SYNC_STAGES = 2,
+  parameter bit               SVA_CHECKER       = 1
 )(
   input var                 i_slave_clk,
   input var                 i_slave_rst_n,
@@ -58,4 +59,18 @@ module pzcorebus_response_async_fifo
     .id_pop         (slave_if.mresp_accept  ),
     .od_data        (slave_sresp            )
   );
+
+//--------------------------------------------------------------
+//  SVA checker
+//--------------------------------------------------------------
+  if (PZCOREBUS_ENABLE_SVA_CHECKER) begin : g_sva
+    pzcorebus_response_sva_checker #(
+      .BUS_CONFIG   (BUS_CONFIG   ),
+      .SVA_CHECKER  (SVA_CHECKER  )
+    ) u_sva_checker (
+      .i_clk    (i_master_clk   ),
+      .i_rst_n  (i_master_rst_n ),
+      .bus_if   (master_if      )
+    );
+  end
 endmodule

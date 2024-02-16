@@ -13,7 +13,8 @@ module pzcorebus_response_fifo
   parameter bit               VALID         = 1,
   parameter bit               FLAG_FF_OUT   = 1,
   parameter bit               DATA_FF_OUT   = 1,
-  parameter bit               RESET_DATA_FF = 1
+  parameter bit               RESET_DATA_FF = 1,
+  parameter bit               SVA_CHECKER   = 1
 )(
   input   var               i_clk,
   input   var               i_rst_n,
@@ -91,5 +92,19 @@ module pzcorebus_response_fifo
       sresp_valid[1]  = sresp_valid[0];
       sresp[1]        = sresp[0];
     end
+  end
+
+//--------------------------------------------------------------
+//  SVA checker
+//--------------------------------------------------------------
+  if (PZCOREBUS_ENABLE_SVA_CHECKER) begin : g_sva
+    pzcorebus_response_sva_checker #(
+      .BUS_CONFIG   (BUS_CONFIG   ),
+      .SVA_CHECKER  (SVA_CHECKER  )
+    ) u_sva_checker (
+      .i_clk    (i_clk      ),
+      .i_rst_n  (i_rst_n    ),
+      .bus_if   (master_if  )
+    );
   end
 endmodule

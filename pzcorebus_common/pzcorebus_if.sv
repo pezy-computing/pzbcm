@@ -27,11 +27,7 @@ interface pzcorebus_if
 //--------------------------------------------------------------
 //  Debug
 //--------------------------------------------------------------
-  localparam  bit DEBUG = `ifndef SYNTHESIS 1
-                          `else             0
-                          `endif;
-
-  if (DEBUG) begin : g_debug
+  if (PZCOREBUS_ENABLE_DEBUG) begin : g_debug
     logic [BUS_CONFIG.data_width/32-1:0][31:0]  debug_mdata;
     logic [BUS_CONFIG.data_width/32-1:0][3:0]   debug_mdata_byteen;
     logic [BUS_CONFIG.data_width/32-1:0][31:0]  debug_sdata;
