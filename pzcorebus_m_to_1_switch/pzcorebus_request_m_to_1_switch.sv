@@ -248,7 +248,8 @@ module pzcorebus_request_m_to_1_switch
       .RELAX_MODE     (1              ),
       .SLAVE_FIFO     (1              ),
       .COMMAND_DEPTH  (COMMAND_DEPTH  ),
-      .DATA_DEPTH     (DATA_DEPTH     )
+      .DATA_DEPTH     (DATA_DEPTH     ),
+      .SVA_CHECKER    (0              )
     ) u_aligner (
       .i_clk      (i_clk              ),
       .i_rst_n    (i_rst_n            ),
@@ -262,7 +263,8 @@ module pzcorebus_request_m_to_1_switch
       .COMMAND_DEPTH  (COMMAND_DEPTH  ),
       .COMMAND_VALID  (MASTER_FIFO    ),
       .DATA_DEPTH     (DATA_DEPTH     ),
-      .DATA_VALID     (MASTER_FIFO    )
+      .DATA_VALID     (MASTER_FIFO    ),
+      .SVA_CHECKER    (0              )
     ) u_fifo (
       .i_clk          (i_clk              ),
       .i_rst_n        (i_rst_n            ),
