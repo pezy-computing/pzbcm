@@ -28,6 +28,9 @@ include_directory '.'
   'pzcorebus_if_bundler.sv',
   'pzcorebus_if_unbundler.sv',
   'pzcorebus_bundled_array_if_packer.sv',
-  'pzcorebus_bundled_array_if_unpacker.sv',
-  'pzcorebus_sva_checker.sv'
+  'pzcorebus_bundled_array_if_unpacker.sv'
 ].each { |file| source_file file }
+
+if [:SYNTHESIS, :PZCOREBUS_DISABLE_SVA_CHECKER].none? { |m| macro? m }
+  source_file 'pzcorebus_sva_checker.sv'
+end

@@ -4,13 +4,6 @@
 //                    All Rights Reserved.
 //
 //========================================
-`ifndef PZCOREBUS_DISABLE_SVA_CHECKER
-  `ifdef  SYNTHESIS
-    `define PZCOREBUS_DISABLE_SVA_CHECKER
-  `endif
-`endif
-
-`ifndef PZCOREBUS_DISABLE_SVA_CHECKER
 module pzcorebus_request_sva_checker
   import  pzcorebus_pkg::*;
 #(
@@ -142,4 +135,3 @@ module pzcorebus_response_sva_checker
     end
   end
 endmodule
-`endif
