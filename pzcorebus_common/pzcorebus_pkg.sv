@@ -357,8 +357,13 @@ package pzcorebus_pkg;
     width += get_length_width(bus_config, 0);
     //  minfo
     width += get_request_info_width(bus_config, 0);
-    //  mdata
-    width += (is_csr_profile(bus_config)) ? bus_config.data_width : 0;
+
+    if (is_csr_profile(bus_config)) begin
+      //  mdata
+      width += bus_config.data_width;
+      //  mdata_byteen
+      width += get_byte_enable_width(bus_config, 0);
+    end
 
     return width;
   endfunction
@@ -373,7 +378,7 @@ package pzcorebus_pkg;
       //  mdata
       width += bus_config.data_width;
       //  mdata_byteen
-      width += get_byte_enable_width(bus_config, typedef_width);
+      width += get_byte_enable_width(bus_config, 0);
       //  mdata_last
       width += 1;
 
