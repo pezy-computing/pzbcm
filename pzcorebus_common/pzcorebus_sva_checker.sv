@@ -38,6 +38,42 @@ module pzcorebus_request_sva_checker
       ($stable(mdata_valid) && $stable(mdata));
   endproperty
 
+  let detect_ack(ack, id, wid) = ((ack && (id == wid))[->1]);
+
+  property p_match_data_count_and_burst_length (
+    logic         clk,
+    logic         rst_n,
+    logic         write_start,
+    int unsigned  write_id,
+    logic         mcmd_ack,
+    int unsigned  mcmd_id,
+    int unsigned  mburst_length,
+    logic         mdata_last_ack,
+    int unsigned  mdata_id,
+    int unsigned  mdata_count
+  );
+    int unsigned  wid;
+    int unsigned  burst_length;
+    int unsigned  data_count;
+    bit           result_0;
+    bit           result_1;
+
+    @(posedge clk) disable iff (!rst_n)
+    (write_start, wid = write_id, burst_length = 0, data_count = 0, result_0 = 0, result_1 = 0) |->
+      (
+        first_match(
+          (
+            (detect_ack(mcmd_ack, mcmd_id, wid), burst_length = mburst_length) ##0
+              detect_ack(mdata_last_ack, mdata_id, wid) ##0 (1, result_0 = ((mdata_count + 1) == burst_length))
+          ) or (
+            (detect_ack(mdata_last_ack, mdata_id, wid), data_count = (mdata_count + 1)) ##0
+              detect_ack(mcmd_ack, mcmd_id, wid) ##0 (1, result_1 = (data_count == mburst_length))
+          )
+        ) ##0
+        result_0 || result_1
+      );
+  endproperty
+
   if (SVA_CHECKER) begin : g_mcmd
     pzcorebus_command mcmd;
 
@@ -49,13 +85,20 @@ module pzcorebus_request_sva_checker
     assert property (p_keep_mcmd_until_acceptance(
       i_clk, i_rst_n,
       bus_if.scmd_accept, bus_if.mcmd_valid, mcmd
-    ))
-    else
-      $fatal(1, "mcmd is changed even though it is not accepted");
+    ));
   end
 
   if (SVA_CHECKER && is_memory_profile(BUS_CONFIG)) begin : g_mdata
     pzcorebus_write_data  mdata;
+    int unsigned          mburst_length;
+    int unsigned          write_id;
+    logic                 write_start;
+    int unsigned          mcmd_id;
+    logic                 mcmd_ack;
+    int unsigned          mdata_id;
+    logic                 mdata_ack;
+    logic                 mdata_last_ack;
+    int unsigned          mdata_count;
 
     always_comb begin
       mdata = bus_if.get_write_data();
@@ -66,13 +109,65 @@ module pzcorebus_request_sva_checker
       end
     end
 
+    always_comb begin
+      mburst_length = bus_if.get_burst_length();
+    end
+
+    always_comb begin
+      mcmd_ack        = bus_if.command_with_data_ack();
+      mdata_ack       = bus_if.write_data_ack();
+      mdata_last_ack  = bus_if.write_data_last_ack();
+    end
+
+    always_comb begin
+      write_start =
+        (mcmd_ack && (mcmd_id == write_id)) ||
+        (mdata_ack && (mdata_id == write_id));
+    end
+
+    always_ff @(posedge i_clk, negedge i_rst_n) begin
+      if (!i_rst_n) begin
+        write_id  <= 0;
+        mcmd_id   <= 0;
+        mdata_id  <= 0;
+      end
+      else begin
+        if (write_start) begin
+          write_id  <= write_id + 1;
+        end
+        if (mcmd_ack) begin
+          mcmd_id <= mcmd_id + 1;
+        end
+        if (mdata_last_ack) begin
+          mdata_id  <= mdata_id + 1;
+        end
+      end
+    end
+
+    always_ff @(posedge i_clk, negedge i_rst_n) begin
+      if (!i_rst_n) begin
+        mdata_count <= 0;
+      end
+      else if (mdata_last_ack) begin
+        mdata_count <= 0;
+      end
+      else if (mdata_ack) begin
+        mdata_count <= mdata_count + 1;
+      end
+    end
+
     ast_keep_mdata_until_acceptance:
     assert property (p_keep_mdata_until_acceptance(
       i_clk, i_rst_n,
       bus_if.sdata_accept, bus_if.mdata_valid, mdata
-    ))
-    else
-      $fatal(1, "mdata is changed even though it is not accepted");
+    ));
+
+    ast_match_data_count_and_burst_length:
+    assert property (p_match_data_count_and_burst_length(
+      i_clk, i_rst_n, write_start, write_id,
+      mcmd_ack, mcmd_id, mburst_length,
+      mdata_last_ack, mdata_id, mdata_count
+    ));
   end
 endmodule
 
@@ -120,18 +215,14 @@ module pzcorebus_response_sva_checker
     assert property (p_keep_sresp_until_acceptance(
       i_clk, i_rst_n,
       bus_if.mresp_accept, bus_if.sresp_valid, sresp
-    ))
-    else
-      $fatal(1, "sresp is changed even though it is not accepted");
+    ));
 
     if (is_memory_h_profile(BUS_CONFIG)) begin : g_sresp_last
       ast_sresp_last_should_not_be_0b01:
       assert property (p_sresp_last_should_not_be_0b01(
         i_clk, i_rst_n,
         bus_if.sresp_valid, sresp
-      ))
-      else
-        $fatal(1, "invalid sresp_last is received");
+      ));
     end
   end
 endmodule
