@@ -19,7 +19,7 @@ jobs:
 
       - name: Generate filelist
         run: |
-          bundle exec flgen --out all.f  pzbcm.list.rb pzcorebus.list.rb pzhsbus.list.rb pzvbus.list.rb
+          bundle exec flgen --define-macro=PZCOREBUS_DISABLE_SVA_CHECKER --out all.f  pzbcm.list.rb pzcorebus.list.rb pzhsbus.list.rb pzvbus.list.rb
           sed -i 's|${{ github.workspace }}|${PZBCM_HOME}|g' all.f
 
       - name: Run svlint
