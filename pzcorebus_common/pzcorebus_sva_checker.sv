@@ -38,7 +38,7 @@ module pzcorebus_request_sva_checker
       ($stable(mdata_valid) && $stable(mdata));
   endproperty
 
-  let detect_ack(ack, id, wid) = ((ack && (id == wid))[->1]);
+  let detect_ack(ack, id, wid) = (ack && (id == wid));
 
   property p_match_data_count_and_burst_length (
     logic         clk,
@@ -63,11 +63,11 @@ module pzcorebus_request_sva_checker
       (
         first_match(
           (
-            (detect_ack(mcmd_ack, mcmd_id, wid), burst_length = mburst_length) ##0
-              detect_ack(mdata_last_ack, mdata_id, wid) ##0 (1, result_0 = ((mdata_count + 1) == burst_length))
+            (detect_ack(mcmd_ack, mcmd_id, wid)[->1], burst_length = mburst_length) ##0
+              detect_ack(mdata_last_ack, mdata_id, wid)[->1] ##0 (1, result_0 = ((mdata_count + 1) == burst_length))
           ) or (
-            (detect_ack(mdata_last_ack, mdata_id, wid), data_count = (mdata_count + 1)) ##0
-              detect_ack(mcmd_ack, mcmd_id, wid) ##0 (1, result_1 = (data_count == mburst_length))
+            (detect_ack(mdata_last_ack, mdata_id, wid)[->1], data_count = (mdata_count + 1)) ##0
+              detect_ack(mcmd_ack, mcmd_id, wid)[->1] ##0 (1, result_1 = (data_count == mburst_length))
           )
         ) ##0
         result_0 || result_1
