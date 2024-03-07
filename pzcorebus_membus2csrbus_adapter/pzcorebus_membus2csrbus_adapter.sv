@@ -112,6 +112,8 @@ module pzcorebus_membus2csrbus_adapter
     data_width:           MEMBUS_CONFIG.data_width,
     use_byte_enable:      MEMBUS_CONFIG.use_byte_enable,
     max_length:           MEMBUS_CONFIG.max_length,
+    atomic_command_width: 0,
+    message_code_width:   0,
     request_info_width:   MINFO_WIDTH,
     response_info_width:  MEMBUS_CONFIG.response_info_width,
     unit_data_width:      MEMBUS_CONFIG.unit_data_width,

@@ -19,6 +19,7 @@ package pzcorebus_if_pkg;
     pzcorebus_if_position_info  mid;
     pzcorebus_if_position_info  maddr;
     pzcorebus_if_position_info  mlength;
+    pzcorebus_if_position_info  mparam;
     pzcorebus_if_position_info  minfo;
     pzcorebus_if_position_info  mdata;
     pzcorebus_if_position_info  mdata_byteen;
@@ -57,7 +58,9 @@ package pzcorebus_if_pkg;
     list.maddr.width    = bus_config.address_width;
     list.mlength.lsb    = calc_next_lsb(list.maddr);
     list.mlength.width  = get_length_width(bus_config, 0);
-    list.minfo.lsb      = calc_next_lsb(list.mlength);
+    list.mparam.lsb     = calc_next_lsb(list.mlength);
+    list.mparam.width   = get_request_param_width(bus_config, 0);
+    list.minfo.lsb      = calc_next_lsb(list.mparam);
     list.minfo.width    = get_request_info_width(bus_config, 0);
 
     if (`pzcorebus_csr_profile(bus_config)) begin
@@ -137,6 +140,7 @@ package pzcorebus_if_pkg;
     width += list.mid.width;
     width += list.maddr.width;
     width += list.mlength.width;
+    width += list.mparam.width;
     width += list.minfo.width;
     width += list.mdata.width;
     width += list.mdata_byteen.width;

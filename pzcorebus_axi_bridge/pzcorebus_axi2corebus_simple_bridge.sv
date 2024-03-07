@@ -102,6 +102,7 @@ module pzcorebus_axi2corebus_simple_bridge
     read_bus_if.mid         = axi_if.arid;
     read_bus_if.maddr       = get_maddr(axi_if.araddr, axi_if.arlen, axi_if.arsize);
     read_bus_if.mlength     = get_mlength(axi_if.araddr, axi_if.arlen, axi_if.arsize);
+    read_bus_if.mparam      = '0;
     read_bus_if.minfo       = '0;
   end
 
@@ -201,6 +202,7 @@ module pzcorebus_axi2corebus_simple_bridge
     write_bus_if.mid        = axi_if.awid;
     write_bus_if.maddr      = get_maddr(axi_if.awaddr, axi_if.awlen, axi_if.awsize);
     write_bus_if.mlength    = get_mlength(axi_if.awaddr, axi_if.awlen, axi_if.awsize);
+    write_bus_if.mparam     = '0;
     write_bus_if.minfo      = '0;
   end
 

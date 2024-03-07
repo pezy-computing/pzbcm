@@ -22,18 +22,14 @@ module pzcorebus_request_1_to_m_switch
   parameter int                 COMMAND_DEPTH               = 2,
   parameter int                 DATA_DEPTH                  = 2,
   parameter bit                 ALIGN_OUT                   = 0,
-  parameter int                 MINFO_WIDTH                 = get_request_info_width(BUS_CONFIG, 1),
   parameter bit                 SVA_CHECKER                 = 1
 )(
-  input   var                                 i_clk,
-  input   var                                 i_rst_n,
-  output  var pzcorebus_command_type          o_mcmd,
-  output  var [BUS_CONFIG.id_width-1:0]       o_mid,
-  output  var [BUS_CONFIG.address_width-1:0]  o_maddr,
-  output  var [MINFO_WIDTH-1:0]               o_minfo,
-  input   var [SELECT_WIDTH-1:0]              i_select,
-  interface.request_slave                     slave_if,
-  interface.request_master                    master_if[MASTERS]
+  input   var                     i_clk,
+  input   var                     i_rst_n,
+  output  var pzcorebus_command   o_mcmd,
+  input   var [SELECT_WIDTH-1:0]  i_select,
+  interface.request_slave         slave_if,
+  interface.request_master        master_if[MASTERS]
 );
   localparam  bit BROADCAST = is_csr_profile(BUS_CONFIG) && ENABLE_BROADCAST;
 
@@ -95,10 +91,7 @@ module pzcorebus_request_1_to_m_switch
 
   if (EXTERNAL_DECODE) begin : g_command_select
     always_comb begin
-      o_mcmd  = aligner_if.mcmd;
-      o_mid   = aligner_if.mid;
-      o_maddr = aligner_if.maddr;
-      o_minfo = aligner_if.minfo;
+      o_mcmd  = aligner_if.get_command();
     end
 
     always_comb begin
@@ -107,10 +100,7 @@ module pzcorebus_request_1_to_m_switch
   end
   else begin : g_command_select
     always_comb begin
-      o_mcmd  = pzcorebus_command_type'(0);
-      o_mid   = '0;
-      o_maddr = '0;
-      o_minfo = '0;
+      o_mcmd  = '0;
     end
 
     always_comb begin

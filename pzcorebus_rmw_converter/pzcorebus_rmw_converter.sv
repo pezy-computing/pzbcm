@@ -163,6 +163,7 @@ module pzcorebus_rmw_converter
     rmw_converter_if.mid          = (state == SEND_READ_REQUEST) ? i_read_id      : fifo_if[1].mid;
     rmw_converter_if.maddr        = fifo_if[1].maddr;
     rmw_converter_if.mlength      = fifo_if[1].mlength;
+    rmw_converter_if.mparam       = fifo_if[1].mparam;
     rmw_converter_if.minfo        = fifo_if[1].minfo;
     rmw_converter_if.mdata        = get_mdata(state, fifo_if[1].mdata, fifo_if[1].mdata_byteen, fifo_if[0].sdata);
     rmw_converter_if.mdata_byteen = (state == DO_RMW_WRITE_ACCESS) ? '1 : fifo_if[1].mdata_byteen;

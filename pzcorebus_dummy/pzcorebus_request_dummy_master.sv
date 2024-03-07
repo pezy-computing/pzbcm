@@ -15,6 +15,7 @@ module pzcorebus_request_dummy_master
     master_if.mid           = '0;
     master_if.maddr         = '0;
     master_if.mlength       = '0;
+    master_if.mparam        = '0;
     master_if.minfo         = '0;
     master_if.mdata_valid   = '0;
     master_if.mdata         = '0;

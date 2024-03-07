@@ -91,6 +91,7 @@ module pzcorebus_csrbus_upsizer
     upsizer_if.mcmd         = slicer_if.mcmd;
     upsizer_if.mid          = slicer_if.mid;
     upsizer_if.maddr        = slicer_if.maddr;
+    upsizer_if.mparam       = '0;
     upsizer_if.minfo        = slicer_if.minfo;
     upsizer_if.mdata        = get_mdata(slicer_if.mdata);
     upsizer_if.mdata_byteen = get_mdata_byteen(word_index[0], slicer_if.mdata_byteen);

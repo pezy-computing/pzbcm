@@ -21,6 +21,7 @@ module pzcorebus_base_address_remover
     master_if.mid         = slave_if.mid;
     master_if.maddr       = slave_if.maddr & (~i_base_mask);
     master_if.mlength     = slave_if.mlength;
+    master_if.mparam      = slave_if.mparam;
     master_if.minfo       = slave_if.minfo;
   end
 

@@ -13,6 +13,7 @@ typedef logic [BUS_CONFIG.address_width-1:0]                    pzcorebus_addrss
 typedef logic [get_length_width(BUS_CONFIG, 1)-1:0]             pzcorebus_length; \
 typedef logic [get_unpacked_length_width(BUS_CONFIG)-1:0]       pzcorebus_unpacked_length; \
 typedef logic [get_burst_length_width(BUS_CONFIG)-1:0]          pzcorebus_burst_length; \
+typedef logic [get_request_param_width(BUS_CONFIG, 1)-1:0]      pzcorebus_request_param; \
 typedef logic [get_request_info_width(BUS_CONFIG, 1)-1:0]       pzcorebus_request_info; \
 typedef logic [get_response_info_width(BUS_CONFIG, 1)-1:0]      pzcorebus_response_info; \
 typedef logic [BUS_CONFIG.data_width-1:0]                       pzcorebus_data; \
@@ -34,6 +35,7 @@ pzcorebus_command_type    mcmd; \
 pzcorebus_id              mid; \
 pzcorebus_addrss          maddr; \
 pzcorebus_length          mlength; \
+pzcorebus_request_param   mparam; \
 pzcorebus_request_info    minfo; \
 logic                     sdata_accept; \
 logic                     mdata_valid; \
@@ -69,6 +71,9 @@ function automatic pzcorebus_packed_command get_packed_command(); \
   if (COMMAND_POSITION_LIST.mlength.width > 0) begin \
     `pzcorebus_if_get_packer(packer, COMMAND_POSITION_LIST.mlength) = mlength; \
   end \
+  if (COMMAND_POSITION_LIST.mparam.width > 0) begin \
+    `pzcorebus_if_get_packer(packer, COMMAND_POSITION_LIST.mparam)  = mparam; \
+  end \
   if (COMMAND_POSITION_LIST.minfo.width > 0) begin \
     `pzcorebus_if_get_packer(packer, COMMAND_POSITION_LIST.minfo) = minfo; \
   end \
@@ -93,7 +98,13 @@ function automatic void put_packed_command(pzcorebus_packed_command command); \
   else begin \
     mlength = '0; \
   end \
-  if (BUS_CONFIG.request_info_width > 0) begin \
+  if (COMMAND_POSITION_LIST.mparam.width > 0) begin \
+    mparam  = `pzcorebus_if_get_packer(packer, COMMAND_POSITION_LIST.mparam); \
+  end \
+  else begin \
+    mparam  = '0; \
+  end \
+  if (COMMAND_POSITION_LIST.minfo.width > 0) begin \
     minfo = `pzcorebus_if_get_packer(packer, COMMAND_POSITION_LIST.minfo); \
   end \
   else begin \
@@ -121,7 +132,13 @@ function automatic pzcorebus_command get_command(); \
   else begin \
     command.length  = '0; \
   end \
-  if (BUS_CONFIG.request_info_width > 0) begin \
+  if (COMMAND_POSITION_LIST.mparam.width > 0) begin \
+    command.param = mparam; \
+  end \
+  else begin \
+    command.param = '0; \
+  end \
+  if (COMMAND_POSITION_LIST.minfo.width > 0) begin \
     command.info  = minfo; \
   end \
   else begin \
@@ -152,7 +169,13 @@ function automatic void put_command(pzcorebus_command command); \
   else begin \
     mlength = '0; \
   end \
-  if (BUS_CONFIG.request_info_width > 0) begin \
+  if (COMMAND_POSITION_LIST.mparam.width > 0) begin \
+    mparam  = command.param; \
+  end \
+  else begin \
+    mparam  = '0; \
+  end \
+  if (COMMAND_POSITION_LIST.minfo.width > 0) begin \
     minfo = command.info; \
   end \
   else begin \
@@ -392,13 +415,10 @@ endfunction \
 localparam  int DATA_SIZE           = BUS_CONFIG.data_width / BUS_CONFIG.unit_data_width; \
 localparam  int LENGTH_OFFSET_LSB   = $clog2(BUS_CONFIG.unit_data_width / 8); \
 localparam  int LENGTH_OFFSET_WIDTH = (DATA_SIZE > 1) ? $clog2(DATA_SIZE) : 1; \
-localparam  int BURST_OFFSET        = DATA_SIZE - 1; \
-localparam  int BURST_SHIFT         = $clog2(DATA_SIZE); \
 \
 function automatic pzcorebus_unpacked_length get_length(); \
   case (1'b1) \
     `pzcorebus_csr_profile(BUS_CONFIG): return pzcorebus_unpacked_length'(1); \
-    is_atomic_command():                return pzcorebus_unpacked_length'(DATA_SIZE); \
     is_message_command():               return pzcorebus_unpacked_length'(0); \
     default:                            return unpack_length(); \
   endcase \
@@ -406,11 +426,7 @@ endfunction \
 \
 function automatic pzcorebus_unpacked_length get_aligned_length(); \
   pzcorebus_unpacked_length offset; \
-  logic                     no_offset; \
-  no_offset = \
-    (!`pzcorebus_memoy_h_profile(BUS_CONFIG)) || (DATA_SIZE == 1) || \
-    is_atomic_command() || is_message_command(); \
-  if (no_offset) begin \
+  if ((DATA_SIZE == 1) || is_atomic_command() || is_message_command()) begin \
     offset  = pzcorebus_unpacked_length'(0); \
   end \
   else begin \
@@ -420,20 +436,21 @@ function automatic pzcorebus_unpacked_length get_aligned_length(); \
 endfunction \
 \
 function automatic pzcorebus_burst_length get_burst_length(); \
-  if (`pzcorebus_memoy_h_profile(BUS_CONFIG)) begin \
-    pzcorebus_unpacked_length length; \
-    length  = get_aligned_length() + pzcorebus_unpacked_length'(BURST_OFFSET); \
-    return pzcorebus_burst_length'(length >> BURST_SHIFT); \
+  if ((DATA_SIZE == 1) || `pzcorebus_csr_profile(BUS_CONFIG)) begin \
+    return pzcorebus_burst_length'(get_length()); \
   end \
   else begin \
-    return pzcorebus_burst_length'(get_length()); \
+    pzcorebus_unpacked_length length; \
+    length  = get_aligned_length() + pzcorebus_unpacked_length'(DATA_SIZE - 1); \
+    return pzcorebus_burst_length'(length / DATA_SIZE); \
   end \
 endfunction \
 \
 function automatic pzcorebus_unpacked_length get_response_length(); \
   case (1'b1) \
     is_posted_command():  return pzcorebus_unpacked_length'(0); \
-    is_read_command():    return unpack_length(); \
+    is_read_command(), \
+    is_atomic_command():  return unpack_length(); \
     default:              return pzcorebus_unpacked_length'(DATA_SIZE); \
   endcase \
 endfunction
@@ -448,7 +465,7 @@ function automatic pzcorebus_packed_response get_packed_response(); \
   `pzcorebus_if_get_packer(packer, RESPONSE_POSITION_LIST.sid)    = sid; \
   `pzcorebus_if_get_packer(packer, RESPONSE_POSITION_LIST.serror) = serror; \
   `pzcorebus_if_get_packer(packer, RESPONSE_POSITION_LIST.sdata)  = sdata; \
-  if (BUS_CONFIG.response_info_width > 0) begin \
+  if (RESPONSE_POSITION_LIST.sinfo.width > 0) begin \
     `pzcorebus_if_get_packer(packer, RESPONSE_POSITION_LIST.sinfo)  = sinfo; \
   end \
   if (`pzcorebus_memoy_h_profile(BUS_CONFIG)) begin \
@@ -467,7 +484,7 @@ function automatic void put_packed_response(pzcorebus_packed_response response);
   sid     = `pzcorebus_if_get_packer(packer, RESPONSE_POSITION_LIST.sid); \
   serror  = `pzcorebus_if_get_packer(packer, RESPONSE_POSITION_LIST.serror); \
   sdata   = `pzcorebus_if_get_packer(packer, RESPONSE_POSITION_LIST.sdata); \
-  if (BUS_CONFIG.response_info_width > 0) begin \
+  if (RESPONSE_POSITION_LIST.sinfo.width > 0) begin \
     sinfo = `pzcorebus_if_get_packer(packer, RESPONSE_POSITION_LIST.sinfo); \
   end \
   else begin \
@@ -493,7 +510,7 @@ function automatic pzcorebus_response get_response(); \
   response.id           = sid; \
   response.error        = serror; \
   response.data         = sdata; \
-  response.info         = (BUS_CONFIG.response_info_width > 0    ) ? sinfo        : '0; \
+  response.info         = (RESPONSE_POSITION_LIST.sinfo.width > 0) ? sinfo        : '0; \
   response.unit_enable  = (`pzcorebus_memoy_h_profile(BUS_CONFIG)) ? sresp_uniten : '0; \
   response.last         = (`pzcorebus_memoy_profile(BUS_CONFIG)  ) ? sresp_last   : '0; \
   return response; \
@@ -504,7 +521,7 @@ function automatic void put_response(pzcorebus_response response); \
   sid     = response.id; \
   serror  = response.error; \
   sdata   = response.data; \
-  if (BUS_CONFIG.response_info_width > 0) begin \
+  if (RESPONSE_POSITION_LIST.sinfo.width > 0) begin \
     sinfo = response.info; \
   end \
   else begin \
@@ -552,6 +569,7 @@ modport request_master ( \
   output  mid, \
   output  maddr, \
   output  mlength, \
+  output  mparam, \
   output  minfo, \
   input   sdata_accept, \
   output  mdata_valid, \
@@ -604,6 +622,7 @@ modport command_master ( \
   output  mcmd, \
   output  mid, \
   output  maddr, \
+  output  mparam, \
   output  mlength, \
   output  minfo, \
   import  put_packed_command, \
@@ -659,6 +678,7 @@ modport request_slave ( \
   input   mid, \
   input   maddr, \
   input   mlength, \
+  input   mparam, \
   input   minfo, \
   output  sdata_accept, \
   input   mdata_valid, \
@@ -712,6 +732,7 @@ modport command_slave ( \
   input   mid, \
   input   maddr, \
   input   mlength, \
+  input   mparam, \
   input   minfo, \
   import  get_packed_command, \
   import  get_command, \
@@ -766,6 +787,7 @@ modport request_monitor ( \
   input   mid, \
   input   maddr, \
   input   mlength, \
+  input   mparam, \
   input   minfo, \
   input   sdata_accept, \
   input   mdata_valid, \

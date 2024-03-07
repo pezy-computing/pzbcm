@@ -37,6 +37,7 @@ module pzcorebus_id_assigner
     master_if.mid         = get_mid(i_base_id, slave_if.mid);
     master_if.maddr       = slave_if.maddr;
     master_if.mlength     = slave_if.mlength;
+    master_if.mparam      = slave_if.mparam;
     master_if.minfo       = slave_if.minfo;
   end
 
@@ -100,6 +101,7 @@ module pzcorebus_request_id_assigner
     master_if.mid         = get_mid(i_base_id, slave_if.mid);
     master_if.maddr       = slave_if.maddr;
     master_if.mlength     = slave_if.mlength;
+    master_if.mparam      = slave_if.mparam;
     master_if.minfo       = slave_if.minfo;
   end
 

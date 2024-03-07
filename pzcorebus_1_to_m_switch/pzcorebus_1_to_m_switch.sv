@@ -29,21 +29,17 @@ module pzcorebus_1_to_m_switch
   parameter int                       DATA_DEPTH                    = 2,
   parameter int                       RESPONSE_DEPTH                = 2,
   parameter bit                       ALIGN_OUT                     = 0,
-  parameter int                       MINFO_WIDTH                   = get_request_info_width(BUS_CONFIG, 1),
   parameter bit                       SVA_CHECKER                   = 1,
   parameter bit                       REQUEST_SVA_CHECKER           = SVA_CHECKER,
   parameter bit                       RESPONSE_SVA_CHECKER          = SVA_CHECKER
 )(
-  input   var                                 i_clk,
-  input   var                                 i_rst_n,
-  input   var pzbcm_arbiter_config            i_arbiter_config,
-  output  var pzcorebus_command_type          o_mcmd,
-  output  var [BUS_CONFIG.id_width-1:0]       o_mid,
-  output  var [BUS_CONFIG.address_width-1:0]  o_maddr,
-  output  var [MINFO_WIDTH-1:0]               o_minfo,
-  input   var [SELECT_WIDTH-1:0]              i_select,
-  pzcorebus_if.slave                          slave_if,
-  pzcorebus_if.master                         master_if[MASTERS]
+  input   var                       i_clk,
+  input   var                       i_rst_n,
+  input   var pzbcm_arbiter_config  i_arbiter_config,
+  output  var pzcorebus_command     o_mcmd,
+  input   var [SELECT_WIDTH-1:0]    i_select,
+  pzcorebus_if.slave                slave_if,
+  pzcorebus_if.master               master_if[MASTERS]
 );
   pzcorebus_if #(BUS_CONFIG)  bus_if[1+MASTERS]();
 
@@ -89,9 +85,6 @@ module pzcorebus_1_to_m_switch
     .i_clk      (i_clk              ),
     .i_rst_n    (i_rst_n            ),
     .o_mcmd     (o_mcmd             ),
-    .o_mid      (o_mid              ),
-    .o_maddr    (o_maddr            ),
-    .o_minfo    (o_minfo            ),
     .i_select   (i_select           ),
     .slave_if   (bus_if[0]          ),
     .master_if  (bus_if[1:MASTERS]  )

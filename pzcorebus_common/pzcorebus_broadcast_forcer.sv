@@ -20,6 +20,7 @@ module pzcorebus_broadcast_forcer
     master_if.mid         = slave_if.mid;
     master_if.maddr       = slave_if.maddr;
     master_if.mlength     = slave_if.mlength;
+    master_if.mparam      = slave_if.mparam;
     master_if.minfo       = slave_if.minfo;
   end
 

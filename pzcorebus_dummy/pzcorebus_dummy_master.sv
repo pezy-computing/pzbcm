@@ -15,6 +15,7 @@ module pzcorebus_dummy_master
     master_if.mid           = '0;
     master_if.maddr         = '0;
     master_if.mlength       = '0;
+    master_if.mparam        = '0;
     master_if.minfo         = '0;
     master_if.mdata_valid   = '0;
     master_if.mdata         = '0;
@@ -38,6 +39,7 @@ module pzcorebus_array_dummy_master
       master_if[i].mid          = '0;
       master_if[i].maddr        = '0;
       master_if[i].mlength      = '0;
+      master_if[i].mparam       = '0;
       master_if[i].minfo        = '0;
       master_if[i].mdata_valid  = '0;
       master_if[i].mdata        = '0;

@@ -39,6 +39,20 @@
   ((`PZCOREBUS_MAX_LENGTH == 1) ? 1 : pzcorebus_clog2(`PZCOREBUS_MAX_LENGTH))
 `endif
 
+`ifndef PZCOREBUS_MAX_ATOMIC_COMMAND_WIDTH
+  `define PZCOREBUS_MAX_ATOMIC_COMMAND_WIDTH  8
+`endif
+
+`ifndef PZCOREBUS_MAX_MESSAGE_CODE_WIDTH
+  `define PZCOREBUS_MAX_MESSAGE_CODE_WIDTH  1
+`endif
+
+`ifndef PZCOREBUS_MAX_REQUEST_PARAM_WIDTH
+  `define PZCOREBUS_MAX_REQUEST_PARAM_WIDTH \
+  ((`PZCOREBUS_MAX_ATOMIC_COMMAND_WIDTH > `PZCOREBUS_MAX_MESSAGE_CODE_WIDTH) ? \
+    `PZCOREBUS_MAX_ATOMIC_COMMAND_WIDTH : `PZCOREBUS_MAX_MESSAGE_CODE_WIDTH)
+`endif
+
 `ifndef PZCOREBUS_MAX_REQUEST_INFO_WIDTH
   `define PZCOREBUS_MAX_REQUEST_INFO_WIDTH  32
 `endif
@@ -95,13 +109,14 @@ package pzcorebus_pkg;
   } pzcorebus_response_type;
 
   typedef struct packed {
-    pzcorebus_command_type                        command;
-    logic [`PZCOREBUS_MAX_ID_WIDTH-1:0]           id;
-    logic [`PZCOREBUS_MAX_ADDRESS_WIDTH-1:0]      address;
-    logic [`PZCOREBUS_MAX_LENGTH_WIDTH-1:0]       length;
-    logic [`PZCOREBUS_MAX_REQUEST_INFO_WIDTH-1:0] info;
-    logic [`PZCOREBUS_MAX_DATA_WIDTH-1:0]         data;
-    logic [`PZCOREBUS_MAX_BYTE_ENABLE_WIDTH-1:0]  byte_enable;
+    pzcorebus_command_type                          command;
+    logic [`PZCOREBUS_MAX_ID_WIDTH-1:0]             id;
+    logic [`PZCOREBUS_MAX_ADDRESS_WIDTH-1:0]        address;
+    logic [`PZCOREBUS_MAX_LENGTH_WIDTH-1:0]         length;
+    logic [`PZCOREBUS_MAX_REQUEST_PARAM_WIDTH-1:0]  param;
+    logic [`PZCOREBUS_MAX_REQUEST_INFO_WIDTH-1:0]   info;
+    logic [`PZCOREBUS_MAX_DATA_WIDTH-1:0]           data;
+    logic [`PZCOREBUS_MAX_BYTE_ENABLE_WIDTH-1:0]    byte_enable;
   } pzcorebus_command;
 
   typedef struct packed {
@@ -144,6 +159,8 @@ package pzcorebus_pkg;
     shortint          data_width;
     bit               use_byte_enable;
     shortint          max_length;
+    shortint          atomic_command_width;
+    shortint          message_code_width;
     shortint          request_info_width;
     shortint          response_info_width;
     shortint          unit_data_width;
@@ -242,6 +259,30 @@ package pzcorebus_pkg;
     pzcorebus_config  bus_config
   );
     return pzcorebus_clog2(get_max_burst_length(bus_config) + 1);
+  endfunction
+
+  function automatic int get_request_param_width(
+    pzcorebus_config  bus_config,
+    bit               typedef_width
+  );
+    int width = 0;
+
+    if (bus_config.atomic_command_width > width) begin
+      width = bus_config.atomic_command_width;
+    end
+    if (bus_config.message_code_width > width) begin
+      width = bus_config.message_code_width;
+    end
+    if (is_csr_profile(bus_config)) begin
+      width = 0;
+    end
+
+    if (typedef_width && (width == 0)) begin
+      return 1;
+    end
+    else begin
+      return width;
+    end
   endfunction
 
   function automatic int get_request_info_width(
@@ -355,6 +396,8 @@ package pzcorebus_pkg;
     width += bus_config.address_width;
     //  mlength
     width += get_length_width(bus_config, 0);
+    //  mparam
+    width += get_request_param_width(bus_config, 0);
     //  minfo
     width += get_request_info_width(bus_config, 0);
 
