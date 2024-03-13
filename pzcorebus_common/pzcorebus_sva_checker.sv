@@ -222,57 +222,39 @@ module pzcorebus_response_sva_checker
       ($stable(sresp_valid) && $stable(sresp));
   endproperty
 
-  property p_sresp_last_should_not_be_0b01 (
+  property p_sresp_should_have_corresponting_mcmd(
+    logic clk,
+    logic rst_n,
+    logic sresp_start,
+    logic sresp_unknown
+  );
+    @(posedge clk) disable iff (!rst_n)
+    (sresp_start) |-> !sresp_unknown;
+  endproperty
+
+  property p_sresp_type_should_correspond_to_mcmd_type(
     logic               clk,
     logic               rst_n,
-    logic               sresp_valid,
+    pzcorebus_command   mcmd,
+    logic               sresp_ack,
     pzcorebus_response  sresp
   );
     @(posedge clk) disable iff (!rst_n)
-    (sresp_valid) |->
-      (sresp.last != 2'b01);
+    (sresp_ack) |-> check_response_type(mcmd, sresp);
   endproperty
 
-  function automatic logic check_sresp_count(
-    int unsigned        sresp_count,
-    pzcorebus_command   mreq,
+  function automatic logic check_response_type(
+    pzcorebus_command   mcmd,
     pzcorebus_response  sresp
   );
-    if (mreq.command != PZCOREBUS_READ) begin
-      return sresp.last[0] == 1;
-    end
-    else begin
-      int last_count;
-
-      if (is_memory_h_profile(BUS_CONFIG) && (sresp.last == 2'b10)) begin
-        int unsigned  offset;
-        offset  = (mreq.address / DATA_BYTE) % BURST_BOUNDARY;
-        if (((sresp_count + offset) % BURST_BOUNDARY) != 0) begin
-          $display("sresp_count = %0d offset = %0d", sresp_count, offset);
-          return 0;
-        end
-      end
-
-      last_count  = calc_last_count(mreq);
-      return sresp.last[0] == (sresp_count == last_count);
-    end
-  endfunction
-
-  function automatic int unsigned calc_last_count(
-    pzcorebus_command mreq
-  );
-    int unsigned  offset;
-    int unsigned  unpacked_length;
-
-    offset  = (mreq.address % DATA_BYTE) / UNIT_BYTE;
-    if (mreq.length == 0) begin
-      unpacked_length = BUS_CONFIG.max_length;
-    end
-    else begin
-      unpacked_length = mreq.length;
-    end
-
-    return (unpacked_length + offset + (DATA_SIZE - 1)) / DATA_SIZE;
+    case (mcmd.command)
+      PZCOREBUS_READ:                   return sresp.response == PZCOREBUS_RESPONSE_WITH_DATA;
+      PZCOREBUS_WRITE_NON_POSTED:       return sresp.response == PZCOREBUS_RESPONSE;
+      PZCOREBUS_FULL_WRITE_NON_POSTED:  return sresp.response == PZCOREBUS_RESPONSE;
+      PZCOREBUS_BROADCAST_NON_POSTED:   return sresp.response == PZCOREBUS_RESPONSE;
+      PZCOREBUS_MESSAGE_NON_POSTED:     return sresp.response == PZCOREBUS_RESPONSE_WITH_DATA;
+      default:                          return 0;
+    endcase
   endfunction
 
   property p_match_sresp_count_and_burst_length(
@@ -283,16 +265,68 @@ module pzcorebus_response_sva_checker
     logic               sresp_ack,
     pzcorebus_response  sresp
   );
-    int unsigned      sresp_count;
-    pzcorebus_command mreq;
+    int unsigned  sresp_count;
+    int unsigned  sresp_id;
     @(posedge clk) disable iff (!rst_n)
-    (sresp_start, sresp_count = 0, mreq = mcmd) |->
+    (sresp_start, sresp_count = 0, sresp_id = sresp.id) |->
       first_match(
         (
-          ((sresp_ack && (sresp.id == mreq.id))[->1], sresp_count += 1) ##0
-            check_sresp_count(sresp_count, mreq, sresp)
+          ((sresp_ack && (sresp.id == sresp_id))[->1], sresp_count += 1) ##0
+            check_sresp_count(sresp_count, mcmd, sresp)
         )[*1:$] ##0 sresp.last[0]
       );
+  endproperty
+
+  function automatic logic check_sresp_count(
+    int unsigned        sresp_count,
+    pzcorebus_command   mcmd,
+    pzcorebus_response  sresp
+  );
+    if (mcmd.command != PZCOREBUS_READ) begin
+      return sresp.last[0] == 1;
+    end
+    else begin
+      int last_count;
+
+      if (is_memory_h_profile(BUS_CONFIG) && (sresp.last == 2'b10)) begin
+        int unsigned  offset;
+        offset  = (mcmd.address / DATA_BYTE) % BURST_BOUNDARY;
+        if (((sresp_count + offset) % BURST_BOUNDARY) != 0) begin
+          $display("sresp_count = %0d offset = %0d", sresp_count, offset);
+          return 0;
+        end
+      end
+
+      last_count  = calc_last_count(mcmd);
+      return sresp.last[0] == (sresp_count == last_count);
+    end
+  endfunction
+
+  function automatic int unsigned calc_last_count(
+    pzcorebus_command mcmd
+  );
+    int unsigned  offset;
+    int unsigned  unpacked_length;
+
+    offset  = (mcmd.address % DATA_BYTE) / UNIT_BYTE;
+    if (mcmd.length == 0) begin
+      unpacked_length = BUS_CONFIG.max_length;
+    end
+    else begin
+      unpacked_length = mcmd.length;
+    end
+
+    return (unpacked_length + offset + (DATA_SIZE - 1)) / DATA_SIZE;
+  endfunction
+
+  property p_sresp_last_should_not_be_0b01 (
+    logic               clk,
+    logic               rst_n,
+    logic               sresp_valid,
+    pzcorebus_response  sresp
+  );
+    @(posedge clk) disable iff (!rst_n)
+    (sresp_valid) |-> (sresp.last != 2'b01);
   endproperty
 
   if (SVA_CHECKER) begin : g_sresp
@@ -312,23 +346,20 @@ module pzcorebus_response_sva_checker
       bus_if.mresp_accept, bus_if.sresp_valid, sresp
     ));
 
-    if (is_memory_h_profile(BUS_CONFIG)) begin : g_sresp_last
-      ast_sresp_last_should_not_be_0b01:
-      assert property (p_sresp_last_should_not_be_0b01(
-        i_clk, i_rst_n,
-        bus_if.sresp_valid, sresp
-      ));
-    end
-
     bit               sresp_busy[int];
     bit               sresp_start;
+    bit               sresp_unknown;
     pzcorebus_command mcmd;
     pzcorebus_command mcmd_queue[int][$];
 
     if (!SRESP_IF_ONLY) begin : g_sresp_state
       always @(sresp_ack, sresp) begin
-        sresp_start = sresp_ack && (!sresp_busy[sresp.id]);
-        if (sresp_start && mcmd_queue.exists(sresp.id)) begin
+        sresp_start   = sresp_ack && (!sresp_busy[sresp.id]);
+        sresp_unknown = sresp_start && (!mcmd_queue.exists(sresp.id));
+      end
+
+      always @(sresp_ack, sresp) begin
+        if (mcmd_queue.exists(sresp.id)) begin
           mcmd  = mcmd_queue[sresp.id][0];
         end
       end
@@ -353,7 +384,7 @@ module pzcorebus_response_sva_checker
           if (bus_if.command_non_posted_ack()) begin
             mcmd_queue[bus_if.mid].push_back(bus_if.get_command());
           end
-          if (sresp_start) begin
+          if (sresp_last_ack) begin
             if (mcmd_queue[sresp.id].size() == 1) begin
               mcmd_queue.delete(sresp.id);
             end
@@ -365,11 +396,34 @@ module pzcorebus_response_sva_checker
       end
     end
 
+    if (!SRESP_IF_ONLY) begin : g_sresp_unknown
+      ast_sresp_should_have_corresponting_mcmd:
+      assert property (p_sresp_should_have_corresponting_mcmd(
+        i_clk, i_rst_n, sresp_start, sresp_unknown
+      ));
+    end
+
+    if (!SRESP_IF_ONLY) begin : g_sresp_type
+      ast_sresp_type_should_correspond_to_mcmd_type:
+      assert property (p_sresp_type_should_correspond_to_mcmd_type(
+        i_clk, i_rst_n,
+        mcmd, sresp_ack, sresp
+      ));
+    end
+
     if ((!SRESP_IF_ONLY) && is_memory_profile(BUS_CONFIG)) begin : g_sresp_count
       ast_match_sresp_count_and_burst_length:
       assert property (p_match_sresp_count_and_burst_length(
         i_clk, i_rst_n,
         sresp_start, mcmd, sresp_ack, sresp
+      ));
+    end
+
+    if (is_memory_h_profile(BUS_CONFIG)) begin : g_sresp_last
+      ast_sresp_last_should_not_be_0b01:
+      assert property (p_sresp_last_should_not_be_0b01(
+        i_clk, i_rst_n,
+        bus_if.sresp_valid, sresp
       ));
     end
   end
