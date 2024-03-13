@@ -7,12 +7,15 @@
 module pzcorebus_response_reorder
   import  pzcorebus_pkg::*;
 #(
-  parameter pzcorebus_config                BUS_CONFIG    = '0,
-  parameter int                             ENTRIES       = 4,
-  parameter bit [BUS_CONFIG.data_width-1:0] ERROR_DATA    = 'hdead_aaaa,
-  parameter bit                             SLAVE_SLICER  = 0,
-  parameter bit                             MASTER_SLICER = 0,
-  parameter int                             TIMEOUT_WIDTH = 32
+  parameter pzcorebus_config                BUS_CONFIG            = '0,
+  parameter int                             ENTRIES               = 4,
+  parameter bit [BUS_CONFIG.data_width-1:0] ERROR_DATA            = 'hdead_aaaa,
+  parameter bit                             SLAVE_SLICER          = 0,
+  parameter bit                             MASTER_SLICER         = 0,
+  parameter int                             TIMEOUT_WIDTH         = 32,
+  parameter bit                             SVA_CHECKER           = 1,
+  parameter bit                             REQUEST_SVA_CHECKER   = SVA_CHECKER,
+  parameter bit                             RESPONSE_SVA_CHECKER  = SVA_CHECKER
 )(
   input var                           i_clk,
   input var                           i_rst_n,
@@ -52,10 +55,12 @@ module pzcorebus_response_reorder
 //  Slave slicer
 //--------------------------------------------------------------
   pzcorebus_slicer #(
-    .BUS_CONFIG     (BUS_CONFIG   ),
-    .STAGES         (1            ),
-    .REQUEST_VALID  (SLAVE_SLICER ),
-    .RESPONSE_VALID (SLAVE_SLICER )
+    .BUS_CONFIG           (BUS_CONFIG           ),
+    .STAGES               (1                    ),
+    .REQUEST_VALID        (SLAVE_SLICER         ),
+    .RESPONSE_VALID       (SLAVE_SLICER         ),
+    .REQUEST_SVA_CHECKER  (REQUEST_SVA_CHECKER  ),
+    .RESPONSE_SVA_CHECKER (0                    )
   ) u_slave_slicer (
     .i_clk      (i_clk      ),
     .i_rst_n    (i_rst_n    ),
@@ -190,10 +195,12 @@ module pzcorebus_response_reorder
 //  Master slicer
 //--------------------------------------------------------------
   pzcorebus_slicer #(
-    .BUS_CONFIG     (BUS_CONFIG     ),
-    .STAGES         (1              ),
-    .REQUEST_VALID  (MASTER_SLICER  ),
-    .RESPONSE_VALID (MASTER_SLICER  )
+    .BUS_CONFIG           (BUS_CONFIG           ),
+    .STAGES               (1                    ),
+    .REQUEST_VALID        (MASTER_SLICER        ),
+    .RESPONSE_VALID       (MASTER_SLICER        ),
+    .REQUEST_SVA_CHECKER  (0                    ),
+    .RESPONSE_SVA_CHECKER (RESPONSE_SVA_CHECKER )
   ) u_master_slicer (
     .i_clk      (i_clk      ),
     .i_rst_n    (i_rst_n    ),

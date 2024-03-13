@@ -80,7 +80,7 @@ module pzcorebus_1_to_m_switch
     .COMMAND_DEPTH                (COMMAND_DEPTH                ),
     .DATA_DEPTH                   (DATA_DEPTH                   ),
     .ALIGN_OUT                    (ALIGN_OUT                    ),
-    .SVA_CHECKER                  (REQUEST_SVA_CHECKER          )
+    .SVA_CHECKER                  (0                            )
   ) u_request_switch (
     .i_clk      (i_clk              ),
     .i_rst_n    (i_rst_n            ),
@@ -91,16 +91,16 @@ module pzcorebus_1_to_m_switch
   );
 
   pzcorebus_response_1_to_m_switch #(
-    .BUS_CONFIG         (BUS_CONFIG           ),
-    .MASTERS            (MASTERS              ),
-    .ENABLE_ARBITER     (ENABLE_ARBITER       ),
-    .PRIORITY_WIDTH     (PRIORITY_WIDTH       ),
-    .WEIGHT_WIDTH       (WEIGHT_WIDTH         ),
-    .WEIGHT             (WEIGHT               ),
-    .SLAVE_FIFO         (SLAVE_FIFO[1]        ),
-    .MASTER_FIFO        (MASTER_FIFO[1]       ),
-    .RESPONSE_DEPTH     (RESPONSE_DEPTH       ),
-    .SVA_CHECKER        (RESPONSE_SVA_CHECKER )
+    .BUS_CONFIG     (BUS_CONFIG     ),
+    .MASTERS        (MASTERS        ),
+    .ENABLE_ARBITER (ENABLE_ARBITER ),
+    .PRIORITY_WIDTH (PRIORITY_WIDTH ),
+    .WEIGHT_WIDTH   (WEIGHT_WIDTH   ),
+    .WEIGHT         (WEIGHT         ),
+    .SLAVE_FIFO     (SLAVE_FIFO[1]  ),
+    .MASTER_FIFO    (MASTER_FIFO[1] ),
+    .RESPONSE_DEPTH (RESPONSE_DEPTH ),
+    .SVA_CHECKER    (0              )
   ) u_response_switch (
     .i_clk            (i_clk              ),
     .i_rst_n          (i_rst_n            ),
@@ -113,4 +113,29 @@ module pzcorebus_1_to_m_switch
     .slave_if   (bus_if[1:MASTERS]  ),
     .master_if  (master_if          )
   );
+
+//--------------------------------------------------------------
+//  SVA checker
+//--------------------------------------------------------------
+  if (PZCOREBUS_ENABLE_SVA_CHECKER) begin : g_sva
+    pzcorebus_request_sva_checker #(
+      .BUS_CONFIG   (BUS_CONFIG           ),
+      .SVA_CHECKER  (REQUEST_SVA_CHECKER  )
+    ) u_request_sva_checker (
+      .i_clk    (i_clk    ),
+      .i_rst_n  (i_rst_n  ),
+      .bus_if   (slave_if )
+    );
+
+    pzcorebus_response_sva_array_checker #(
+      .BUS_CONFIG     (BUS_CONFIG           ),
+      .N              (MASTERS              ),
+      .SVA_CHECKER    (RESPONSE_SVA_CHECKER ),
+      .SRESP_IF_ONLY  (0                    )
+    ) u_sva_checker (
+      .i_clk    (i_clk      ),
+      .i_rst_n  (i_rst_n    ),
+      .bus_if   (master_if  )
+    );
+  end
 endmodule

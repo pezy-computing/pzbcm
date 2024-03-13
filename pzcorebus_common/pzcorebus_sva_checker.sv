@@ -171,16 +171,45 @@ module pzcorebus_request_sva_checker
   end
 endmodule
 
-module pzcorebus_response_sva_checker
+module pzcorebus_request_sva_arary_checker
   import  pzcorebus_pkg::*;
 #(
   parameter pzcorebus_config  BUS_CONFIG  = '0,
+  parameter int               N           = 2,
   parameter bit               SVA_CHECKER = 1
+)(
+  input var i_clk,
+  input var i_rst_n,
+  interface bus_if[N]
+);
+  for (genvar i = 0;i < N;++i) begin : g
+    pzcorebus_request_sva_checker #(
+      .BUS_CONFIG   (BUS_CONFIG   ),
+      .SVA_CHECKER  (SVA_CHECKER  )
+    ) u_sva_checker (
+      .i_clk    (i_clk      ),
+      .i_rst_n  (i_rst_n    ),
+      .bus_if   (bus_if[i]  )
+    );
+  end
+endmodule
+
+module pzcorebus_response_sva_checker
+  import  pzcorebus_pkg::*;
+#(
+  parameter pzcorebus_config  BUS_CONFIG    = '0,
+  parameter bit               SVA_CHECKER   = 1,
+  parameter bit               SRESP_IF_ONLY = 1
 )(
   input var i_clk,
   input var i_rst_n,
   interface bus_if
 );
+  localparam  int UNIT_BYTE       = BUS_CONFIG.unit_data_width / 8;
+  localparam  int DATA_BYTE       = BUS_CONFIG.data_width / 8;
+  localparam  int DATA_SIZE       = DATA_BYTE / UNIT_BYTE;
+  localparam  int BURST_BOUNDARY  = BUS_CONFIG.response_boundary / DATA_BYTE;
+
   property p_keep_sresp_until_acceptance (
     logic               clk,
     logic               rst_n,
@@ -204,11 +233,77 @@ module pzcorebus_response_sva_checker
       (sresp.last != 2'b01);
   endproperty
 
+  function automatic logic check_sresp_count(
+    int unsigned        sresp_count,
+    pzcorebus_command   mreq,
+    pzcorebus_response  sresp
+  );
+    if (mreq.command != PZCOREBUS_READ) begin
+      return sresp.last[0] == 1;
+    end
+    else begin
+      int last_count;
+
+      if (is_memory_h_profile(BUS_CONFIG) && (sresp.last == 2'b10)) begin
+        int unsigned  offset;
+        offset  = (mreq.address / DATA_BYTE) % BURST_BOUNDARY;
+        if (((sresp_count + offset) % BURST_BOUNDARY) != 0) begin
+          $display("sresp_count = %0d offset = %0d", sresp_count, offset);
+          return 0;
+        end
+      end
+
+      last_count  = calc_last_count(mreq);
+      return sresp.last[0] == (sresp_count == last_count);
+    end
+  endfunction
+
+  function automatic int unsigned calc_last_count(
+    pzcorebus_command mreq
+  );
+    int unsigned  offset;
+    int unsigned  unpacked_length;
+
+    offset  = (mreq.address % DATA_BYTE) / UNIT_BYTE;
+    if (mreq.length == 0) begin
+      unpacked_length = BUS_CONFIG.max_length;
+    end
+    else begin
+      unpacked_length = mreq.length;
+    end
+
+    return (unpacked_length + offset + (DATA_SIZE - 1)) / DATA_SIZE;
+  endfunction
+
+  property p_match_sresp_count_and_burst_length(
+    logic               clk,
+    logic               rst_n,
+    logic               sresp_start,
+    pzcorebus_command   mcmd,
+    logic               sresp_ack,
+    pzcorebus_response  sresp
+  );
+    int unsigned      sresp_count;
+    pzcorebus_command mreq;
+    @(posedge clk) disable iff (!rst_n)
+    (sresp_start, sresp_count = 0, mreq = mcmd) |->
+      first_match(
+        (
+          ((sresp_ack && (sresp.id == mreq.id))[->1], sresp_count += 1) ##0
+            check_sresp_count(sresp_count, mreq, sresp)
+        )[*1:$] ##0 sresp.last[0]
+      );
+  endproperty
+
   if (SVA_CHECKER) begin : g_sresp
+    logic               sresp_ack;
+    logic               sresp_last_ack;
     pzcorebus_response  sresp;
 
     always_comb begin
-      sresp = bus_if.get_response();
+      sresp_ack       = bus_if.response_ack();
+      sresp_last_ack  = bus_if.response_last_ack();
+      sresp           = bus_if.get_response();
     end
 
     ast_keep_sresp_until_acceptance:
@@ -224,5 +319,122 @@ module pzcorebus_response_sva_checker
         bus_if.sresp_valid, sresp
       ));
     end
+
+    bit               sresp_busy[int];
+    bit               sresp_start;
+    pzcorebus_command mcmd;
+    pzcorebus_command mcmd_queue[int][$];
+
+    if (!SRESP_IF_ONLY) begin : g_sresp_state
+      always @(sresp_ack, sresp) begin
+        sresp_start = sresp_ack && (!sresp_busy[sresp.id]);
+        if (sresp_start && mcmd_queue.exists(sresp.id)) begin
+          mcmd  = mcmd_queue[sresp.id][0];
+        end
+      end
+
+      always @(negedge i_clk, negedge i_rst_n) begin
+        if (!i_rst_n) begin
+          sresp_busy.delete();
+        end
+        else if (sresp_last_ack) begin
+          sresp_busy.delete(sresp.id);
+        end
+        else if (sresp_start) begin
+          sresp_busy[sresp.id]  = 1;
+        end
+      end
+
+      always @(negedge i_clk, negedge i_rst_n) begin
+        if (!i_rst_n) begin
+          mcmd_queue.delete();
+        end
+        else begin
+          if (bus_if.command_non_posted_ack()) begin
+            mcmd_queue[bus_if.mid].push_back(bus_if.get_command());
+          end
+          if (sresp_start) begin
+            if (mcmd_queue[sresp.id].size() == 1) begin
+              mcmd_queue.delete(sresp.id);
+            end
+            else begin
+              void'(mcmd_queue[sresp.id].pop_front());
+            end
+          end
+        end
+      end
+    end
+
+    if ((!SRESP_IF_ONLY) && is_memory_profile(BUS_CONFIG)) begin : g_sresp_count
+      ast_match_sresp_count_and_burst_length:
+      assert property (p_match_sresp_count_and_burst_length(
+        i_clk, i_rst_n,
+        sresp_start, mcmd, sresp_ack, sresp
+      ));
+    end
+  end
+endmodule
+
+module pzcorebus_response_sva_array_checker
+  import  pzcorebus_pkg::*;
+#(
+  parameter pzcorebus_config  BUS_CONFIG    = '0,
+  parameter int               N             = 2,
+  parameter bit               SVA_CHECKER   = 1,
+  parameter bit               SRESP_IF_ONLY = 1
+)(
+  input var i_clk,
+  input var i_rst_n,
+  interface bus_if[N]
+);
+  for (genvar i = 0;i < N;++i) begin : g
+    pzcorebus_response_sva_checker #(
+      .BUS_CONFIG     (BUS_CONFIG     ),
+      .SVA_CHECKER    (SVA_CHECKER    ),
+      .SRESP_IF_ONLY  (SRESP_IF_ONLY  )
+    ) u_sva_checker (
+      .i_clk    (i_clk      ),
+      .i_rst_n  (i_rst_n    ),
+      .bus_if   (bus_if[i]  )
+    );
+  end
+endmodule
+
+module pzcorebus_sva_checker
+  import  pzcorebus_pkg::*;
+#(
+  parameter pzcorebus_config  BUS_CONFIG            = '0,
+  parameter pzcorebus_config  REQUEST_BUS_CONFIG    = BUS_CONFIG,
+  parameter pzcorebus_config  RESPONSE_BUS_CONFIG   = BUS_CONFIG,
+  parameter bit               SVA_CHECKER           = 1,
+  parameter bit               REQUEST_SVA_CHECKER   = SVA_CHECKER,
+  parameter bit               RESPONSE_SVA_CHECKER  = SVA_CHECKER
+)(
+  input var i_request_clk,
+  input var i_request_rst_n,
+  interface request_bus_if,
+  input var i_response_clk,
+  input var i_response_rst_n,
+  interface response_bus_if
+);
+  if (REQUEST_SVA_CHECKER) begin : u_request
+    pzcorebus_request_sva_checker #(
+      .BUS_CONFIG (REQUEST_BUS_CONFIG )
+    ) u_sva_checker (
+      .i_clk    (i_request_clk    ),
+      .i_rst_n  (i_request_rst_n  ),
+      .bus_if   (request_bus_if   )
+    );
+  end
+
+  if (RESPONSE_SVA_CHECKER) begin : g_response
+    pzcorebus_response_sva_checker #(
+      .BUS_CONFIG     (RESPONSE_BUS_CONFIG  ),
+      .SRESP_IF_ONLY  (0                    )
+    ) u_sva_checker (
+      .i_clk    (i_response_clk   ),
+      .i_rst_n  (i_response_rst_n ),
+      .bus_if   (response_bus_if  )
+    );
   end
 endmodule

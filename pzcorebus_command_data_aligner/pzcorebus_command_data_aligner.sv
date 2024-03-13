@@ -39,7 +39,7 @@ module pzcorebus_command_data_aligner
     .SLAVE_FIFO               (SLAVE_FIFO               ),
     .COMMAND_DEPTH            (COMMAND_DEPTH            ),
     .DATA_DEPTH               (DATA_DEPTH               ),
-    .SVA_CHECKER              (REQUEST_SVA_CHECKER      )
+    .SVA_CHECKER              (0                        )
   ) u_aligner_core (
     .i_clk        (i_clk      ),
     .i_rst_n      (i_rst_n    ),
@@ -54,10 +54,10 @@ module pzcorebus_command_data_aligner
   );
 
   pzcorebus_response_fifo #(
-    .BUS_CONFIG   (BUS_CONFIG           ),
-    .DEPTH        (RESPONSE_DEPTH       ),
-    .VALID        (SLAVE_FIFO           ),
-    .SVA_CHECKER  (RESPONSE_SVA_CHECKER )
+    .BUS_CONFIG   (BUS_CONFIG     ),
+    .DEPTH        (RESPONSE_DEPTH ),
+    .VALID        (SLAVE_FIFO     ),
+    .SVA_CHECKER  (0              )
   ) u_response_fifo (
     .i_clk          (i_clk      ),
     .i_rst_n        (i_rst_n    ),
@@ -73,4 +73,22 @@ module pzcorebus_command_data_aligner
     .slave_if   (bus_if[1]  ),
     .master_if  (master_if  )
   );
+
+//--------------------------------------------------------------
+//  SVA checker
+//--------------------------------------------------------------
+  if (PZCOREBUS_ENABLE_SVA_CHECKER) begin : g_sva
+    pzcorebus_sva_checker #(
+      .BUS_CONFIG           (BUS_CONFIG           ),
+      .REQUEST_SVA_CHECKER  (REQUEST_SVA_CHECKER  ),
+      .RESPONSE_SVA_CHECKER (RESPONSE_SVA_CHECKER )
+    ) u_sva_checker (
+      .i_request_clk    (i_clk      ),
+      .i_request_rst_n  (i_rst_n    ),
+      .request_bus_if   (slave_if   ),
+      .i_response_clk   (i_clk      ),
+      .i_response_rst_n (i_rst_n    ),
+      .response_bus_if  (master_if  )
+    );
+  end
 endmodule

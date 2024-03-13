@@ -193,22 +193,17 @@ module pzcorebus_corebus2axi_simple_bridge
 //  SVA checker
 //--------------------------------------------------------------
   if (PZCOREBUS_ENABLE_SVA_CHECKER) begin : g_sva
-    pzcorebus_request_sva_checker #(
-      .BUS_CONFIG   (COREBUS_CONFIG       ),
-      .SVA_CHECKER  (REQUEST_SVA_CHECKER  )
-    ) u_request_sva_checker (
-      .i_clk    (i_clk      ),
-      .i_rst_n  (i_rst_n    ),
-      .bus_if   (corebus_if )
-    );
-
-    pzcorebus_response_sva_checker #(
-      .BUS_CONFIG   (COREBUS_CONFIG       ),
-      .SVA_CHECKER  (RESPONSE_SVA_CHECKER )
-    ) u_response_sva_checker (
-      .i_clk    (i_clk      ),
-      .i_rst_n  (i_rst_n    ),
-      .bus_if   (corebus_if )
+    pzcorebus_sva_checker #(
+      .BUS_CONFIG           (COREBUS_CONFIG       ),
+      .REQUEST_SVA_CHECKER  (REQUEST_SVA_CHECKER  ),
+      .RESPONSE_SVA_CHECKER (RESPONSE_SVA_CHECKER )
+    ) u_sva_checker (
+      .i_request_clk    (i_clk      ),
+      .i_request_rst_n  (i_rst_n    ),
+      .request_bus_if   (corebus_if ),
+      .i_response_clk   (i_clk      ),
+      .i_response_rst_n (i_rst_n    ),
+      .response_bus_if  (corebus_if )
     );
   end
 endmodule
