@@ -29,11 +29,8 @@ module pzcorebus_membus2csrbus_adapter
   `include  "pzcorebus_macros.svh"
 
   initial begin
-    assume (CSRBUS_CONFIG.data_width == 32);
+    assume (CSRBUS_CONFIG.data_width == MEMBUS_CONFIG.unit_data_width);
     assume (VALID_ADDRESS_WIDTH inside {[1:CSRBUS_CONFIG.address_width]});
-    if (is_memory_h_profile(MEMBUS_CONFIG)) begin
-      assume (MEMBUS_CONFIG.unit_data_width == 32);
-    end
   end
 
   typedef logic [get_request_info_width(MEMBUS_CONFIG, 1)-1:0]  pzcorebus_request_info;
@@ -44,12 +41,14 @@ module pzcorebus_membus2csrbus_adapter
     logic                   wait_for_all_responses;
   } pzcorebus_sideband_info;
 
-  localparam  int ADDRESS_WIDTH   = CSRBUS_CONFIG.address_width;
-  localparam  int DATA_WIDTH      = MEMBUS_CONFIG.data_width;
-  localparam  int UNIT_WIDTH      = 32;
-  localparam  int UNIT_BYTE_SIZE  = UNIT_WIDTH / 8;
-  localparam  int UNIT_SIZE       = DATA_WIDTH / UNIT_WIDTH;
-  localparam  int UNITEN_WIDTH    = get_unit_enable_width(MEMBUS_CONFIG, 1);
+  localparam  int ADDRESS_WIDTH             = CSRBUS_CONFIG.address_width;
+  localparam  int DATA_WIDTH                = MEMBUS_CONFIG.data_width;
+  localparam  int UNIT_WIDTH                = MEMBUS_CONFIG.unit_data_width;
+  localparam  int UNIT_BYTE_SIZE            = UNIT_WIDTH / 8;
+  localparam  int UNIT_SIZE                 = DATA_WIDTH / UNIT_WIDTH;
+  localparam  int UNITEN_WIDTH              = get_unit_enable_width(MEMBUS_CONFIG, 1);
+  localparam  int MEMBUS_BYTE_ENABLE_WIDTH  = get_byte_enable_width(MEMBUS_CONFIG, 1);
+  localparam  int CSRBUS_BYTE_ENABLE_WIDTH  = get_byte_enable_width(CSRBUS_CONFIG, 1);
 
   function automatic int get_minfo_width();
     if (MEMBUS_CONFIG.request_info_width >= 1) begin
@@ -124,7 +123,6 @@ module pzcorebus_membus2csrbus_adapter
   pzcorebus_if #(BUS_CONFIG)          membus_if();
   pzcorebus_if #(BUS_CONFIG)          slicer_if();
   pzcorebus_if #(CSRBUS_CONFIG)       csrbus_if();
-  pzcorebus_command                   request_command;
   pzcorebus_sideband_info             sideband_info;
   logic                               info_fifo_empty;
   logic                               info_fifo_full;
@@ -141,10 +139,10 @@ module pzcorebus_membus2csrbus_adapter
   always_comb begin
     membus_slave_if.scmd_accept = membus_if.scmd_accept;
     membus_if.mcmd_valid        = membus_slave_if.mcmd_valid;
-
-    request_command       = membus_slave_if.get_command();
-    request_command.info  = get_minfo(membus_slave_if.minfo, i_force_np_write, i_wait_for_all_responses);
-    membus_if.put_command(request_command);
+    membus_if.put_command(set_sideband_info(
+      membus_slave_if.get_command(),
+      i_force_np_write, i_wait_for_all_responses
+    ));
   end
 
   always_comb begin
@@ -159,16 +157,19 @@ module pzcorebus_membus2csrbus_adapter
     membus_slave_if.put_response(membus_if.get_response());
   end
 
-  function automatic logic [`PZCOREBUS_MAX_REQUEST_INFO_WIDTH-1:0] get_minfo(
-    pzcorebus_request_info  minfo,
-    logic                   force_np_write,
-    logic                   wait_for_all_responses
+  function automatic pzcorebus_command set_sideband_info(
+    pzcorebus_command mcmd,
+    logic             force_np_write,
+    logic             wait_for_all_responses
   );
     pzcorebus_sideband_info info;
+    pzcorebus_command       command;
     info.force_np_write         = force_np_write;
     info.wait_for_all_responses = wait_for_all_responses;
-    info.minfo                  = minfo;
-    return (`PZCOREBUS_MAX_REQUEST_INFO_WIDTH)'(info);
+    info.minfo                  = pzcorebus_request_info'(mcmd.info);
+    command                     = mcmd;
+    command.info                = (`PZCOREBUS_MAX_REQUEST_INFO_WIDTH)'(info);
+    return command;
   endfunction
 
   pzcorebus_slicer #(
@@ -188,67 +189,70 @@ module pzcorebus_membus2csrbus_adapter
 //  Request paht
 //--------------------------------------------------------------
   if (1) begin : g_request_path
-    logic                               busy;
-    logic                               non_posted_ready;
-    logic                               write_data_inactive;
-    logic [1:0]                         read_valid;
-    logic [2:0]                         write_valid;
-    logic [1:0][LENGTH_COUNT_WIDTH-1:0] length_count;
-    logic                               length_count_last;
-    logic [1:0][DATA_COUNT_WIDTH-1:0]   data_count;
-    logic                               data_count_last;
-    logic [1:0][ADDRESS_WIDTH-1:0]      maddr;
-    logic [LENGTH_COUNT_WIDTH-1:0]      request_count;
-    logic [LENGTH_COUNT_WIDTH-1:0]      request_count_next;
-    logic [1:0]                         update;
+    logic                           busy;
+    logic                           write_data_inactive;
+    logic                           read_valid;
+    logic                           write_valid;
+    logic [LENGTH_COUNT_WIDTH-1:0]  length_count;
+    logic                           length_count_last;
+    logic [DATA_COUNT_WIDTH-1:0]    data_count;
+    logic                           data_count_last;
+    pzcorebus_command_type  [1:0]   mcmd;
+    logic [ADDRESS_WIDTH-1:0]       maddr;
+    logic [LENGTH_COUNT_WIDTH-1:0]  request_count;
+    logic [LENGTH_COUNT_WIDTH-1:0]  request_count_next;
+    logic [1:0]                     update;
 
     always_comb begin
-      sideband_info = pzcorebus_sideband_info'(slicer_if.minfo);
-    end
-
-    always_comb begin
-      if (!busy) begin
-        length_count[0] = slicer_if.get_length();
-        data_count[0]   = slicer_if.maddr[UNIT_OFFSET_LSB+:UNIT_OFFSET_WIDTH];
-        maddr[0]        = get_initial_maddr(slicer_if.maddr);
-      end
-      else begin
-        length_count[0] = length_count[1];
-        data_count[0]   = data_count[1];
-        maddr[0]        = maddr[1];
-      end
-
-      length_count_last   = length_count[0] == LENGTH_COUNT_WIDTH'(1);
-      data_count_last     = data_count[0]   == DATA_COUNT_WIDTH'(UNIT_SIZE - 1);
+      length_count_last   = length_count == LENGTH_COUNT_WIDTH'(1);
+      data_count_last     = data_count   == DATA_COUNT_WIDTH'(UNIT_SIZE - 1);
       request_count_next  = request_count + LENGTH_COUNT_WIDTH'(1);
       update[0]           = csrbus_if.command_ack();
-      update[1]           = (write_valid == '1) && write_data_inactive;
+      update[1]           = write_valid && write_data_inactive;
     end
 
     always_ff @(posedge i_clk, negedge i_rst_n) begin
       if (!i_rst_n) begin
         busy  <= '0;
       end
-      else if (update != '0) begin
-        if (length_count_last) begin
-          busy  <= '0;
-        end
-        else begin
-          busy  <= '1;
-        end
+      else if ((update != '0) && length_count_last) begin
+        busy  <= '0;
+      end
+      else if (slicer_if.command_ack()) begin
+        busy  <= '1;
+      end
+    end
+
+    always_comb begin
+      mcmd[0] = get_mcmd(slicer_if.mcmd, pzcorebus_sideband_info'(slicer_if.minfo));
+    end
+
+    always_ff @(posedge i_clk, negedge i_rst_n) begin
+      if (!i_rst_n) begin
+        sideband_info <= pzcorebus_sideband_info'(0);
+        mcmd[1]       <= pzcorebus_command_type'(0);
+      end
+      else if (slicer_if.command_ack()) begin
+        sideband_info <= pzcorebus_sideband_info'(slicer_if.minfo);
+        mcmd[1]       <= mcmd[0];
       end
     end
 
     always_ff @(posedge i_clk, negedge i_rst_n) begin
       if (!i_rst_n) begin
-        length_count[1] <= LENGTH_COUNT_WIDTH'(0);
-        data_count[1]   <= DATA_COUNT_WIDTH'(0);
-        maddr[1]        <= ADDRESS_WIDTH'(0);
+        length_count  <= LENGTH_COUNT_WIDTH'(0);
+        data_count    <= DATA_COUNT_WIDTH'(0);
+        maddr         <= ADDRESS_WIDTH'(0);
+      end
+      else if (slicer_if.command_ack()) begin
+        length_count  <= slicer_if.get_length();
+        data_count    <= slicer_if.maddr[UNIT_OFFSET_LSB+:UNIT_OFFSET_WIDTH];
+        maddr         <= get_initial_maddr(slicer_if.maddr);
       end
       else if (update != '0) begin
-        length_count[1] <= length_count[0] - LENGTH_COUNT_WIDTH'(1);
-        data_count[1]   <= data_count[0] + DATA_COUNT_WIDTH'(1);
-        maddr[1]        <= get_next_maddr(maddr[0]);
+        length_count  <= length_count - LENGTH_COUNT_WIDTH'(1);
+        data_count    <= data_count + DATA_COUNT_WIDTH'(1);
+        maddr         <= get_next_maddr(maddr);
       end
     end
 
@@ -265,37 +269,26 @@ module pzcorebus_membus2csrbus_adapter
     end
 
     always_comb begin
-      csrbus_if.mcmd  = get_mcmd(slicer_if.mcmd, sideband_info);
-      csrbus_if.mid   = '0;
-      csrbus_if.maddr = maddr[0];
-      csrbus_if.minfo = sideband_info.minfo;
-      csrbus_if.mdata = slicer_if.mdata[UNIT_WIDTH*data_count[0]+:UNIT_WIDTH];
-      if (CSRBUS_CONFIG.use_byte_enable) begin
-        csrbus_if.mdata_byteen  = slicer_if.mdata_byteen[UNIT_BYTE_SIZE*data_count[0]+:UNIT_BYTE_SIZE];
-      end
-      else begin
-        csrbus_if.mdata_byteen  = '0;
-      end
+      slicer_if.scmd_accept   = (!busy) && ((!mcmd[0][PZCOREBUS_NON_POSTED_BIT]) || (!info_fifo_full));
+      csrbus_if.mcmd          = mcmd[1];
+      csrbus_if.mid           = '0;
+      csrbus_if.maddr         = maddr;
+      csrbus_if.minfo         = sideband_info.minfo;
+      csrbus_if.mdata         = get_mdata(slicer_if.mdata, data_count);
+      csrbus_if.mdata_byteen  = get_mdata_byteen(slicer_if.mdata_byteen, data_count);
 
-      non_posted_ready    = busy || (!info_fifo_full);
-      write_data_inactive = slicer_if.mdata_byteen[UNIT_BYTE_SIZE*data_count[0]+:UNIT_BYTE_SIZE] == '0;
-      read_valid[0]       = slicer_if.command_valid(PZCOREBUS_READ);
-      read_valid[1]       = non_posted_ready;
-      write_valid[0]      = slicer_if.command_with_data_valid();
-      write_valid[1]      = slicer_if.mdata_valid;
-      write_valid[2]      = csrbus_if.is_posted_command() || non_posted_ready;
-      if (read_valid == '1) begin
-        slicer_if.scmd_accept   = csrbus_if.scmd_accept && length_count_last;
+      write_data_inactive = is_write_data_inactive(slicer_if.mdata_byteen, data_count);
+      read_valid          = busy && (mcmd[1] == PZCOREBUS_READ);
+      write_valid         = busy && mcmd[1][PZCOREBUS_WITH_DATA_BIT] && slicer_if.mdata_valid;
+      if (read_valid) begin
         slicer_if.sdata_accept  = '0;
         csrbus_if.mcmd_valid    = '1;
       end
-      else if (write_valid == '1) begin
-        slicer_if.scmd_accept   = (csrbus_if.scmd_accept || write_data_inactive) && length_count_last;
+      else if (write_valid) begin
         slicer_if.sdata_accept  = (csrbus_if.scmd_accept || write_data_inactive) && (data_count_last || length_count_last);
         csrbus_if.mcmd_valid    = !write_data_inactive;
       end
       else begin
-        slicer_if.scmd_accept   = '0;
         slicer_if.sdata_accept  = '0;
         csrbus_if.mcmd_valid    = '0;
       end
@@ -303,12 +296,13 @@ module pzcorebus_membus2csrbus_adapter
 
     always_comb begin
       csrbus_if.mlength     = '0;
+      csrbus_if.mparam      = '0;
       csrbus_if.mdata_valid = '0;
       csrbus_if.mdata_last  = '0;
     end
 
     always_comb begin
-      info_fifo_push    = (update != '0) && csrbus_if.is_non_posted_command() && (!busy);
+      info_fifo_push    = slicer_if.command_ack() && mcmd[0][PZCOREBUS_NON_POSTED_BIT];
       response_info[0]  = get_response_info(slicer_if.mcmd, slicer_if.mid, slicer_if.maddr, sideband_info);
     end
 
@@ -354,6 +348,45 @@ module pzcorebus_membus2csrbus_adapter
     else begin
       return mcmd;
     end
+  endfunction
+
+  function automatic logic [CSRBUS_CONFIG.data_width-1:0] get_mdata(
+    logic [MEMBUS_CONFIG.data_width-1:0]  mdata,
+    logic [DATA_COUNT_WIDTH-1:0]          data_count
+  );
+    logic [UNIT_SIZE-1:0][UNIT_WIDTH-1:0] data;
+    data  = mdata;
+    return data[data_count];
+  endfunction
+
+  function automatic logic [CSRBUS_BYTE_ENABLE_WIDTH-1:0] get_mdata_byteen(
+    logic [MEMBUS_BYTE_ENABLE_WIDTH-1:0]  mdata_byteen,
+    logic [DATA_COUNT_WIDTH-1:0]          data_count
+  );
+    logic [UNIT_SIZE-1:0][UNIT_BYTE_SIZE-1:0] byte_enable;
+
+    if (MEMBUS_CONFIG.use_byte_enable) begin
+      byte_enable = mdata_byteen;
+    end
+    else begin
+      byte_enable = '1;
+    end
+
+    if (CSRBUS_CONFIG.use_byte_enable) begin
+      return CSRBUS_BYTE_ENABLE_WIDTH'(byte_enable[data_count]);
+    end
+    else begin
+      return '0;
+    end
+  endfunction
+
+  function automatic logic is_write_data_inactive(
+    logic [MEMBUS_BYTE_ENABLE_WIDTH-1:0]  mdata_byteen,
+    logic [DATA_COUNT_WIDTH-1:0]          data_count
+  );
+    logic [UNIT_SIZE-1:0][UNIT_BYTE_SIZE-1:0] byte_enable;
+    byte_enable = mdata_byteen;
+    return MEMBUS_CONFIG.use_byte_enable && (byte_enable[data_count] == '0);
   endfunction
 
   function automatic pzcorebus_response_info get_response_info(
