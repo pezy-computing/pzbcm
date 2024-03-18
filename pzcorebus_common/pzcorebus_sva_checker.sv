@@ -252,7 +252,8 @@ module pzcorebus_response_sva_checker
       PZCOREBUS_WRITE_NON_POSTED:       return sresp.response == PZCOREBUS_RESPONSE;
       PZCOREBUS_FULL_WRITE_NON_POSTED:  return sresp.response == PZCOREBUS_RESPONSE;
       PZCOREBUS_BROADCAST_NON_POSTED:   return sresp.response == PZCOREBUS_RESPONSE;
-      PZCOREBUS_MESSAGE_NON_POSTED:     return sresp.response == PZCOREBUS_RESPONSE_WITH_DATA;
+      PZCOREBUS_ATOMIC_NON_POSTED:      return sresp.response == PZCOREBUS_RESPONSE_WITH_DATA;
+      PZCOREBUS_MESSAGE_NON_POSTED:     return sresp.response == PZCOREBUS_RESPONSE;
       default:                          return 0;
     endcase
   endfunction
@@ -261,9 +262,9 @@ module pzcorebus_response_sva_checker
     logic               clk,
     logic               rst_n,
     logic               sresp_start,
-    pzcorebus_command   mcmd,
     logic               sresp_ack,
-    pzcorebus_response  sresp
+    pzcorebus_response  sresp,
+    pzcorebus_command   mcmd
   );
     int unsigned  sresp_count;
     int unsigned  sresp_id;
@@ -298,7 +299,16 @@ module pzcorebus_response_sva_checker
       end
 
       last_count  = calc_last_count(mcmd);
-      return sresp.last[0] == (sresp_count == last_count);
+      if (sresp.last[0] == (sresp_count == last_count)) begin
+        return 1;
+      end
+      else begin
+        $display(
+          "sresp_last = %b sresp_count = %0d last_count = %0d",
+          sresp.last, sresp_count, last_count
+        );
+        return 0;
+      end
     end
   endfunction
 
@@ -353,12 +363,12 @@ module pzcorebus_response_sva_checker
     pzcorebus_command mcmd_queue[int][$];
 
     if (!SRESP_IF_ONLY) begin : g_sresp_state
-      always @(sresp_ack, sresp) begin
+      always @(posedge i_clk, sresp_ack, sresp) begin
         sresp_start   = sresp_ack && (!sresp_busy[sresp.id]);
         sresp_unknown = sresp_start && (!mcmd_queue.exists(sresp.id));
       end
 
-      always @(sresp_ack, sresp) begin
+      always @(posedge i_clk, sresp_ack, sresp) begin
         if (mcmd_queue.exists(sresp.id)) begin
           mcmd  = mcmd_queue[sresp.id][0];
         end
@@ -415,7 +425,7 @@ module pzcorebus_response_sva_checker
       ast_match_sresp_count_and_burst_length:
       assert property (p_match_sresp_count_and_burst_length(
         i_clk, i_rst_n,
-        sresp_start, mcmd, sresp_ack, sresp
+        sresp_start, sresp_ack, sresp, mcmd
       ));
     end
 
