@@ -113,3 +113,34 @@ module pzcorebus_request_id_assigner
     master_if.mdata_last    = slave_if.mdata_last;
   end
 endmodule
+
+module pzcorebus_response_id_remover
+  import  pzcorebus_pkg::*;
+#(
+  parameter pzcorebus_config  BUS_CONFIG      = '0,
+  parameter int               ID_WIDTH        = BUS_CONFIG.id_width,
+  parameter int               LOCAL_ID_WIDTH  = ID_WIDTH - 1,
+  parameter int               LOCAL_ID_LSB    = 0
+)(
+  interface.response_slave  slave_if,
+  interface.response_master master_if
+);
+  localparam  bit [ID_WIDTH-1:0]  LOCAL_ID_MASK = (1 << LOCAL_ID_WIDTH) - 1;
+
+  always_comb begin
+    master_if.mresp_accept  = slave_if.mresp_accept;
+    slave_if.sresp_valid    = master_if.sresp_valid;
+    slave_if.sresp          = master_if.sresp;
+    slave_if.sid            = get_sid(master_if.sid);
+    slave_if.serror         = master_if.serror;
+    slave_if.sdata          = master_if.sdata;
+    slave_if.sinfo          = master_if.sinfo;
+    slave_if.sresp_uniten   = master_if.sresp_uniten;
+    slave_if.sresp_last     = master_if.sresp_last;
+  end
+  function automatic logic [ID_WIDTH-1:0] get_sid(
+    logic [ID_WIDTH-1:0]  id
+  );
+    return ID_WIDTH'((id >> LOCAL_ID_LSB) & LOCAL_ID_MASK);
+  endfunction
+endmodule
