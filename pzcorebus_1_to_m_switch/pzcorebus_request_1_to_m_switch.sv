@@ -15,6 +15,7 @@ module pzcorebus_request_1_to_m_switch
   parameter int                 SELECT_WIDTH                = calc_select_width(SELECTOR_TYPE, MASTERS),
   parameter int                 SELECT_LSB                  = BUS_CONFIG.address_width - SELECT_WIDTH,
   parameter bit                 WAIT_FOR_DATA               = 0,
+  parameter bit                 WAIT_FOR_DATA_LAST          = 0,
   parameter bit                 ENABLE_BROADCAST            = 0,
   parameter bit                 ENABLE_BROADCAST_NON_POSTED = 0,
   parameter bit                 SLAVE_FIFO                  = 0,
@@ -41,14 +42,14 @@ module pzcorebus_request_1_to_m_switch
 //--------------------------------------------------------------
   if (is_memory_profile(BUS_CONFIG)) begin : g_slave_aligner
     pzcorebus_command_data_aligner_core #(
-      .BUS_CONFIG               (BUS_CONFIG     ),
-      .WAIT_FOR_DATA            (WAIT_FOR_DATA  ),
-      .RELAX_MODE               (1              ),
-      .THROUGH_NO_DATA_COMMAND  (1              ),
-      .SLAVE_FIFO               (SLAVE_FIFO     ),
-      .COMMAND_DEPTH            (COMMAND_DEPTH  ),
-      .DATA_DEPTH               (DATA_DEPTH     ),
-      .SVA_CHECKER              (SVA_CHECKER    )
+      .BUS_CONFIG               (BUS_CONFIG           ),
+      .WAIT_FOR_DATA            (WAIT_FOR_DATA        ),
+      .RELAX_MODE               (1                    ),
+      .THROUGH_NO_DATA_COMMAND  (!WAIT_FOR_DATA_LAST  ),
+      .SLAVE_FIFO               (SLAVE_FIFO           ),
+      .COMMAND_DEPTH            (COMMAND_DEPTH        ),
+      .DATA_DEPTH               (DATA_DEPTH           ),
+      .SVA_CHECKER              (SVA_CHECKER          )
     ) u_aligner (
       .i_clk        (i_clk      ),
       .i_rst_n      (i_rst_n    ),

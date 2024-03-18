@@ -16,6 +16,7 @@ module pzcorebus_1_to_m_switch
   parameter int                       SELECT_WIDTH                  = calc_select_width(SELECTOR_TYPE, MASTERS),
   parameter int                       SELECT_LSB                    = BUS_CONFIG.address_width - SELECT_WIDTH,
   parameter bit                       WAIT_FOR_DATA                 = 0,
+  parameter bit                       WAIT_FOR_DATA_LAST            = 0,
   parameter bit [1:0]                 ENABLE_ARBITER                = 2'b01,
   parameter int                       PRIORITY_WIDTH                = 0,
   parameter int                       WEIGHT_WIDTH                  = 0,
@@ -75,6 +76,7 @@ module pzcorebus_1_to_m_switch
     .ENABLE_BROADCAST             (ENABLE_BROADCAST             ),
     .ENABLE_BROADCAST_NON_POSTED  (ENABLE_BROADCAST_NON_POSTED  ),
     .WAIT_FOR_DATA                (WAIT_FOR_DATA                ),
+    .WAIT_FOR_DATA_LAST           (WAIT_FOR_DATA_LAST           ),
     .SLAVE_FIFO                   (SLAVE_FIFO[0]                ),
     .MASTER_FIFO                  (MASTER_FIFO[0]               ),
     .COMMAND_DEPTH                (COMMAND_DEPTH                ),
@@ -132,7 +134,7 @@ module pzcorebus_1_to_m_switch
       .N              (MASTERS              ),
       .SVA_CHECKER    (RESPONSE_SVA_CHECKER ),
       .SRESP_IF_ONLY  (0                    )
-    ) u_sva_checker (
+    ) u_response_sva_checker (
       .i_clk    (i_clk      ),
       .i_rst_n  (i_rst_n    ),
       .bus_if   (master_if  )
