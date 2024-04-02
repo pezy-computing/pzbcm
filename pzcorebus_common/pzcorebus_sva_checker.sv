@@ -232,32 +232,6 @@ module pzcorebus_response_sva_checker
     (sresp_start) |-> !sresp_unknown;
   endproperty
 
-  property p_sresp_type_should_correspond_to_mcmd_type(
-    logic               clk,
-    logic               rst_n,
-    pzcorebus_command   mcmd,
-    logic               sresp_ack,
-    pzcorebus_response  sresp
-  );
-    @(posedge clk) disable iff (!rst_n)
-    (sresp_ack) |-> check_response_type(mcmd, sresp);
-  endproperty
-
-  function automatic logic check_response_type(
-    pzcorebus_command   mcmd,
-    pzcorebus_response  sresp
-  );
-    case (mcmd.command)
-      PZCOREBUS_READ:                   return sresp.response == PZCOREBUS_RESPONSE_WITH_DATA;
-      PZCOREBUS_WRITE_NON_POSTED:       return sresp.response == PZCOREBUS_RESPONSE;
-      PZCOREBUS_FULL_WRITE_NON_POSTED:  return sresp.response == PZCOREBUS_RESPONSE;
-      PZCOREBUS_BROADCAST_NON_POSTED:   return sresp.response == PZCOREBUS_RESPONSE;
-      PZCOREBUS_ATOMIC_NON_POSTED:      return sresp.response == PZCOREBUS_RESPONSE_WITH_DATA;
-      PZCOREBUS_MESSAGE_NON_POSTED:     return sresp.response == PZCOREBUS_RESPONSE;
-      default:                          return 0;
-    endcase
-  endfunction
-
   property p_match_sresp_count_and_burst_length(
     logic               clk,
     logic               rst_n,
@@ -356,21 +330,27 @@ module pzcorebus_response_sva_checker
       bus_if.mresp_accept, bus_if.sresp_valid, sresp
     ));
 
-    bit               sresp_busy[int];
+    bit               sresp_busy[pzcorebus_response_type][int];
     bit               sresp_start;
     bit               sresp_unknown;
     pzcorebus_command mcmd;
-    pzcorebus_command mcmd_queue[int][$];
+    pzcorebus_command mcmd_queue[pzcorebus_response_type][int][$];
 
     if (!SRESP_IF_ONLY) begin : g_sresp_state
       always @(posedge i_clk, sresp_ack, sresp) begin
-        sresp_start   = sresp_ack && (!sresp_busy[sresp.id]);
-        sresp_unknown = sresp_start && (!mcmd_queue.exists(sresp.id));
+        if (!$isunknown(sresp)) begin
+          sresp_start   = sresp_ack && (!sresp_busy[sresp.response][sresp.id]);
+          sresp_unknown = sresp_start && (!mcmd_queue[sresp.response].exists(sresp.id));
+        end
+        else begin
+          sresp_start   = '0;
+          sresp_unknown = '0;
+        end
       end
 
       always @(posedge i_clk, sresp_ack, sresp) begin
-        if (mcmd_queue.exists(sresp.id)) begin
-          mcmd  = mcmd_queue[sresp.id][0];
+        if ((!$isunknown(sresp)) && mcmd_queue[sresp.response].exists(sresp.id)) begin
+          mcmd  = mcmd_queue[sresp.response][sresp.id][0];
         end
       end
 
@@ -379,10 +359,10 @@ module pzcorebus_response_sva_checker
           sresp_busy.delete();
         end
         else if (sresp_last_ack) begin
-          sresp_busy.delete(sresp.id);
+          sresp_busy[sresp.response].delete(sresp.id);
         end
         else if (sresp_start) begin
-          sresp_busy[sresp.id]  = 1;
+          sresp_busy[sresp.response][sresp.id]  = 1;
         end
       end
 
@@ -392,14 +372,24 @@ module pzcorebus_response_sva_checker
         end
         else begin
           if (bus_if.command_non_posted_ack()) begin
-            mcmd_queue[bus_if.mid].push_back(bus_if.get_command());
+            case (bus_if.mcmd)
+              PZCOREBUS_READ,
+              PZCOREBUS_ATOMIC_NON_POSTED: begin
+                mcmd_queue[PZCOREBUS_RESPONSE_WITH_DATA][bus_if.mid]
+                  .push_back(bus_if.get_command());
+              end
+              default: begin
+                mcmd_queue[PZCOREBUS_RESPONSE][bus_if.mid]
+                  .push_back(bus_if.get_command());
+              end
+            endcase
           end
           if (sresp_last_ack) begin
             if (mcmd_queue[sresp.id].size() == 1) begin
-              mcmd_queue.delete(sresp.id);
+              mcmd_queue[sresp.response].delete(sresp.id);
             end
             else begin
-              void'(mcmd_queue[sresp.id].pop_front());
+              void'(mcmd_queue[sresp.response][sresp.id].pop_front());
             end
           end
         end
@@ -410,14 +400,6 @@ module pzcorebus_response_sva_checker
       ast_sresp_should_have_corresponting_mcmd:
       assert property (p_sresp_should_have_corresponting_mcmd(
         i_clk, i_rst_n, sresp_start, sresp_unknown
-      ));
-    end
-
-    if (!SRESP_IF_ONLY) begin : g_sresp_type
-      ast_sresp_type_should_correspond_to_mcmd_type:
-      assert property (p_sresp_type_should_correspond_to_mcmd_type(
-        i_clk, i_rst_n,
-        mcmd, sresp_ack, sresp
       ));
     end
 
