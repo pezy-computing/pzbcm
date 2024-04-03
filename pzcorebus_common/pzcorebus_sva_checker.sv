@@ -385,7 +385,7 @@ module pzcorebus_response_sva_checker
             endcase
           end
           if (sresp_last_ack) begin
-            if (mcmd_queue[sresp.id].size() == 1) begin
+            if (mcmd_queue[sresp.response][sresp.id].size() == 1) begin
               mcmd_queue[sresp.response].delete(sresp.id);
             end
             else begin
