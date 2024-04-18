@@ -29,7 +29,7 @@ module pzcorebus_response_xbar_switch
   input   var                                         i_rst_n,
   input   var pzbcm_arbiter_config                    i_arbiter_config,
   output  var [MASTERS-1:0][BUS_CONFIG.id_width-1:0]  o_sid,
-  output  var [MASTERS-1:0][SELECT_WIDTH-1:0]         i_select,
+  input   var [MASTERS-1:0][SELECT_WIDTH-1:0]         i_select,
   interface.response_slave                            slave_if[SLAVES],
   interface.response_master                           master_if[MASTERS]
 );

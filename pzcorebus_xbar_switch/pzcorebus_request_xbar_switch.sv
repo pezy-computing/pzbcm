@@ -60,12 +60,12 @@ module pzcorebus_request_xbar_switch
       .DATA_DEPTH         (DATA_DEPTH         ),
       .SVA_CHECKER        (SVA_CHECKER        )
     ) u_switch (
-      .i_clk      (i_clk                                ),
-      .i_rst_n    (i_rst_n                              ),
-      .o_mcmd     (o_mcmd[i]                            ),
-      .i_select   (i_select[i]                          ),
-      .slave_if   (slave_if[i]                          ),
-      .master_if  (master_if[MASTERS*i:MASTERS*(i+1)-1] )
+      .i_clk      (i_clk                                     ),
+      .i_rst_n    (i_rst_n                                   ),
+      .o_mcmd     (o_mcmd[i]                                 ),
+      .i_select   (i_select[i]                               ),
+      .slave_if   (slave_if[i]                               ),
+      .master_if  (slave_switch_if[MASTERS*i:MASTERS*(i+1)-1])
     );
   end
 
@@ -99,7 +99,7 @@ module pzcorebus_request_xbar_switch
       .i_arbiter_config   (i_arbiter_config                         ),
       .o_response_select  (),
       .i_response_ack     ('0                                       ),
-      .slave_if           (master_switch_if[SLAVES:SLAVES*(i+1)-1]  ),
+      .slave_if           (master_switch_if[SLAVES*i:SLAVES*(i+1)-1]),
       .master_if          (master_if[i]                             )
     );
   end
