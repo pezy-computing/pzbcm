@@ -25,13 +25,13 @@ module pzcorebus_response_xbar_switch
   parameter int                       RESPONSE_DEPTH  = 2,
   parameter bit                       SVA_CHECKER     = 1
 )(
-  input   var                                         i_clk,
-  input   var                                         i_rst_n,
-  input   var pzbcm_arbiter_config                    i_arbiter_config,
-  output  var [MASTERS-1:0][BUS_CONFIG.id_width-1:0]  o_sid,
-  input   var [MASTERS-1:0][SELECT_WIDTH-1:0]         i_select,
-  interface.response_slave                            slave_if[SLAVES],
-  interface.response_master                           master_if[MASTERS]
+  input   var                                   i_clk,
+  input   var                                   i_rst_n,
+  input   var pzbcm_arbiter_config              i_arbiter_config,
+  output  var pzcorebus_response  [MASTERS-1:0] o_sresp,
+  input   var [MASTERS-1:0][SELECT_WIDTH-1:0]   i_select,
+  interface.response_slave                      slave_if[SLAVES],
+  interface.response_master                     master_if[MASTERS]
 );
   localparam  int TOTAL = SLAVES * MASTERS;
 
@@ -82,7 +82,7 @@ module pzcorebus_response_xbar_switch
     ) u_switch (
       .i_clk          (i_clk                                      ),
       .i_rst_n        (i_rst_n                                    ),
-      .o_sid          (o_sid[i]                                   ),
+      .o_sresp        (o_sresp[i]                                 ),
       .i_select       (i_select[i]                                ),
       .o_response_ack (),
       .slave_if       (master_switch_if[SLAVES*i:SLAVES*(i+1)-1]  ),

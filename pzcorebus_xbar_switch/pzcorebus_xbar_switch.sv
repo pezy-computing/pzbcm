@@ -49,7 +49,7 @@ module pzcorebus_xbar_switch
   output  var pzcorebus_command [SLAVES-1:0]            o_mcmd,
   input   var [SLAVES-1:0][REQUEST_SELECT_WIDTH-1:0]    i_request_select,
   input   var pzbcm_arbiter_config                      i_request_arbiter_config,
-  output  var [MASTERS-1:0][BUS_CONFIG.id_width-1:0]    o_sid,
+  output  var pzcorebus_response  [MASTERS-1:0]         o_sresp,
   input   var [MASTERS-1:0][RESPONSE_SELECT_WIDTH-1:0]  i_response_select,
   input   var pzbcm_arbiter_config                      i_response_arbiter_config,
   pzcorebus_if.slave                                    slave_if[SLAVES],
@@ -116,7 +116,7 @@ module pzcorebus_xbar_switch
     .i_clk            (i_clk                      ),
     .i_rst_n          (i_rst_n                    ),
     .i_arbiter_config (i_response_arbiter_config  ),
-    .o_sid            (o_sid                      ),
+    .o_sresp          (o_sresp                    ),
     .i_select         (i_response_select          ),
     .slave_if         (slave_bus_if               ),
     .master_if        (master_bus_if              )

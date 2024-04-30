@@ -31,13 +31,13 @@ module pzcorebus_m_to_1_switch
   parameter bit                       REQUEST_SVA_CHECKER   = SVA_CHECKER,
   parameter bit                       RESPONSE_SVA_CHECKER  = SVA_CHECKER
 )(
-  input   var                           i_clk,
-  input   var                           i_rst_n,
-  input   var pzbcm_arbiter_config      i_arbiter_config,
-  output  var [BUS_CONFIG.id_width-1:0] o_sid,
-  input   var [SELECT_WIDTH-1:0]        i_select,
-  pzcorebus_if.slave                    slave_if[SLAVES],
-  pzcorebus_if.master                   master_if
+  input   var                       i_clk,
+  input   var                       i_rst_n,
+  input   var pzbcm_arbiter_config  i_arbiter_config,
+  output  var pzcorebus_response    o_sresp,
+  input   var [SELECT_WIDTH-1:0]    i_select,
+  pzcorebus_if.slave                slave_if[SLAVES],
+  pzcorebus_if.master               master_if
 );
   localparam  pzbcm_selector_type RESPONSE_SELECT_TYPE  = (WAIT_FOR_RESPONSE) ? PZBCM_SELECTOR_ONEHOT : SELECTOR_TYPE;
   localparam  int                 RESPONSE_SELECT_WIDTH = (WAIT_FOR_RESPONSE) ? SLAVES                : SELECT_WIDTH;
@@ -91,7 +91,7 @@ module pzcorebus_m_to_1_switch
   ) u_response_switch (
     .i_clk          (i_clk              ),
     .i_rst_n        (i_rst_n            ),
-    .o_sid          (o_sid              ),
+    .o_sresp        (o_sresp            ),
     .i_select       (select             ),
     .o_response_ack (response_ack       ),
     .slave_if       (bus_if[0:SLAVES-1] ),

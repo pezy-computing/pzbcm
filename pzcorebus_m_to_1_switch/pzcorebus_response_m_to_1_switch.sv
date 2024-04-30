@@ -19,13 +19,13 @@ module pzcorebus_response_m_to_1_switch
   parameter int                 RESPONSE_DEPTH  = 2,
   parameter bit                 SVA_CHECKER     = 1
 )(
-  input   var                           i_clk,
-  input   var                           i_rst_n,
-  output  var [BUS_CONFIG.id_width-1:0] o_sid,
-  input   var [SELECT_WIDTH-1:0]        i_select,
-  output  var                           o_response_ack,
-  interface.response_slave              slave_if[SLAVES],
-  interface.response_master             master_if
+  input   var                     i_clk,
+  input   var                     i_rst_n,
+  output  var pzcorebus_response  o_sresp,
+  input   var [SELECT_WIDTH-1:0]  i_select,
+  output  var                     o_response_ack,
+  interface.response_slave        slave_if[SLAVES],
+  interface.response_master       master_if
 );
   pzcorebus_response_if #(BUS_CONFIG) fifo_if[SLAVES]();
   pzcorebus_response_if #(BUS_CONFIG) switch_if();
@@ -62,7 +62,7 @@ module pzcorebus_response_m_to_1_switch
 
   if (EXTERNAL_DECODE) begin : g_response_select
     always_comb begin
-      o_sid = switch_if.sid;
+      o_sresp = switch_if.get_response();
     end
 
     always_comb begin
@@ -71,7 +71,7 @@ module pzcorebus_response_m_to_1_switch
   end
   else begin : g_response_select
     always_comb begin
-      o_sid = '0;
+      o_sresp = pzcorebus_response'(0);
     end
 
     always_comb begin

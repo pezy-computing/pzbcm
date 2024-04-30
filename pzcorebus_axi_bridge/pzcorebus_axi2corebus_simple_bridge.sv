@@ -254,7 +254,7 @@ module pzcorebus_axi2corebus_simple_bridge
     .i_clk            (i_clk                            ),
     .i_rst_n          (i_rst_n                          ),
     .i_arbiter_config (PZBCM_ARBITER_CONFIG_ROUND_ROBIN ),
-    .o_sid            (),
+    .o_sresp          (),
     .i_select         (1'd0                             ),
     .slave_if         (switch_if                        ),
     .master_if        (corebus_if                       )
