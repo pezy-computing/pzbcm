@@ -215,7 +215,7 @@ package pzcorebus_pkg;
     return info.lsb + info.width;
   endfunction
 
-  function pzcorebus_config create_corebus_config(
+  function automatic pzcorebus_config create_corebus_config(
     pzcorebus_profile profile,
     shortint          id_width,
     shortint          address_width,
