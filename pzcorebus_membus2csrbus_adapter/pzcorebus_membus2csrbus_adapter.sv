@@ -104,21 +104,22 @@ module pzcorebus_membus2csrbus_adapter
     logic                               ignore_response;
   } pzcorebus_response_info;
 
-  localparam  pzcorebus_config  BUS_CONFIG  = '{
-    profile:              MEMBUS_CONFIG.profile,
-    id_width:             MEMBUS_CONFIG.id_width,
-    address_width:        MEMBUS_CONFIG.address_width,
-    data_width:           MEMBUS_CONFIG.data_width,
-    use_byte_enable:      MEMBUS_CONFIG.use_byte_enable,
-    max_length:           MEMBUS_CONFIG.max_length,
-    atomic_command_width: 0,
-    message_code_width:   0,
-    request_info_width:   MINFO_WIDTH,
-    response_info_width:  MEMBUS_CONFIG.response_info_width,
-    unit_data_width:      MEMBUS_CONFIG.unit_data_width,
-    max_data_width:       MEMBUS_CONFIG.max_data_width,
-    response_boundary:    MEMBUS_CONFIG.response_boundary
-  };
+  localparam  pzcorebus_config  BUS_CONFIG  =
+    create_corebus_config(
+      .profile              (MEMBUS_CONFIG.profile             ),
+      .id_width             (MEMBUS_CONFIG.id_width            ),
+      .address_width        (MEMBUS_CONFIG.address_width       ),
+      .data_width           (MEMBUS_CONFIG.data_width          ),
+      .use_byte_enable      (MEMBUS_CONFIG.use_byte_enable     ),
+      .max_length           (MEMBUS_CONFIG.max_length          ),
+      .atomic_command_width (0                                 ),
+      .message_code_width   (0                                 ),
+      .request_info_width   (MINFO_WIDTH                       ),
+      .response_info_width  (MEMBUS_CONFIG.response_info_width ),
+      .unit_data_width      (MEMBUS_CONFIG.unit_data_width     ),
+      .max_data_width       (MEMBUS_CONFIG.max_data_width      ),
+      .response_boundary    (MEMBUS_CONFIG.response_boundary   )
+    );
 
   pzcorebus_if #(BUS_CONFIG)          membus_if();
   pzcorebus_if #(BUS_CONFIG)          slicer_if();

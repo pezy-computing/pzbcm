@@ -5,8 +5,7 @@
 //
 //========================================
 interface pzcorebus_request_if
-  import  pzcorebus_pkg::*,
-          pzcorebus_if_pkg::*;
+  import  pzcorebus_pkg::*;
 #(
   parameter pzcorebus_config  BUS_CONFIG  = '0
 );

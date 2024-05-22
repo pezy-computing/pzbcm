@@ -28,7 +28,7 @@ module pzcorebus_dummy_slave
   typedef logic [get_response_offset_width(BUS_CONFIG, 1)-1:0]  pzcorebus_response_offset;
   typedef logic [get_response_size_width(BUS_CONFIG)-1:0]       pzcorebus_response_size;
 
-  localparam  int DATA_SIZE     = get_data_size(BUS_CONFIG);
+  localparam  int DATA_SIZE     = BUS_CONFIG.data_size;
   localparam  int OFFSET_LSB    = get_response_offset_lsb(BUS_CONFIG);
   localparam  int OFFSET_WIDTH  = (DATA_SIZE > 1) ? $clog2(DATA_SIZE) : 1;
 

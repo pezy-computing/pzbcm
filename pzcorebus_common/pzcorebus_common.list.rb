@@ -9,7 +9,6 @@ include_directory '.'
 [
   'pzcorebus_macros.svh',
   'pzcorebus_pkg.sv',
-  'pzcorebus_if_pkg.sv',
   'pzcorebus_if_internal_macros.svh',
   'pzcorebus_if.sv',
   'pzcorebus_request_if.sv',
