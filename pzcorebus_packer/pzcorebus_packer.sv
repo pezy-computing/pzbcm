@@ -10,7 +10,7 @@ module pzcorebus_packer
 #(
   parameter pzcorebus_config  BUS_CONFIG            = '0,
   parameter int               COMMAND_DEPTH         = 1,
-  parameter int               DATA_DEPTH            = get_max_burst_length(BUS_CONFIG),
+  parameter int               DATA_DEPTH            = BUS_CONFIG.max_burst_length,
   parameter bit [1:0]         SLAVE_SLICER          = '0,
   parameter bit [1:0]         MASTER_SLICER         = '0,
   parameter pzbcm_sram_params SRAM_PARAMS           = '0,
