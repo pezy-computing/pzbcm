@@ -27,7 +27,7 @@ module pzcorebus_rmw_converter
   end
 
   localparam  int COUNTER_WIDTH   = $clog2(MAX_NP_REQUESTS + 1);
-  localparam  int DATA_FIFO_DEPTH = get_max_burst_length(BUS_CONFIG);
+  localparam  int DATA_FIFO_DEPTH = BUS_CONFIG.max_burst_length;
 
   typedef enum logic [2:0] {
     PASS_THROUGH,
