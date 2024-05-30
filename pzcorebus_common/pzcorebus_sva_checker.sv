@@ -338,7 +338,7 @@ module pzcorebus_response_sva_checker
 
     if (!SRESP_IF_ONLY) begin : g_sresp_state
       always @(posedge i_clk, sresp_ack, sresp) begin
-        if (!$isunknown(sresp)) begin
+        if (!($isunknown(sresp.response) || $isunknown(sresp.id))) begin
           sresp_start   = sresp_ack && (!sresp_busy[sresp.response][sresp.id]);
           sresp_unknown = sresp_start && (!mcmd_queue[sresp.response].exists(sresp.id));
         end
@@ -349,8 +349,10 @@ module pzcorebus_response_sva_checker
       end
 
       always @(posedge i_clk, sresp_ack, sresp) begin
-        if ((!$isunknown(sresp)) && mcmd_queue[sresp.response].exists(sresp.id)) begin
-          mcmd  = mcmd_queue[sresp.response][sresp.id][0];
+        if (!($isunknown(sresp.response) || $isunknown(sresp.id))) begin
+          if (mcmd_queue[sresp.response].exists(sresp.id)) begin
+            mcmd  = mcmd_queue[sresp.response][sresp.id][0];
+          end
         end
       end
 
