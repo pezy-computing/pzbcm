@@ -465,7 +465,7 @@ package pzcorebus_pkg;
     shortint  width;
 
     if (is_memory_h_profile(bus_config)) begin
-      width = $clog2(bus_config.max_burst_length / bus_config.unit_data_width);
+      width = $clog2(bus_config.max_data_width / bus_config.unit_data_width);
     end
     else begin
       width = 0;
