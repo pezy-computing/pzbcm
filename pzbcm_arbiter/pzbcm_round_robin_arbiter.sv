@@ -60,8 +60,8 @@ module pzbcm_round_robin_arbiter
   ) u_max_finder();
 
   localparam  int WEIGHT_LSB    = 1;
-  localparam  int PRIORITY_LSB  = WEIGHT_LSB   + WEIGHT_WIDTH;
-  localparam  int REQUEST_LSB   = PRIORITY_LSB + PRIORITY_WIDTH;
+  localparam  int PRIORITY_LSB  = WEIGHT_LSB   + ((WEIGHT_WIDTH   > 0) ? 1              : 0);
+  localparam  int REQUEST_LSB   = PRIORITY_LSB + ((PRIORITY_WIDTH > 0) ? PRIORITY_WIDTH : 0);
 
   function automatic pzbcm_compare_data [REQUESTS-1:0] get_compare_data(
     logic [INDEX_WIDTH-1:0]                       current_grant,
