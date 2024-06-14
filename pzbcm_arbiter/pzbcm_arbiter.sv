@@ -96,7 +96,7 @@ module pzbcm_arbiter
         .o_grant    (grant_raw[1]       )
       );
     end
-    else begin
+    else begin : g_matrix
       always_comb begin
         grant_raw[1]  = GRANT_WIDTH'(0);
       end
