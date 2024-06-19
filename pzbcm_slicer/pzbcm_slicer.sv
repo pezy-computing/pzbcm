@@ -28,7 +28,7 @@ module pzbcm_slicer #(
   logic [STAGES+1-1:0]        ready;
   logic [STAGES+1-1:0][W-1:0] data;
 
-  if (ASCENDING_ORDER) begin : g_ascending_order
+  if (ASCENDING_ORDER) begin : g
     always_comb begin
       o_ready   = ready[0];
       valid[0]  = i_valid;
@@ -40,26 +40,8 @@ module pzbcm_slicer #(
       o_valid       = valid[STAGES];
       o_data        = TYPE'(data[STAGES]);
     end
-
-    for (genvar i = 0;i < STAGES;++i) begin : g
-      pzbcm_slicer_unit #(
-        .WIDTH          (W              ),
-        .FULL_BANDWIDTH (FULL_BANDWIDTH ),
-        .DISABLE_MBFF   (DISABLE_MBFF   ),
-        .USE_RESET      (USE_RESET      )
-      ) u_slicer_unit (
-        .i_clk    (i_clk      ),
-        .i_rst_n  (i_rst_n    ),
-        .i_valid  (valid[i+0] ),
-        .o_ready  (ready[i+0] ),
-        .i_data   (data[i+0]  ),
-        .o_valid  (valid[i+1] ),
-        .i_ready  (ready[i+1] ),
-        .o_data   (data[i+1]  )
-      );
-    end
   end
-  else begin : g_descending_order
+  else begin : g
     always_comb begin
       o_ready       = ready[STAGES];
       valid[STAGES] = i_valid;
@@ -71,22 +53,42 @@ module pzbcm_slicer #(
       o_valid   = valid[0];
       o_data    = TYPE'(data[0]);
     end
+  end
 
-    for (genvar i = STAGES;i > 0;--i) begin : g
-      pzbcm_slicer_unit #(
-        .WIDTH          (W              ),
-        .FULL_BANDWIDTH (FULL_BANDWIDTH ),
-        .DISABLE_MBFF   (DISABLE_MBFF   ),
-        .USE_RESET      (USE_RESET      )
+  localparam  int IN_OFFSET   = (ASCENDING_ORDER) ? 0 : 1;
+  localparam  int OUT_OFFSET  = (ASCENDING_ORDER) ? 1 : 0;
+
+  for (genvar i = 0;i < STAGES;++i) begin : g_slicer
+    if (FULL_BANDWIDTH) begin : g
+      pzbcm_slicer_unit_full_bandwidth #(
+        .WIDTH        (W            ),
+        .DISABLE_MBFF (DISABLE_MBFF ),
+        .USE_RESET    (USE_RESET    )
+      ) u_slicer (
+        .i_clk    (i_clk                ),
+        .i_rst_n  (i_rst_n              ),
+        .i_valid  (valid[i+IN_OFFSET]   ),
+        .o_ready  (ready[i+IN_OFFSET]   ),
+        .i_data   (data[i+IN_OFFSET]    ),
+        .o_valid  (valid[i+OUT_OFFSET]  ),
+        .i_ready  (ready[i+OUT_OFFSET]  ),
+        .o_data   (data[i+OUT_OFFSET]   )
+      );
+    end
+    else begin : g
+      pzbcm_slicer_unit_half_bandwidth #(
+        .WIDTH        (WIDTH        ),
+        .DISABLE_MBFF (DISABLE_MBFF ),
+        .USE_RESET    (USE_RESET    )
       ) u_slicer_unit (
-        .i_clk    (i_clk      ),
-        .i_rst_n  (i_rst_n    ),
-        .i_valid  (valid[i-0] ),
-        .o_ready  (ready[i-0] ),
-        .i_data   (data[i-0]  ),
-        .o_valid  (valid[i-1] ),
-        .i_ready  (ready[i-1] ),
-        .o_data   (data[i-1]  )
+        .i_clk    (i_clk                ),
+        .i_rst_n  (i_rst_n              ),
+        .i_valid  (valid[i+IN_OFFSET]   ),
+        .o_ready  (ready[i+IN_OFFSET]   ),
+        .i_data   (data[i+IN_OFFSET]    ),
+        .o_valid  (valid[i+OUT_OFFSET]  ),
+        .i_ready  (ready[i+OUT_OFFSET]  ),
+        .o_data   (data[i+OUT_OFFSET]   )
       );
     end
   end
