@@ -62,6 +62,20 @@
 `endif
 
 package pzcorebus_pkg;
+  localparam  int PZCOREBUS_MAX_ID_WIDTH              = `PZCOREBUS_MAX_ID_WIDTH;
+  localparam  int PZCOREBUS_MAX_ADDRESS_WIDTH         = `PZCOREBUS_MAX_ADDRESS_WIDTH;
+  localparam  int PZCOREBUS_MAX_DATA_WIDTH            = `PZCOREBUS_MAX_DATA_WIDTH;
+  localparam  int PZCOREBUS_MIN_DATA_WIDTH            = `PZCOREBUS_MIN_DATA_WIDTH;
+  localparam  int PZCOREBUS_MAX_BYTE_ENABLE_WIDTH     = `PZCOREBUS_MAX_BYTE_ENABLE_WIDTH;
+  localparam  int PZCOREBUS_MAX_UNIT_ENABLE_WIDTH     = `PZCOREBUS_MAX_UNIT_ENABLE_WIDTH;
+  localparam  int PZCOREBUS_MAX_LENGTH                = `PZCOREBUS_MAX_LENGTH;
+  localparam  int PZCOREBUS_MAX_LENGTH_WIDTH          = `PZCOREBUS_MAX_LENGTH_WIDTH;
+  localparam  int PZCOREBUS_MAX_ATOMIC_COMMAND_WIDTH  = `PZCOREBUS_MAX_ATOMIC_COMMAND_WIDTH;
+  localparam  int PZCOREBUS_MAX_MESSAGE_CODE_WIDTH    = `PZCOREBUS_MAX_MESSAGE_CODE_WIDTH;
+  localparam  int PZCOREBUS_MAX_REQUEST_PARAM_WIDTH   = `PZCOREBUS_MAX_REQUEST_PARAM_WIDTH;
+  localparam  int PZCOREBUS_MAX_REQUEST_INFO_WIDTH    = `PZCOREBUS_MAX_REQUEST_INFO_WIDTH;
+  localparam  int PZCOREBUS_MAX_RESPONSE_INFO_WIDTH   = `PZCOREBUS_MAX_RESPONSE_INFO_WIDTH;
+
 //--------------------------------------------------------------
 //  Typedef
 //--------------------------------------------------------------
@@ -109,20 +123,20 @@ package pzcorebus_pkg;
   } pzcorebus_response_type;
 
   typedef struct packed {
-    pzcorebus_command_type                          command;
-    logic [`PZCOREBUS_MAX_ID_WIDTH-1:0]             id;
-    logic [`PZCOREBUS_MAX_ADDRESS_WIDTH-1:0]        address;
-    logic [`PZCOREBUS_MAX_LENGTH_WIDTH-1:0]         length;
-    logic [`PZCOREBUS_MAX_REQUEST_PARAM_WIDTH-1:0]  param;
-    logic [`PZCOREBUS_MAX_REQUEST_INFO_WIDTH-1:0]   info;
-    logic [`PZCOREBUS_MAX_DATA_WIDTH-1:0]           data;
-    logic [`PZCOREBUS_MAX_BYTE_ENABLE_WIDTH-1:0]    byte_enable;
+    pzcorebus_command_type                        command;
+    logic [PZCOREBUS_MAX_ID_WIDTH-1:0]            id;
+    logic [PZCOREBUS_MAX_ADDRESS_WIDTH-1:0]       address;
+    logic [PZCOREBUS_MAX_LENGTH_WIDTH-1:0]        length;
+    logic [PZCOREBUS_MAX_REQUEST_PARAM_WIDTH-1:0] param;
+    logic [PZCOREBUS_MAX_REQUEST_INFO_WIDTH-1:0]  info;
+    logic [PZCOREBUS_MAX_DATA_WIDTH-1:0]          data;
+    logic [PZCOREBUS_MAX_BYTE_ENABLE_WIDTH-1:0]   byte_enable;
   } pzcorebus_command;
 
   typedef struct packed {
-    logic [`PZCOREBUS_MAX_DATA_WIDTH-1:0]         data;
-    logic [`PZCOREBUS_MAX_BYTE_ENABLE_WIDTH-1:0]  byte_enable;
-    logic                                         last;
+    logic [PZCOREBUS_MAX_DATA_WIDTH-1:0]        data;
+    logic [PZCOREBUS_MAX_BYTE_ENABLE_WIDTH-1:0] byte_enable;
+    logic                                       last;
   } pzcorebus_write_data;
 
   typedef struct packed {
@@ -131,13 +145,13 @@ package pzcorebus_pkg;
   } pzcorebus_request;
 
   typedef struct packed {
-    pzcorebus_response_type                         response;
-    logic [`PZCOREBUS_MAX_ID_WIDTH-1:0]             id;
-    logic                                           error;
-    logic [`PZCOREBUS_MAX_DATA_WIDTH-1:0]           data;
-    logic [`PZCOREBUS_MAX_RESPONSE_INFO_WIDTH-1:0]  info;
-    logic [`PZCOREBUS_MAX_UNIT_ENABLE_WIDTH-1:0]    unit_enable;
-    logic [1:0]                                     last;
+    pzcorebus_response_type                       response;
+    logic [PZCOREBUS_MAX_ID_WIDTH-1:0]            id;
+    logic                                         error;
+    logic [PZCOREBUS_MAX_DATA_WIDTH-1:0]          data;
+    logic [PZCOREBUS_MAX_RESPONSE_INFO_WIDTH-1:0] info;
+    logic [PZCOREBUS_MAX_UNIT_ENABLE_WIDTH-1:0]   unit_enable;
+    logic [1:0]                                   last;
   } pzcorebus_response;
 
 //--------------------------------------------------------------
