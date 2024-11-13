@@ -5,13 +5,13 @@
 //
 //========================================
 module pzbcm_ram #(
-  parameter int       WORD_SIZE       = 1,
-  parameter int       ADDRESS_WIDTH   = (WORD_SIZE >= 2) ? $clog2(WORD_SIZE) : 1,
-  parameter int       DATA_WIDTH      = 8,
-  parameter type      DATA_TYPE       = logic [DATA_WIDTH-1:0],
-  parameter bit       BUFFER_OUT      = 0,
-  parameter bit       USE_RESET       = 0,
-  parameter DATA_TYPE INITIAL_VALUE   = DATA_TYPE'(0)
+  parameter int                         WORD_SIZE     = 1,
+  parameter int                         ADDRESS_WIDTH = (WORD_SIZE >= 2) ? $clog2(WORD_SIZE) : 1,
+  parameter int                         DATA_WIDTH    = 8,
+  parameter type                        DATA_TYPE     = logic [DATA_WIDTH-1:0],
+  parameter bit                         BUFFER_OUT    = 0,
+  parameter bit                         USE_RESET     = 0,
+  parameter bit [$bits(DATA_TYPE)-1:0]  INITIAL_VALUE = '0
 )(
   input   var                     i_clk,
   input   var                     i_rst_n,
