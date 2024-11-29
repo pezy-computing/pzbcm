@@ -15,6 +15,7 @@ module pzbcm_fifo #(
   parameter   bit   RESET_DATA_FF     = 1,
   parameter   bit   CLEAR_DATA        = 0,
   parameter   bit   PUSH_ON_CLEAR     = 0,
+  parameter   bit   ENABLE_GRAY       = 0,
   parameter   int   MATCH_COUNT_WIDTH = 0,
   localparam  type  COUNTER           = logic [$clog2(DEPTH+1)-1:0]
 )(
@@ -62,6 +63,7 @@ module pzbcm_fifo #(
     .PUSH_ON_CLEAR      (PUSH_ON_CLEAR      ),
     .RAM_WORDS          (RAM_WORDS          ),
     .RAM_POINTER_WIDTH  (POINTER_WIDTH      ),
+    .ENABLE_GRAY        (ENABLE_GRAY        ),
     .MATCH_COUNT_WIDTH  (MATCH_COUNT_WIDTH  )
   ) u_controller (
     .i_clk            (i_clk          ),

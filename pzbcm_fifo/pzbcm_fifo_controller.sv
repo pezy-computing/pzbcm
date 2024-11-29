@@ -13,6 +13,7 @@ module pzbcm_fifo_controller #(
   parameter   bit   PUSH_ON_CLEAR     = 0,
   parameter   int   RAM_WORDS         = (DATA_FF_OUT) ? DEPTH - 1 : DEPTH,
   parameter   int   RAM_POINTER_WIDTH = (RAM_WORDS >= 2) ? $clog2(RAM_WORDS) : 1,
+  parameter   bit   ENABLE_GRAY       = 0,
   parameter   int   MATCH_COUNT_WIDTH = 0,
   parameter   int   POINTER_WIDTH     = (DEPTH >= 2) ? $clog2(DEPTH) : 1,
   localparam  type  RAM_POINTER       = logic [RAM_POINTER_WIDTH-1:0],
@@ -186,7 +187,63 @@ module pzbcm_fifo_controller #(
     end
   end
 
-  if (RAM_WORDS >= 2) begin : g_multi_word_ram
+  if (RAM_WORDS == 1) begin : g_ram_poiner
+    always_comb begin
+      ram_write_pointer = RAM_POINTER'(0);
+      ram_read_pointer  = RAM_POINTER'(0);
+    end
+  end
+  else if (ENABLE_GRAY && (RAM_WORDS > 2) && ($countones(RAM_WORDS) == 1)) begin : g_ram_poiner
+    logic       set_wp;
+    RAM_POINTER set_wp_value;
+    logic       set_rp;
+    RAM_POINTER set_rp_value;
+
+    always_comb begin
+      set_wp  = clear[1] || ram_empty_next;
+      if (clear[1] && DATA_FF_OUT) begin
+        set_wp_value  = RAM_POINTER'(0);
+      end
+      else if (clear[1]) begin
+        set_wp_value  = RAM_POINTER'(1);
+      end
+      else begin
+        set_wp_value  = ram_read_pointer;
+      end
+    end
+
+    pzbcm_gray_counter #(
+      .MAX_COUNT  (RAM_WORDS - 1      ),
+      .WIDTH      (RAM_POINTER_WIDTH  )
+    ) u_write_pointer (
+      .i_clk        (i_clk              ),
+      .i_rst_n      (i_rst_n            ),
+      .i_clear      (clear[0]           ),
+      .i_set        (set_wp             ),
+      .i_set_value  (set_wp_value       ),
+      .i_up         (write_to_ram       ),
+      .o_gray_count (ram_write_pointer  )
+    );
+
+    always_comb begin
+      set_rp        = ram_empty_next;
+      set_rp_value  = ram_read_pointer;
+    end
+
+    pzbcm_gray_counter #(
+      .MAX_COUNT  (RAM_WORDS - 1      ),
+      .WIDTH      (RAM_POINTER_WIDTH  )
+    ) u_read_pointer (
+      .i_clk        (i_clk            ),
+      .i_rst_n      (i_rst_n          ),
+      .i_clear      (i_clear          ),
+      .i_set        (set_rp           ),
+      .i_set_value  (set_rp_value     ),
+      .i_up         (read_from_ram    ),
+      .o_gray_count (ram_read_pointer )
+    );
+  end
+  else begin : g_ram_poiner
     always_ff @(posedge i_clk, negedge i_rst_n) begin
       if (!i_rst_n) begin
         ram_write_pointer <= RAM_POINTER'(0);
@@ -228,12 +285,6 @@ module pzbcm_fifo_controller #(
           ram_read_pointer  <= ram_read_pointer + RAM_POINTER'(1);
         end
       end
-    end
-  end
-  else begin : g_single_word_ram
-    always_comb begin
-      ram_write_pointer = RAM_POINTER'(0);
-      ram_read_pointer  = RAM_POINTER'(0);
     end
   end
 
