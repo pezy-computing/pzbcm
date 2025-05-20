@@ -1,0 +1,37 @@
+//========================================
+//
+// Copyright (c) 2025 PEZY Computing, K.K.
+//                    All Rights Reserved.
+//
+//========================================
+pub module pzhsbus_slicer #(
+  param T              : type = logic,
+  param STAGES         : u32  = 1    ,
+  param ASCENDING_ORDER: bool = true ,
+  param FULL_BANDWIDTH : bool = true ,
+  param DISABLE_MBFF   : bool = false,
+  param USE_RESET      : bool = true ,
+)(
+  i_clk    : input   clock             ,
+  i_rst    : input   reset             ,
+  slave_if : modport pzhsbus_if::slave ,
+  master_if: modport pzhsbus_if::master,
+) {
+  inst u_slicer: $std::slicer #(
+    TYPE           : T              ,
+    STAGES         : STAGES         ,
+    ASCENDING_ORDER: ASCENDING_ORDER,
+    FULL_BANDWIDTH : FULL_BANDWIDTH ,
+    DISABLE_MBFF   : DISABLE_MBFF   ,
+    USE_RESET      : USE_RESET      ,
+  )(
+    i_clk  : i_clk            ,
+    i_rst  : i_rst            ,
+    o_ready: slave_if.ready   ,
+    i_valid: slave_if.valid   ,
+    i_data : slave_if.payload ,
+    i_ready: master_if.ready  ,
+    o_valid: master_if.valid  ,
+    o_data : master_if.payload,
+  );
+}

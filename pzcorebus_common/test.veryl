@@ -1,0 +1,15 @@
+module Test {
+  type T = logic<8>;
+
+  inst a_if: pzhsbus_if#(T);
+  inst b_if: pzhsbus_if#(T);
+
+  inst u: pzhsbus_slicer #(
+    T: T
+  )(
+    i_clk        : '0  ,
+    i_rst        : '0  ,
+    slave_if     : a_if,
+    master_if    : b_if,
+  );
+}

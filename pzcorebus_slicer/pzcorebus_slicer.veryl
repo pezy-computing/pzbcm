@@ -1,0 +1,126 @@
+//========================================
+//
+// Copyright (c) 2025 PEZY Computing, K.K.
+//                    All Rights Reserved.
+//
+//========================================
+pub module pzcorebus_slicer::<PKG: pzcorebus_proto_pkg>#(
+  param STAGES         : u32  = 1    ,
+  param ASCENDING_ORDER: bool = true ,
+  param FULL_BANDWIDTH : bool = true ,
+  param DISABLE_MBFF   : bool = false,
+  param USE_RESET      : bool = true ,
+  param MCMD_VALID     : bool = true ,
+  param MDATA_VALID    : bool = true ,
+  param SRESP_VALID    : bool = true ,
+)(
+  i_clk    : input   clock                      ,
+  i_rst    : input   reset                      ,
+  slave_if : modport pzcorebus_if::<PKG>::slave ,
+  master_if: modport pzcorebus_if::<PKG>::master,
+){
+  const BUS_CONFIG: pzcorebus_common_pkg::pzcorebus_config = PKG::BUS_CONFIG;
+
+  var mcmd : PKG::pzcorebus_packed_mcmd<2>;
+  var mdata: PKG::pzcorebus_packed_mdata<2>;
+  var sresp: PKG::pzcorebus_packed_sresp<2>;
+
+  always_comb {
+    mcmd[0]  = slave_if.get_packed_mcmd();
+    mdata[0] = slave_if.get_packed_mdata();
+  }
+
+  always_comb {
+    master_if.put_packed_mcmd(mcmd[1]);
+    master_if.put_packed_mdata(mdata[1]);
+  }
+
+  always_comb {
+    sresp[1] = master_if.get_packed_sresp();
+  }
+
+  always_comb {
+    slave_if.put_packed_sresp(sresp[0]);
+  }
+
+  if MCMD_VALID && STAGES >= 1 :g_mcmd {
+    inst u_slicer: $std::slicer #(
+      TYPE           : PKG::pzcorebus_packed_mcmd,
+      STAGES         : STAGES                    ,
+      ASCENDING_ORDER: ASCENDING_ORDER           ,
+      FULL_BANDWIDTH : FULL_BANDWIDTH            ,
+      DISABLE_MBFF   : DISABLE_MBFF              ,
+      USE_RESET      : USE_RESET                 ,
+    )(
+      i_clk  : i_clk                ,
+      i_rst  : i_rst                ,
+      o_ready: slave_if.scmd_accept ,
+      i_valid: slave_if.mcmd_valid  ,
+      i_data : mcmd[0]              ,
+      i_ready: master_if.scmd_accept,
+      o_valid: master_if.mcmd_valid ,
+      o_data : mcmd[1]              ,
+    );
+  } else {
+    always_comb {
+      slave_if.scmd_accept = master_if.scmd_accept;
+      master_if.mcmd_valid = slave_if.mcmd_valid;
+      mcmd[1]              = mcmd[0];
+    }
+  }
+
+  if MDATA_VALID
+    && STAGES >= 1
+    && BUS_CONFIG.profile != PKG::pzcorebus_profile::CSR :g_mdata
+  {
+    inst u_slicer: $std::slicer #(
+      TYPE           : PKG::pzcorebus_packed_mdata,
+      STAGES         : STAGES                     ,
+      ASCENDING_ORDER: ASCENDING_ORDER            ,
+      FULL_BANDWIDTH : FULL_BANDWIDTH             ,
+      DISABLE_MBFF   : DISABLE_MBFF               ,
+      USE_RESET      : USE_RESET                  ,
+    )(
+      i_clk  : i_clk                 ,
+      i_rst  : i_rst                 ,
+      o_ready: slave_if.sdata_accept ,
+      i_valid: slave_if.mdata_valid  ,
+      i_data : mdata[0]              ,
+      i_ready: master_if.sdata_accept,
+      o_valid: master_if.mdata_valid ,
+      o_data : mdata[1]              ,
+    );
+  } else {
+    always_comb {
+      slave_if.sdata_accept = master_if.sdata_accept;
+      master_if.mdata_valid = slave_if.mdata_valid;
+      mdata[1]              = mdata[0];
+    }
+  }
+
+  if SRESP_VALID && STAGES >= 1 :g_sresp {
+    inst u_slicer: $std::slicer #(
+      TYPE           : PKG::pzcorebus_packed_sresp,
+      STAGES         : STAGES                     ,
+      ASCENDING_ORDER: ASCENDING_ORDER            ,
+      FULL_BANDWIDTH : FULL_BANDWIDTH             ,
+      DISABLE_MBFF   : DISABLE_MBFF               ,
+      USE_RESET      : USE_RESET                  ,
+    )(
+      i_clk  : i_clk                 ,
+      i_rst  : i_rst                 ,
+      o_ready: master_if.mresp_accept,
+      i_valid: master_if.sresp_valid ,
+      i_data : sresp[1]              ,
+      i_ready: slave_if.mresp_accept ,
+      o_valid: slave_if.sresp_valid  ,
+      o_data : sresp[0]              ,
+    );
+  } else {
+    always_comb {
+      master_if.mresp_accept = slave_if.mresp_accept;
+      slave_if.sresp_valid   = master_if.sresp_valid;
+      sresp[0]               = sresp[1];
+    }
+  }
+}

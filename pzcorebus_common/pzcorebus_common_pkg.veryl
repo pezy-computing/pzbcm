@@ -1,0 +1,284 @@
+//========================================
+//
+// Copyright (c) 2025 PEZY Computing, K.K.
+//                    All Rights Reserved.
+//
+//========================================
+package pzcorebus_common_pkg {
+//--------------------------------------------------------------
+//  Typedef
+//--------------------------------------------------------------
+  enum pzcorebus_profile {
+    CSR     ,
+    MEMORY_L,
+    MEMORY_H,
+  }
+
+  enum pzcorebus_mcmd_kind: logic<3> {
+    READ        = 3'b001,
+    WRITE       = 3'b100,
+    FULL_WRITE  = 3'b101,
+    BROADCAST   = 3'b110,
+    ATOMIC      = 3'b111,
+    MESSAGE     = 3'b010,
+  }
+
+  // [3]   1: non-posted request
+  //       0: posted request
+  // [2:0] see pzcorebus_mcmd_kind
+  enum pzcorebus_mcmd: logic<4> {
+    NULL                  = 4'b0_000,
+    READ                  = {1'b1, pzcorebus_mcmd_kind::READ      },
+    WRITE                 = {1'b0, pzcorebus_mcmd_kind::WRITE     },
+    WRITE_NON_POSTED      = {1'b1, pzcorebus_mcmd_kind::WRITE     },
+    FULL_WRITE            = {1'b0, pzcorebus_mcmd_kind::FULL_WRITE},
+    FULL_WRITE_NON_POSTED = {1'b1, pzcorebus_mcmd_kind::FULL_WRITE},
+    BROADCAST             = {1'b0, pzcorebus_mcmd_kind::BROADCAST },
+    ATOMIC                = {1'b0, pzcorebus_mcmd_kind::ATOMIC    },
+    ATOMIC_NON_POSTED     = {1'b1, pzcorebus_mcmd_kind::ATOMIC    },
+    MESSAGE               = {1'b0, pzcorebus_mcmd_kind::MESSAGE   },
+    MESSAGE_NON_POSTED    = {1'b1, pzcorebus_mcmd_kind::MESSAGE   },
+  }
+
+  const MCMD_KIND_WIDTH: u32 = $bits(pzcorebus_mcmd_kind);
+  const MCMD_KIND_BIT  : u32 = 0;
+  const WITH_DATA_BIT  : u32 = MCMD_KIND_BIT + MCMD_KIND_WIDTH - 1;
+  const NON_POSTED_BIT : u32 = WITH_DATA_BIT + 1;
+
+  enum pzcorebus_sresp: logic {
+    RESPONSE            = 1'b0,
+    RESPONSE_WITH_DATA  = 1'b1,
+  }
+
+//--------------------------------------------------------------
+//  Configuration
+//--------------------------------------------------------------
+  #[ifdef(SYNTHESIS)]
+  const ENABLE_DEBUG: bool = true;
+  #[else]
+  const ENABLE_DEBUG: bool = false;
+
+  #[ifndef(PZCOREBUS_DISABLE_SVA_CHECKER)]
+  const ENABLE_SVA_CHECKER: bool = ENABLE_DEBUG;
+  #[else]
+  const ENABLE_SVA_CHECKER: bool = false;
+
+  struct pzcorebus_signal_info {
+    pos  : u32,
+    width: u32,
+  }
+
+  struct pzcorebus_mcmd_info {
+    mcmd               : pzcorebus_signal_info,
+    mid                : pzcorebus_signal_info,
+    maddr              : pzcorebus_signal_info,
+    mlength            : pzcorebus_signal_info,
+    mparam             : pzcorebus_signal_info,
+    minfo              : pzcorebus_signal_info,
+    mdata              : pzcorebus_signal_info,
+    mdata_byteen       : pzcorebus_signal_info,
+    mlength_width      : u32                  ,
+    mburst_length_width: u32                  ,
+    packed_width       : u32                  ,
+  }
+
+  struct pzcorebus_mdata_info {
+    mdata       : pzcorebus_signal_info,
+    mdata_byteen: pzcorebus_signal_info,
+    mdata_last  : pzcorebus_signal_info,
+    packed_width: u32                  ,
+  }
+
+  struct pzcorebus_sresp_info {
+    sresp       : pzcorebus_signal_info,
+    sid         : pzcorebus_signal_info,
+    serror      : pzcorebus_signal_info,
+    sdata       : pzcorebus_signal_info,
+    sinfo       : pzcorebus_signal_info,
+    sresp_uniten: pzcorebus_signal_info,
+    sresp_last  : pzcorebus_signal_info,
+    packed_width: u16                  ,
+  }
+
+  struct pzcorebus_config {
+    profile             : pzcorebus_profile   ,
+    id_width            : u16                 ,
+    address_width       : u16                 ,
+    data_width          : u16                 ,
+    unit_data_width     : u16                 ,
+    max_data_width      : u16                 ,
+    data_size           : u16                 ,
+    use_byte_enable     : bool                ,
+    byte_enable_width   : u16                 ,
+    max_length          : u16                 ,
+    max_burst_length    : u16                 ,
+    atomic_command_width: u16                 ,
+    message_code_width  : u16                 ,
+    rqeuest_info_width  : u16                 ,
+    response_info_width : u16                 ,
+    response_boundary   : u16                 ,
+    mcmd_info           : pzcorebus_mcmd_info ,
+    mdata_info          : pzcorebus_mdata_info,
+    sresp_info          : pzcorebus_sresp_info,
+  }
+
+  function get_signal_width(
+    width        : input u32 ,
+    typedef_width: input bool,
+  ) -> u32 {
+    if typedef_width && width == 0 {
+      return 1;
+    } else {
+      return width;
+    }
+  }
+
+  function calc_next_pos(
+    info: input pzcorebus_signal_info,
+  ) -> u32 {
+    return info.pos + info.width;
+  }
+
+  function create_config(
+    profile             : input pzcorebus_profile,
+    id_width            : input u32              ,
+    address_width       : input u32              ,
+    data_width          : input u32              ,
+    use_byte_enable     : input bool             ,
+    max_length          : input u32              ,
+    atomic_command_width: input u32              ,
+    message_code_width  : input u32              ,
+    rqeuest_info_width  : input u32              ,
+    response_info_width : input u32              ,
+    unit_data_width     : input u32              ,
+    max_data_width      : input u32              ,
+    response_boundary   : input u32              ,
+  ) -> pzcorebus_config {
+    var bus_config : pzcorebus_config    ;
+    var mcmd_info  : pzcorebus_mcmd_info ;
+    var mdata_info : pzcorebus_mdata_info;
+    var sresp_info : pzcorebus_sresp_info;
+    var is_csr     : bool                ;
+    var is_memory_h: bool                ;
+
+    is_csr      = profile == pzcorebus_profile::CSR;
+    is_memory_h = profile == pzcorebus_profile::MEMORY_H;
+
+    bus_config.profile              = profile;
+    bus_config.id_width             = id_width;
+    bus_config.address_width        = address_width;
+    bus_config.data_width           = data_width;
+    bus_config.unit_data_width      = if is_csr ? data_width : unit_data_width;
+    bus_config.max_data_width       = if is_memory_h ? max_data_width : data_width;
+    bus_config.data_size            = bus_config.data_width / bus_config.unit_data_width;
+    bus_config.use_byte_enable      = use_byte_enable;
+    bus_config.byte_enable_width    = if use_byte_enable ? data_width / 8 : 0;
+    bus_config.max_length           = if is_csr ? 1 : max_length;
+    bus_config.max_burst_length     = if is_csr ? 1 : max_length / bus_config.data_size;
+    bus_config.atomic_command_width = if is_csr ? 0 : atomic_command_width;
+    bus_config.message_code_width   = if is_csr ? 0 : message_code_width;
+    bus_config.rqeuest_info_width   = rqeuest_info_width;
+    bus_config.response_info_width  = response_info_width;
+    bus_config.response_boundary    = response_boundary;
+
+    //  mcmd info
+    mcmd_info.mcmd.pos      = 0;
+    mcmd_info.mcmd.width    = $bits(pzcorebus_mcmd);
+    mcmd_info.mid.pos       = calc_next_pos(mcmd_info.mcmd);
+    mcmd_info.mid.width     = bus_config.id_width;
+    mcmd_info.maddr.pos     = calc_next_pos(mcmd_info.mid);
+    mcmd_info.maddr.width   = bus_config.address_width;
+    mcmd_info.mlength.pos   = calc_next_pos(mcmd_info.maddr);
+    if is_csr {
+      mcmd_info.mlength.width = 0;
+    } else if bus_config.max_length >= 2 {
+      mcmd_info.mlength.width = $clog2(bus_config.max_length);
+    } else {
+      mcmd_info.mlength.width = 1;
+    }
+    mcmd_info.mparam.pos = calc_next_pos(mcmd_info.mlength);
+    if bus_config.atomic_command_width >= bus_config.message_code_width {
+      mcmd_info.mparam.width = bus_config.atomic_command_width;
+    } else {
+      mcmd_info.mparam.width = bus_config.message_code_width;
+    }
+    mcmd_info.minfo.pos   = calc_next_pos(mcmd_info.mparam);
+    mcmd_info.minfo.width = rqeuest_info_width;
+    if is_csr {
+      mcmd_info.mdata.pos           = calc_next_pos(mcmd_info.minfo);
+      mcmd_info.mdata.width         = data_width;
+      mcmd_info.mdata_byteen.pos    = calc_next_pos(mcmd_info.mdata);
+      mcmd_info.mdata_byteen.width  = bus_config.byte_enable_width;
+      mcmd_info.mlength_width       = $clog2(bus_config.max_length + 1);
+      mcmd_info.mburst_length_width = $clog2(bus_config.max_burst_length + 1);
+    } else {
+      mcmd_info.mdata.pos           = calc_next_pos(mcmd_info.minfo);
+      mcmd_info.mdata.width         = 0;
+      mcmd_info.mdata_byteen.pos    = calc_next_pos(mcmd_info.mdata);
+      mcmd_info.mdata_byteen.width  = 0;
+      mcmd_info.mlength_width       = 0;
+      mcmd_info.mburst_length_width = 0;
+    }
+    mcmd_info.packed_width = mcmd_info.mcmd.width
+                           + mcmd_info.mid.width
+                           + mcmd_info.maddr.width
+                           + mcmd_info.mlength.width
+                           + mcmd_info.mparam.width
+                           + mcmd_info.minfo.width
+                           + mcmd_info.mdata.width
+                           + mcmd_info.mdata_byteen.width;
+
+    //  mdata info
+    if !is_csr {
+      mdata_info.mdata_last.pos     = 0;
+      mdata_info.mdata_last.width   = 1;
+      mdata_info.mdata.pos          = calc_next_pos(mdata_info.mdata_last);
+      mdata_info.mdata.width        = data_width;
+      mdata_info.mdata_byteen.pos   = calc_next_pos(mdata_info.mdata);
+      mdata_info.mdata_byteen.width = bus_config.byte_enable_width;
+      mdata_info.packed_width       = mdata_info.mdata_last.width
+                                    + mdata_info.mdata.width
+                                    + mdata_info.mdata_byteen.width;
+    } else {
+      mdata_info = 0 as pzcorebus_mdata_info;
+    }
+
+    // sresp info
+    sresp_info.sresp.pos        = 0;
+    sresp_info.sresp.width      = $clog2(pzcorebus_sresp);
+    sresp_info.sid.pos          = calc_next_pos(sresp_info.sresp);
+    sresp_info.sid.width        = id_width;
+    sresp_info.serror.pos       = calc_next_pos(sresp_info.sid);
+    sresp_info.serror.width     = 1;
+    sresp_info.sdata.pos        = calc_next_pos(sresp_info.serror);
+    sresp_info.sdata.width      = data_width;
+    sresp_info.sinfo.pos        = calc_next_pos(sresp_info.sdata);
+    sresp_info.sinfo.width      = response_info_width;
+    sresp_info.sresp_uniten.pos = calc_next_pos(sresp_info.sinfo);
+    if is_memory_h {
+      sresp_info.sresp_uniten.width = bus_config.max_data_width / bus_config.unit_data_width;
+    } else {
+      sresp_info.sresp_uniten.width = 0;
+    }
+    sresp_info.sresp_last.pos = calc_next_pos(sresp_info.sresp_uniten);
+    if is_csr {
+      sresp_info.sresp_last.width = 0;
+    } else if is_memory_h {
+      sresp_info.sresp_last.width = 2;
+    } else {
+      sresp_info.sresp_last.width = 1;
+    }
+    sresp_info.packed_width = sresp_info.sresp.width
+                            + sresp_info.sid.width
+                            + sresp_info.serror.width
+                            + sresp_info.sdata.width
+                            + sresp_info.sinfo.width
+                            + sresp_info.sresp_uniten.width
+                            + sresp_info.sresp_last.width;
+
+    bus_config.mcmd_info  = mcmd_info;
+    bus_config.mdata_info = mdata_info;
+    bus_config.sresp_info = sresp_info;
+    return bus_config;
+  }
+}

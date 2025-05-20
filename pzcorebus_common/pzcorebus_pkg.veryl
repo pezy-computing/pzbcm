@@ -1,0 +1,108 @@
+//========================================
+//
+// Copyright (c) 2025 PEZY Computing, K.K.
+//                    All Rights Reserved.
+//
+//========================================
+pub proto package pzcorebus_proto_pkg {
+  type pzcorebus_config ;
+  type pzcorebus_profile;
+
+  const BUS_CONFIG: pzcorebus_config;
+
+  type pzcorebus_id     ;
+  type pzcorebus_data   ;
+
+  type pzcorebus_mcmd_kind   ;
+  type pzcorebus_mcmd        ;
+  type pzcorebus_mid         ;
+  type pzcorebus_maddr       ;
+  type pzcorebus_mlength     ;
+  type pzcorebus_mparam      ;
+  type pzcorebus_minfo       ;
+  type pzcorebus_mdata       ;
+  type pzcorebus_mdata_byteen;
+  type pzcorebus_mdata_last  ;
+  type pzcorebus_sresp       ;
+  type pzcorebus_sid         ;
+  type pzcorebus_serror      ;
+  type pzcorebus_sdata       ;
+  type pzcorebus_sinfo       ;
+  type pzcorebus_sresp_uniten;
+  type pzcorebus_sresp_last  ;
+
+  type pzcorebus_packed_mcmd ;
+  type pzcorebus_packed_mdata;
+  type pzcorebus_packed_sresp;
+
+  type pzcorebus_mcmd_packer ;
+  type pzcorebus_mdata_packer;
+  type pzcorebus_sresp_packer;
+}
+
+pub package pzcorebus_pkg::<
+  PROFILE             : pzcorebus_common_pkg::pzcorebus_profile,
+  ID_WIDTH            : u16                                    ,
+  ADDRESS_WIDTH       : u16                                    ,
+  DATA_WIDTH          : u16                                    ,
+  UNIT_DATA_WIDTH     : u16                                    ,
+  USE_BYTE_ENABLE     : bool                                   ,
+  ATOMIC_COMMAND_WIDTH: u16                                    ,
+  MESSAGE_CODE_WIDTH  : u16                                    ,
+  RQEUEST_INFO_WIDTH  : u16                                    ,
+  RESPONSE_INFO_WIDTH : u16                                    ,
+  MAX_DATA_WIDTH      : u16                                    ,
+  RESPONSE_BOUNDARY   : u16                                    ,
+> for pzcorebus_proto_pkg {
+  import pzcorebus_common_pkg::create_config;
+  import pzcorebus_common_pkg::get_signal_width;
+
+  type pzcorebus_config  = pzcorebus_common_pkg::pzcorebus_config ;
+  type pzcorebus_profile = pzcorebus_common_pkg::pzcorebus_profile;
+
+  const BUS_CONFIG: pzcorebus_config =
+    create_config(
+      profile             : PROFILE             ,
+      id_width            : ID_WIDTH            ,
+      address_width       : ADDRESS_WIDTH       ,
+      data_width          : DATA_WIDTH          ,
+      use_byte_enable     : UNIT_DATA_WIDTH     ,
+      max_length          : USE_BYTE_ENABLE     ,
+      atomic_command_width: ATOMIC_COMMAND_WIDTH,
+      message_code_width  : MESSAGE_CODE_WIDTH  ,
+      rqeuest_info_width  : RQEUEST_INFO_WIDTH  ,
+      response_info_width : RESPONSE_INFO_WIDTH ,
+      unit_data_width     : UNIT_DATA_WIDTH     ,
+      max_data_width      : MAX_DATA_WIDTH      ,
+      response_boundary   : RESPONSE_BOUNDARY   ,
+    );
+
+  type pzcorebus_id   = logic<get_signal_width(BUS_CONFIG.id_width, true)>;
+  type pzcorebus_data = logic<get_signal_width(BUS_CONFIG.data_width, true)>;
+
+  type pzcorebus_mcmd_kind    = pzcorebus_common_pkg::pzcorebus_mcmd_kind;
+  type pzcorebus_mcmd         = pzcorebus_common_pkg::pzcorebus_mcmd;
+  type pzcorebus_mid          = pzcorebus_id;
+  type pzcorebus_maddr        = logic<get_signal_width(BUS_CONFIG.mcmd_info.maddr.width, true)>;
+  type pzcorebus_mlength      = logic<get_signal_width(BUS_CONFIG.mcmd_info.mlength.width, true)>;
+  type pzcorebus_mparam       = logic<get_signal_width(BUS_CONFIG.mcmd_info.mparam.width, true)>;
+  type pzcorebus_minfo        = logic<get_signal_width(BUS_CONFIG.mcmd_info.minfo.width, true)>;
+  type pzcorebus_mdata        = pzcorebus_data;
+  type pzcorebus_mdata_byteen = logic<get_signal_width(BUS_CONFIG.byte_enable_width, true)>;
+  type pzcorebus_mdata_last   = logic;
+  type pzcorebus_sresp        = pzcorebus_common_pkg::pzcorebus_sresp;
+  type pzcorebus_sid          = pzcorebus_id;
+  type pzcorebus_serror       = logic;
+  type pzcorebus_sdata        = pzcorebus_data;
+  type pzcorebus_sinfo        = logic<get_signal_width(BUS_CONFIG.sresp_info.sinfo.width, true)>;
+  type pzcorebus_sresp_uniten = logic<get_signal_width(BUS_CONFIG.sresp_info.sresp_uniten.width, true)>;
+  type pzcorebus_sresp_last   = logic<get_signal_width(BUS_CONFIG.sresp_info.sresp_last.width, true)>;
+
+  type pzcorebus_packed_mcmd  = logic<BUS_CONFIG.mcmd_info.packed_width>;
+  type pzcorebus_packed_mdata = logic<BUS_CONFIG.mdata_info.packed_width>;
+  type pzcorebus_packed_sresp = logic<BUS_CONFIG.sresp_info.packed_width>;
+
+  type pzcorebus_mcmd_packer  = logic<BUS_CONFIG.mcmd_info.packed_width  + 1>;
+  type pzcorebus_mdata_packer = logic<BUS_CONFIG.mdata_info.packed_width + 1>;
+  type pzcorebus_sresp_packer = logic<BUS_CONFIG.sresp_info.packed_width + 1>;
+}

@@ -1,0 +1,63 @@
+//========================================
+//
+// Copyright (c) 2025 PEZY Computing, K.K.
+//                    All Rights Reserved.
+//
+//========================================
+pub module pzhsbus_fifo #(
+  param T            : type = logic            ,
+  param DEPTH        : u32  = 8                ,
+  param THRESHOLD    : u32  = DEPTH            ,
+  param FLAG_FF_OUT  : bool = true             ,
+  param DATA_FF_OUT  : bool = true             ,
+  param RESET_RAM    : bool = false            ,
+  param CLEAR_DATA   : bool = false            ,
+  param RESET_DATA_FF: bool = true             ,
+  const COUTNER_WIDTH: u32  = $clog2(DEPTH + 1),
+)(
+  i_clk        : input   clock               ,
+  i_rst        : input   reset               ,
+  i_clear      : input   logic               ,
+  o_empty      : output  logic               ,
+  o_almost_full: output  logic               ,
+  o_full       : output  logic               ,
+  o_word_count : output  logic<COUTNER_WIDTH>,
+  slave_if     : modport pzhsbus_if::slave   ,
+  master_if    : modport pzhsbus_if::master  ,
+){
+  var status: logic<3>;
+
+  always_comb {
+    o_empty       = status[0];
+    o_almost_full = status[1];
+    o_full        = status[2];
+  }
+
+  always_comb {
+    slave_if.ready  = !status[2];
+    master_if.valid = !status[0];
+  }
+
+  inst u_fifo: $std::fifo #(
+      TYPE         : T            ,
+      DEPTH        : DEPTH        ,
+      THRESHOLD    : THRESHOLD    ,
+      FLAG_FF_OUT  : FLAG_FF_OUT  ,
+      DATA_FF_OUT  : DATA_FF_OUT  ,
+      RESET_RAM    : RESET_RAM    ,
+      CLEAR_DATA   : CLEAR_DATA   ,
+      RESET_DATA_FF: RESET_DATA_FF,
+  )(
+    i_clk        : i_clk            ,
+    i_rst        : i_rst            ,
+    i_clear      : i_clear          ,
+    o_empty      : status[0]        ,
+    o_almost_full: status[1]        ,
+    o_full       : status[2]        ,
+    o_word_count : o_word_count     ,
+    i_push       : slave_if.valid   ,
+    i_data       : slave_if.payload ,
+    i_pop        : master_if.ready  ,
+    o_data       : master_if.payload,
+  );
+}

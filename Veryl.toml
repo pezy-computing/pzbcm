@@ -1,0 +1,19 @@
+[project]
+name        = "pzbcm"
+version     = "0.1.0"
+authors     = ["Taichi Ishitani <ishitani@pezy.co.jp>"]
+license     = "Apache-2.0"
+repository  = "https://github.com/pezy-computing/pzbcm"
+
+[build]
+clock_type           = "posedge"
+reset_type           = "async_low"
+filelist_type        = "flgen"
+target               = {type = "directory", path = "generated"}
+sourcemap_target     = {type = "directory", path = "map"}
+omit_project_prefix  = true
+reset_low_suffix     = "_n"
+shorten_mangled_name = true
+
+[format]
+indent_width  = 2

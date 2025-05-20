@@ -1,0 +1,396 @@
+//========================================
+//
+// Copyright (c) 2025 PEZY Computing, K.K.
+//                    All Rights Reserved.
+//
+//========================================
+pub interface pzcorebus_if::<PKG: pzcorebus_proto_pkg> {
+  import pzcorebus_common_pkg::pzcorebus_config;
+  import pzcorebus_common_pkg::pzcorebus_signal_info;
+
+  const BUS_CONFIG: pzcorebus_config = PKG::BUS_CONFIG;
+
+  var scmd_accept : logic                      ;
+  var mcmd_valid  : logic                      ;
+  var mcmd        : PKG::pzcorebus_mcmd        ;
+  var mid         : PKG::pzcorebus_mid         ;
+  var maddr       : PKG::pzcorebus_maddr       ;
+  var mlength     : PKG::pzcorebus_mlength     ;
+  var mparam      : PKG::pzcorebus_mparam      ;
+  var minfo       : PKG::pzcorebus_minfo       ;
+  var sdata_accept: logic                      ;
+  var mdata_valid : logic                      ;
+  var mdata       : PKG::pzcorebus_mdata       ;
+  var mdata_byteen: PKG::pzcorebus_mdata_byteen;
+  var mdata_last  : PKG::pzcorebus_mdata_last  ;
+  var mresp_accept: logic                      ;
+  var sresp_valid : logic                      ;
+  var sresp       : PKG::pzcorebus_sresp       ;
+  var sid         : PKG::pzcorebus_sid         ;
+  var serror      : PKG::pzcorebus_serror      ;
+  var sdata       : PKG::pzcorebus_sdata       ;
+  var sinfo       : PKG::pzcorebus_sinfo       ;
+  var sresp_uniten: PKG::pzcorebus_sresp_uniten;
+  var sresp_last  : PKG::pzcorebus_sresp_last  ;
+
+//--------------------------------------------------------------
+//  Internal functions
+//--------------------------------------------------------------
+  function pack_field::<
+    PACKER: type                 ,
+    T     : type                 ,
+    INFO  : pzcorebus_signal_info,
+  >(
+    packer: input PACKER,
+    value : input T     ,
+  ) -> PACKER {
+    var packer_next: PACKER;
+
+    packer_next = packer;
+    if INFO.width >: 0 {
+      packer_next[INFO.pos+:if INFO.width >: 0 ? INFO.width : 1] = value;
+    }
+
+    return packer_next;
+  }
+
+  function unpack_field::<
+    PACKER: type                 ,
+    T     : type                 ,
+    INFO  : pzcorebus_signal_info,
+  >(packer: input PACKER) -> T {
+    if INFO.width >: 0 {
+      return packer[INFO.pos+:if INFO.width >: 0 ? INFO.width : 1] as T;
+    } else {
+      return 'x as T;
+    }
+  }
+
+//--------------------------------------------------------------
+//  API
+//--------------------------------------------------------------
+  function get_packed_mcmd() -> PKG::pzcorebus_packed_mcmd {
+    var packer: PKG::pzcorebus_mcmd_packer;
+
+    packer =
+      pack_field::<
+        PKG::pzcorebus_mcmd_packer,
+        PKG::pzcorebus_mcmd       ,
+        BUS_CONFIG.mcmd_info.mcmd ,
+      >(packer, mcmd);
+    packer =
+      pack_field::<
+        PKG::pzcorebus_mcmd_packer,
+        PKG::pzcorebus_mid,
+        BUS_CONFIG.mcmd_info.mid
+      >(packer, mid);
+    packer =
+      pack_field::<
+        PKG::pzcorebus_mcmd_packer,
+        PKG::pzcorebus_maddr      ,
+        BUS_CONFIG.mcmd_info.maddr
+      >(packer, maddr);
+    packer =
+      pack_field::<
+        PKG::pzcorebus_mcmd_packer  ,
+        PKG::pzcorebus_mlength      ,
+        BUS_CONFIG.mcmd_info.mlength,
+        >(packer, mlength);
+    packer =
+      pack_field::<
+        PKG::pzcorebus_mcmd_packer ,
+        PKG::pzcorebus_mparam      ,
+        BUS_CONFIG.mcmd_info.mparam,
+      >(packer, mparam);
+    packer =
+      pack_field::<
+        PKG::pzcorebus_mcmd_packer,
+        PKG::pzcorebus_minfo      ,
+        BUS_CONFIG.mcmd_info.minfo,
+      >(packer, minfo);
+    if BUS_CONFIG.profile == PKG::pzcorebus_profile::CSR {
+      packer =
+        pack_field::<
+          PKG::pzcorebus_mcmd_packer,
+          PKG::pzcorebus_mdata      ,
+          BUS_CONFIG.mcmd_info.mdata,
+        >(packer, mdata);
+      packer =
+        pack_field::<
+          PKG::pzcorebus_mcmd_packer       ,
+          PKG::pzcorebus_mdata_byteen      ,
+          BUS_CONFIG.mcmd_info.mdata_byteen,
+        >(packer, mdata_byteen);
+    }
+
+    return packer as PKG::pzcorebus_packed_mcmd;
+  }
+
+  function put_packed_mcmd(packed_mcmd: input PKG::pzcorebus_packed_mcmd) {
+    var packer: PKG::pzcorebus_mcmd_packer;
+    packer = packed_mcmd as PKG::pzcorebus_mcmd_packer;
+
+    mcmd =
+      unpack_field::<
+        PKG::pzcorebus_mcmd_packer,
+        PKG::pzcorebus_mcmd       ,
+        BUS_CONFIG.mcmd_info.mcmd ,
+      >(packer);
+    mid =
+      unpack_field::<
+        PKG::pzcorebus_mcmd_packer,
+        PKG::pzcorebus_mid        ,
+        BUS_CONFIG.mcmd_info.mid  ,
+      >(packer);
+    maddr =
+      unpack_field::<
+        PKG::pzcorebus_mcmd_packer,
+        PKG::pzcorebus_maddr      ,
+        BUS_CONFIG.mcmd_info.maddr,
+      >(packer);
+    mlength =
+      unpack_field::<
+        PKG::pzcorebus_mcmd_packer  ,
+        PKG::pzcorebus_mlength      ,
+        BUS_CONFIG.mcmd_info.mlength,
+      >(packer);
+    mparam =
+      unpack_field::<
+        PKG::pzcorebus_mcmd_packer ,
+        PKG::pzcorebus_mparam      ,
+        BUS_CONFIG.mcmd_info.mparam,
+      >(packer);
+    minfo =
+      unpack_field::<
+        PKG::pzcorebus_mcmd_packer,
+        PKG::pzcorebus_minfo      ,
+        BUS_CONFIG.mcmd_info.minfo,
+      >(packer);
+    if BUS_CONFIG.profile == PKG::pzcorebus_profile::CSR {
+      mdata =
+        unpack_field::<
+          PKG::pzcorebus_mcmd_packer,
+          PKG::pzcorebus_mdata      ,
+          BUS_CONFIG.mcmd_info.mdata,
+        >(packer);
+      mdata_byteen =
+        unpack_field::<
+          PKG::pzcorebus_mcmd_packer       ,
+          PKG::pzcorebus_minfo             ,
+          BUS_CONFIG.mcmd_info.mdata_byteen,
+        >(packer);
+    }
+  }
+
+  function get_packed_mdata() -> PKG::pzcorebus_packed_mdata {
+    var packer: PKG::pzcorebus_mdata_packer;
+
+    if BUS_CONFIG.profile != PKG::pzcorebus_profile::CSR {
+      packer  =
+        pack_field::<
+          PKG::pzcorebus_mdata_packer,
+          PKG::pzcorebus_mdata       ,
+          BUS_CONFIG.mdata_info.mdata,
+        >(packer, mdata);
+      packer  =
+        pack_field::<
+          PKG::pzcorebus_mdata_packer       ,
+          PKG::pzcorebus_mdata_byteen       ,
+          BUS_CONFIG.mdata_info.mdata_byteen,
+        >(packer, mdata_byteen);
+      packer  =
+        pack_field::<
+          PKG::pzcorebus_mdata_packer     ,
+          PKG::pzcorebus_mdata_last       ,
+          BUS_CONFIG.mdata_info.mdata_last,
+        >(packer, mdata_last);
+    } else {
+      packer = '0;
+    }
+
+    return packer as PKG::pzcorebus_packed_mdata;
+  }
+
+  function put_packed_mdata(packed_mdata: input PKG::pzcorebus_packed_mdata) {
+    if BUS_CONFIG.profile != PKG::pzcorebus_profile::CSR {
+      var packer: PKG::pzcorebus_mdata_packer;
+      packer  = packed_mdata as PKG::pzcorebus_mdata_packer;
+
+      mdata =
+        unpack_field::<
+          PKG::pzcorebus_mcmd_packer,
+          PKG::pzcorebus_mdata      ,
+          BUS_CONFIG.mdata_info.mdata,
+        >(packer);
+      mdata_byteen =
+        unpack_field::<
+          PKG::pzcorebus_mcmd_packer        ,
+          PKG::pzcorebus_mdata_byteen       ,
+          BUS_CONFIG.mdata_info.mdata_byteen,
+        >(packer);
+      mdata_last =
+        unpack_field::<
+          PKG::pzcorebus_mcmd_packer      ,
+          PKG::pzcorebus_mdata_last       ,
+          BUS_CONFIG.mdata_info.mdata_last,
+        >(packer);
+    }
+  }
+
+  function get_packed_sresp() -> PKG::pzcorebus_packed_sresp {
+    var packer: PKG::pzcorebus_sresp_packer;
+
+    packer =
+      pack_field::<
+        PKG::pzcorebus_sresp_packer,
+        PKG::pzcorebus_sresp       ,
+        BUS_CONFIG.sresp_info.sresp,
+      >(packer, sresp);
+    packer =
+      pack_field::<
+        PKG::pzcorebus_sresp_packer,
+        PKG::pzcorebus_sid         ,
+        BUS_CONFIG.sresp_info.sid  ,
+      >(packer, sid);
+    packer =
+      pack_field::<
+        PKG::pzcorebus_sresp_packer ,
+        PKG::pzcorebus_serror       ,
+        BUS_CONFIG.sresp_info.serror,
+      >(packer, serror);
+    packer =
+      pack_field::<
+        PKG::pzcorebus_sresp_packer,
+        PKG::pzcorebus_sdata       ,
+        BUS_CONFIG.sresp_info.sdata,
+      >(packer, sdata);
+    packer =
+      pack_field::<
+        PKG::pzcorebus_sresp_packer,
+        PKG::pzcorebus_sinfo       ,
+        BUS_CONFIG.sresp_info.sinfo,
+      >(packer, sinfo);
+    packer =
+      pack_field::<
+        PKG::pzcorebus_sresp_packer       ,
+        PKG::pzcorebus_sresp_uniten       ,
+        BUS_CONFIG.sresp_info.sresp_uniten,
+      >(packer, sresp_uniten);
+    packer =
+      pack_field::<
+        PKG::pzcorebus_sresp_packer     ,
+        PKG::pzcorebus_sresp_last       ,
+        BUS_CONFIG.sresp_info.sresp_last,
+      >(packer, sresp_last);
+
+    return packer as PKG::pzcorebus_packed_sresp;
+  }
+
+  function put_packed_sresp(packed_sresp: input PKG::pzcorebus_packed_sresp) {
+    var packer: PKG::pzcorebus_sresp_packer;
+    packer = packed_sresp as PKG::pzcorebus_sresp_packer;
+
+    sresp =
+      unpack_field::<
+        PKG::pzcorebus_sresp_packer,
+        PKG::pzcorebus_sresp       ,
+        BUS_CONFIG.sresp_info.sresp,
+      >(packer);
+    sid =
+      unpack_field::<
+        PKG::pzcorebus_sresp_packer,
+        PKG::pzcorebus_sid         ,
+        BUS_CONFIG.sresp_info.sid  ,
+      >(packer);
+    serror =
+      unpack_field::<
+        PKG::pzcorebus_sresp_packer ,
+        PKG::pzcorebus_serror       ,
+        BUS_CONFIG.sresp_info.serror,
+      >(packer);
+    sdata =
+      unpack_field::<
+        PKG::pzcorebus_sresp_packer,
+        PKG::pzcorebus_sdata       ,
+        BUS_CONFIG.sresp_info.sdata,
+      >(packer);
+    sinfo =
+      unpack_field::<
+        PKG::pzcorebus_sresp_packer,
+        PKG::pzcorebus_sinfo       ,
+        BUS_CONFIG.sresp_info.sinfo,
+      >(packer);
+    sresp_uniten =
+      unpack_field::<
+        PKG::pzcorebus_sresp_packer       ,
+        PKG::pzcorebus_sresp_uniten       ,
+        BUS_CONFIG.sresp_info.sresp_uniten,
+      >(packer);
+    sresp_last =
+      unpack_field::<
+        PKG::pzcorebus_sresp_packer     ,
+        PKG::pzcorebus_sresp_last       ,
+        BUS_CONFIG.sresp_info.sresp_last,
+      >(packer);
+  }
+
+  function mcmd_ack() -> logic {
+    return scmd_accept && mcmd_valid;
+  }
+
+  function mdata_ack() -> logic {
+    if BUS_CONFIG.profile != PKG::pzcorebus_profile::CSR {
+      return sdata_accept && mdata_valid;
+    } else {
+      return '0;
+    }
+  }
+
+  function sresp_ack() -> logic {
+    return mresp_accept && sresp_valid;
+  }
+
+//--------------------------------------------------------------
+//  MOdport
+//--------------------------------------------------------------
+  modport master {
+    scmd_accept     : input ,
+    mcmd_valid      : output,
+    mcmd            : output,
+    mid             : output,
+    maddr           : output,
+    mlength         : output,
+    mparam          : output,
+    minfo           : output,
+    sdata_accept    : input ,
+    mdata_valid     : output,
+    mdata           : output,
+    mdata_byteen    : output,
+    mdata_last      : output,
+    mresp_accept    : output,
+    sresp_valid     : input ,
+    sresp           : input ,
+    sid             : input ,
+    serror          : input ,
+    sdata           : input ,
+    sinfo           : input ,
+    sresp_uniten    : input ,
+    sresp_last      : input ,
+    put_packed_mcmd : import,
+    put_packed_mdata: import,
+    get_packed_sresp: import,
+    mcmd_ack        : import,
+    mdata_ack       : import,
+    sresp_ack       : import,
+  }
+
+  modport slave {
+    get_packed_mcmd : import,
+    get_packed_mdata: import,
+    put_packed_sresp: import,
+    mcmd_ack        : import,
+    mdata_ack       : import,
+    sresp_ack       : import,
+    ..converse(master)
+  }
+}
