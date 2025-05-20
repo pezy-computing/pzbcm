@@ -1,0 +1,114 @@
+//========================================
+//
+// Copyright (c) 2026 PEZY Computing, K.K.
+//
+//========================================
+pub package pzcorebus_utils_pkg::<PKG: pzcorebus_proto_pkg> {
+  const IS_CSR  : bbool = pzcorebus_common_pkg::is_csr_profile(PKG::BUS_CONFIG);
+  const IS_MEM  : bbool = pzcorebus_common_pkg::is_mem_profile(PKG::BUS_CONFIG);
+  const IS_MEM_H: bbool = pzcorebus_common_pkg::is_mem_h_profile(PKG::BUS_CONFIG);
+
+  function mcmd_kind(mcmd: input PKG::pzcorebus_mcmd) -> PKG::pzcorebus_mcmd_kind {
+    return mcmd as PKG::pzcorebus_mcmd_kind;
+  }
+
+  function is_mcmd_posted(mcmd: input PKG::pzcorebus_mcmd) -> logic {
+    return !mcmd[pzcorebus_common_pkg::NON_POSTED_BIT];
+  }
+
+  function is_mcmd_non_posted(mcmd: input PKG::pzcorebus_mcmd) -> logic {
+    return mcmd[pzcorebus_common_pkg::NON_POSTED_BIT];
+  }
+
+  function is_mcmd_no_data(mcmd: input PKG::pzcorebus_mcmd) -> logic {
+    return !mcmd[pzcorebus_common_pkg::WITH_DATA_BIT];
+  }
+
+  function is_mcmd_with_data(mcmd: input PKG::pzcorebus_mcmd) -> logic {
+    return mcmd[pzcorebus_common_pkg::WITH_DATA_BIT];
+  }
+
+  function is_mcmd_atomic(mcmd: input PKG::pzcorebus_mcmd) -> logic {
+    return IS_MEM && (mcmd_kind(mcmd) == PKG::pzcorebus_mcmd_kind::ATOMIC);
+  }
+
+  function is_mcmd_message(mcmd: input PKG::pzcorebus_mcmd) -> logic {
+    return IS_MEM && (mcmd_kind(mcmd) == PKG::pzcorebus_mcmd_kind::MESSAGE);
+  }
+
+  function is_mcmd_with_response_data(mcmd: input PKG::pzcorebus_mcmd) -> logic {
+    if IS_MEM {
+      return inside mcmd { PKG::pzcorebus_mcmd::READ, PKG::pzcorebus_mcmd::ATOMIC_NP };
+    } else {
+      return mcmd_kind(mcmd) == PKG::pzcorebus_mcmd_kind::READ;
+    }
+  }
+
+  function is_sresp_no_data(sresp: input PKG::pzcorebus_sresp) -> logic {
+    return sresp == PKG::pzcorebus_sresp::RESPONSE;
+  }
+
+  function is_sresp_with_data(sresp: input PKG::pzcorebus_sresp) -> logic {
+    return sresp == PKG::pzcorebus_sresp::RESPONSE_WITH_DATA;
+  }
+
+  function unpack_mlength(
+    mlength: input PKG::pzcorebus_mlength,
+  ) -> PKG::pzcorebus_mlength_unpacked {
+    if mlength == '0 {
+      return PKG::BUS_CONFIG.max_length as PKG::pzcorebus_mlength_unpacked;
+    } else {
+      return mlength as PKG::pzcorebus_mlength_unpacked;
+    }
+  }
+
+  function get_mlength_unpacked(
+    mcmd   : input PKG::pzcorebus_mcmd   ,
+    mlength: input PKG::pzcorebus_mlength,
+  ) -> PKG::pzcorebus_mlength_unpacked {
+    if IS_CSR {
+      return 1 as PKG::pzcorebus_mlength_unpacked;
+    } else if is_mcmd_message(mcmd) {
+      return 0 as PKG::pzcorebus_mlength_unpacked;
+    } else {
+      return unpack_mlength(mlength);
+    }
+  }
+
+  function get_mlength_aligned(
+    mcmd   : input PKG::pzcorebus_mcmd   ,
+    maddr  : input PKG::pzcorebus_maddr  ,
+    mlength: input PKG::pzcorebus_mlength,
+  ) -> PKG::pzcorebus_mlength_unpacked {
+    const OFFSET_LSB  : u16 = $clog2(PKG::BUS_CONFIG.unit_data_width) - 3;
+    const OFFSET_WIDTH: u16 = $std::utils::clog2_clipped(PKG::BUS_CONFIG.data_size, 1);
+
+    var offset: logic<OFFSET_WIDTH>;
+    if PKG::BUS_CONFIG.data_size == 1 || is_mcmd_message(mcmd) || is_mcmd_atomic(mcmd) {
+      offset = 0 as OFFSET_WIDTH;
+    } else {
+      offset = maddr[OFFSET_LSB+:OFFSET_WIDTH];
+    }
+
+    return get_mlength_unpacked(mcmd, mlength) + (offset as PKG::pzcorebus_mlength_unpacked);
+  }
+
+  function get_mburst_length(
+    mcmd   : input PKG::pzcorebus_mcmd   ,
+    maddr  : input PKG::pzcorebus_maddr  ,
+    mlength: input PKG::pzcorebus_mlength,
+  ) -> PKG::pzcorebus_mburst_length {
+    if IS_CSR {
+      return 1 as PKG::pzcorebus_mburst_length;
+    } else {
+      var mlength_unpaced: PKG::pzcorebus_mlength_unpacked;
+
+      mlength_unpaced = get_mlength_unpacked(mcmd, mlength);
+      if PKG::BUS_CONFIG.data_size >: 1 {
+        mlength_unpaced += ((PKG::BUS_CONFIG.data_size - 1) as PKG::pzcorebus_mlength_unpacked);
+      }
+
+      return (mlength_unpaced / PKG::BUS_CONFIG.data_size) as PKG::pzcorebus_mburst_length;
+    }
+  }
+}

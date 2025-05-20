@@ -1,0 +1,186 @@
+//========================================
+//
+// Copyright (c) 2026 PEZY Computing, K.K.
+//
+//========================================
+pub module pzcorebus_mreq_aligner_core::<PKG: pzcorebus_proto_pkg> #(
+  param WAIT_FOR_DATA          : bbool = false,
+  param THROUGH_NO_DATA_COMMAND: bbool = false,
+  param SLAVE_FIFO             : bbool = false,
+  param SLAVE_FIFO_MCMD_DEPTH  : u32   = 2    ,
+  param SLAVE_FIFO_MDATA_DEPTH : u32   = 2    ,
+)(
+  i_clk       : input   clock                               ,
+  i_rst       : input   reset                               ,
+  o_mcmd      : output  PKG::pzcorebus_bundled_mcmd      = _,
+  o_mcmd_done : output  logic                            = _,
+  o_mdata_done: output  logic                            = _,
+  slave_if    : modport pzcorebus_if::<PKG>::slave_mreq     ,
+  master_if   : modport pzcorebus_if::<PKG>::master_mreq    ,
+) {
+//--------------------------------------------------------------
+//  Slave IF FIFO
+//--------------------------------------------------------------
+  inst fifo_if: pzcorebus_if::<PKG>;
+
+  inst u_slave_fifo: pzcorebus_mreq_fifo::<PKG> #(
+    MCMD_VALID : SLAVE_FIFO            ,
+    MCMD_DEPTH : SLAVE_FIFO_MCMD_DEPTH ,
+    MDATA_VALID: SLAVE_FIFO            ,
+    MDATA_DEPTH: SLAVE_FIFO_MDATA_DEPTH,
+  )(
+    i_clk    : i_clk   ,
+    i_rst    : i_rst   ,
+    slave_if : slave_if,
+    master_if: fifo_if ,
+  );
+
+//--------------------------------------------------------------
+//  State Machine
+//--------------------------------------------------------------
+  enum state {
+    IDLE  ,
+    ACTIVE,
+    DONE  ,
+  }
+
+  var mcmd_state : state;
+  var mcmd_done  : logic;
+  var mdata_state: state;
+  var mdata_done : logic;
+
+  always_comb {
+    o_mcmd_done  = mcmd_state  == state::DONE;
+    o_mdata_done = mdata_state == state::DONE;
+  }
+
+  always_comb {
+    mcmd_done  = (mcmd_state  == state::DONE) || fifo_if.mcmd_with_data_ack();
+    mdata_done = (mdata_state == state::DONE) || fifo_if.mdata_last_ack();
+  }
+
+  always_ff {
+    if_reset {
+      mcmd_state = state::IDLE;
+    } else {
+      case mcmd_state {
+        state::IDLE: {
+          if mcmd_done && !mdata_done {
+            mcmd_state = state::DONE;
+          }
+        }
+        state::DONE: {
+          if mdata_done {
+            mcmd_state = state::IDLE;
+          }
+        }
+      }
+    }
+  }
+
+  always_ff {
+    if_reset {
+      mdata_state = state::IDLE;
+    } else {
+      case mdata_state {
+        state::IDLE: {
+          if mcmd_done {
+            if !mdata_done {
+              mdata_state = state::ACTIVE;
+            }
+          } else if fifo_if.mcmd_with_data_valid() {
+            if mdata_done {
+              mdata_state = state::DONE;
+            } else if !WAIT_FOR_DATA || fifo_if.mdata_valid {
+              mdata_state = state::ACTIVE;
+            }
+          }
+        }
+        state::ACTIVE: {
+          if mdata_done {
+            if mcmd_done {
+              mdata_state = state::IDLE;
+            } else {
+              mdata_state = state::DONE;
+            }
+          }
+        }
+        state::DONE: {
+          if mcmd_done {
+            mdata_state = state::IDLE;
+          }
+        }
+      }
+    }
+  }
+
+//--------------------------------------------------------------
+//  Aligner
+//--------------------------------------------------------------
+  var mcmd_active : logic;
+  var mdata_active: logic;
+
+  always_comb {
+    case mcmd_state {
+      state::IDLE: {
+        mcmd_active =
+          !WAIT_FOR_DATA || fifo_if.is_mcmd_no_data() || fifo_if.mdata_valid || mdata_done;
+      }
+      default: {
+        mcmd_active =
+          THROUGH_NO_DATA_COMMAND && fifo_if.is_mcmd_no_data();
+      }
+    }
+
+    case mdata_state {
+      state::IDLE: {
+        mdata_active = fifo_if.mcmd_with_data_valid();
+      }
+      state::ACTIVE: {
+        mdata_active = true;
+      }
+      default: {
+        mdata_active = false;
+      }
+    }
+
+    master_if.put_mcmd(fifo_if.get_mcmd());
+    if mcmd_active {
+      fifo_if.scmd_accept  = master_if.scmd_accept;
+      master_if.mcmd_valid = fifo_if.mcmd_valid;
+    } else {
+      fifo_if.scmd_accept  = false;
+      master_if.mcmd_valid = false;
+    }
+
+    master_if.put_mdata(fifo_if.get_mdata());
+    if mdata_active {
+      fifo_if.sdata_accept  = master_if.sdata_accept;
+      master_if.mdata_valid = fifo_if.mdata_valid;
+    } else {
+      fifo_if.sdata_accept  = false;
+      master_if.mdata_valid = false;
+    }
+  }
+
+//--------------------------------------------------------------
+//  Request Info
+//--------------------------------------------------------------
+  var mcmd: PKG::pzcorebus_bundled_mcmd;
+
+  always_comb {
+    if mcmd_state == state::IDLE {
+      o_mcmd = fifo_if.get_mcmd();
+    } else {
+      o_mcmd = mcmd;
+    }
+  }
+
+  always_ff {
+    if_reset {
+      mcmd = 0 as PKG::pzcorebus_bundled_mcmd;
+    } else if fifo_if.mcmd_with_data_ack() {
+      mcmd = fifo_if.get_mcmd();
+    }
+  }
+}

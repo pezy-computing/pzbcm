@@ -1,2 +1,9 @@
 *.f
 Gemfile.lock
+
+# Veryl
+Veryl.lock
+/.build
+/dependencies
+/generated
+/map

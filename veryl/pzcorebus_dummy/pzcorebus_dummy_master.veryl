@@ -1,0 +1,18 @@
+pub module pzcorebus_dummy_master::<PKG: pzcorebus_proto_pkg> (
+  master_if: modport pzcorebus_if::<PKG>::master,
+) {
+  always_comb {
+    master_if.mcmd_valid   = false;
+    master_if.mcmd         = 0 as PKG::pzcorebus_mcmd;
+    master_if.mid          = '0;
+    master_if.maddr        = '0;
+    master_if.mlength      = '0;
+    master_if.mparam       = '0;
+    master_if.minfo        = '0;
+    master_if.mdata_valid  = false;
+    master_if.mdata        = '0;
+    master_if.mdata_byteen = '0;
+    master_if.mdata_last   = '0;
+    master_if.mresp_accept = false;
+  }
+}

@@ -1,0 +1,253 @@
+//========================================
+//
+// Copyright (c) 2026 PEZY Computing, K.K.
+//
+//========================================
+pub module pzcorebus_mreq_m_to_1_switch::<PKG: pzcorebus_proto_pkg> #(
+  param SLAVES                 : u32                       = 2    ,
+  param PRIORITY_ENABLE        : bbool                     = false,
+  param PRIORITY_WIDTH         : u32                       = 1    ,
+  param WEIGHT_ENABLE          : bbool                     = false,
+  param WEIGHT_WIDTH           : u32                       = 1    ,
+  param INITIAL_WEIGHT         : bit<SLAVES, WEIGHT_WIDTH> = '1   ,
+  param WAIT_FOR_MDATA         : bbool                     = false,
+  param WAIT_FOR_SRESP         : bbool                     = false,
+  param SLAVE_FIFO             : bbool                     = false,
+  param SLAVE_FIFO_MCMD_DEPTH  : u32                       = 2    ,
+  param SLAVE_FIFO_MDATA_DEPTH : u32                       = 2    ,
+  param MASTER_FIFO            : bbool                     = false,
+  param MASTER_FIFO_MCMD_DEPTH : u32                       = 2    ,
+  param MASTER_FIFO_MDATA_DEPTH: u32                       = 2    ,
+  param MASTER_ALIGNER         : bbool                     = false,
+)(
+  i_clk                 : input   clock                                                          ,
+  i_rst                 : input   reset                                                          ,
+  i_arbiter_kind        : input   pzbcm_arbiter_kind            = pzbcm_arbiter_kind::ROUND_ROBIN,
+  i_arbiter_init        : input   logic                         = false                          ,
+  i_arbiter_priority    : input   logic<SLAVES, PRIORITY_WIDTH> = '0                             ,
+  i_arbiter_weight_valid: input   logic                         = false                          ,
+  i_arbiter_weight      : input   logic<SLAVES, WEIGHT_WIDTH>   = '0                             ,
+  o_sresp_select        : output  logic<SLAVES>                 = _                              ,
+  i_sresp_last_ack      : input   logic                         = false                          ,
+  slave_if              : modport pzcorebus_if::<PKG>::slave_mreq[SLAVES]                        ,
+  master_if             : modport pzcorebus_if::<PKG>::master_mreq                               ,
+) {
+  import pzbcm_arbiter_pkg::*;
+  import pzcorebus_common_pkg::*;
+  import $std::selector_pkg::selector_kind;
+
+//--------------------------------------------------------------
+//  Slave MReq Aligner
+//--------------------------------------------------------------
+  inst aligner_if: pzcorebus_if::<PKG>[SLAVES];
+
+  for i in 0..SLAVES :g_slave_aligner {
+    if is_mem_profile(PKG::BUS_CONFIG) :g {
+      inst u_aligner: pzcorebus_mreq_aligner_core::<PKG> #(
+        WAIT_FOR_DATA          : WAIT_FOR_MDATA        ,
+        THROUGH_NO_DATA_COMMAND: true                  ,
+        SLAVE_FIFO             : SLAVE_FIFO            ,
+        SLAVE_FIFO_MCMD_DEPTH  : SLAVE_FIFO_MCMD_DEPTH ,
+        SLAVE_FIFO_MDATA_DEPTH : SLAVE_FIFO_MDATA_DEPTH,
+      )(
+        i_clk    : i_clk        ,
+        i_rst    : i_rst        ,
+        slave_if : slave_if[i]  ,
+        master_if: aligner_if[i],
+      );
+    } else if SLAVE_FIFO {
+      inst u_fifo: pzcorebus_mreq_fifo::<PKG> #(
+        MCMD_DEPTH : SLAVE_FIFO_MCMD_DEPTH ,
+        MDATA_DEPTH: SLAVE_FIFO_MDATA_DEPTH,
+      )(
+        i_clk    : i_clk        ,
+        i_rst    : i_rst        ,
+        slave_if : slave_if[i]  ,
+        master_if: aligner_if[i],
+      );
+    } else {
+      always_comb {
+        slave_if[i] <> aligner_if[i].master_mreq;
+      }
+    }
+  }
+
+//--------------------------------------------------------------
+//  Switch
+//--------------------------------------------------------------
+  inst switch_if: pzcorebus_if::<PKG>[2];
+
+  var mcmd_valid : logic<SLAVES>;
+  var mcmd_grant : logic<SLAVES>;
+  var mcmd_ack   : logic        ;
+  var mcmd_done  : logic        ;
+  var mdata_grant: logic<SLAVES>;
+  var sresp_idle : logic        ;
+
+  for i in 0..SLAVES :g_mcmd {
+    always_comb {
+      mcmd_valid[i] = aligner_if[i].mcmd_valid;
+    }
+  }
+
+  if is_mem_profile(PKG::BUS_CONFIG) :g_membus {
+    var done      : logic<3>     ;
+    var mdata_done: logic        ;
+    var grant     : logic<SLAVES>;
+
+    always_comb {
+      done[0] = switch_if[0].mcmd_with_data_ack() && switch_if[0].mdata_last_ack();
+      done[1] = switch_if[0].mcmd_with_data_ack() && mdata_done;
+      done[2] = mcmd_done                         && switch_if[0].mdata_last_ack();
+    }
+
+    always_ff {
+      if_reset {
+        mcmd_done  = false;
+        mdata_done = false;
+      } else if done != '0 {
+        mcmd_done  = false;
+        mdata_done = false;
+      } else {
+        if switch_if[0].mcmd_with_data_ack() {
+          mcmd_done = true;
+        }
+        if switch_if[0].mdata_last_ack() {
+          mdata_done = true;
+        }
+      }
+    }
+
+    always_comb {
+      if mcmd_done {
+        mdata_grant = grant;
+      } else {
+        mdata_grant = mcmd_grant;
+      }
+    }
+
+    always_ff {
+      if_reset {
+        grant = '0;
+      } else if switch_if[0].mcmd_with_data_ack() {
+        grant = mcmd_grant;
+      }
+    }
+  } else {
+    always_comb {
+      mcmd_done   = false;
+      mdata_grant = '0;
+    }
+  }
+
+  always_comb {
+    mcmd_ack = switch_if[0].mcmd_ack();
+  }
+
+  inst u_arbiter: pzbcm_arbiter #(
+    REQUESTS       : SLAVES         ,
+    ONEHOT_GRANT   : true           ,
+    KEEP_RESULT    : true           ,
+    FREE_WIDTH     : 1              ,
+    PRIORITY_ENABLE: PRIORITY_ENABLE,
+    PRIORITY_WIDTH : PRIORITY_WIDTH ,
+    WEIGHT_ENABLE  : WEIGHT_ENABLE  ,
+    WEIGHT_WIDTH   : WEIGHT_WIDTH   ,
+    INITIAL_WEIGHT : INITIAL_WEIGHT ,
+  )(
+    i_clk         : i_clk                 ,
+    i_rst         : i_rst                 ,
+    i_kind        : i_arbiter_kind        ,
+    i_init        : i_arbiter_init        ,
+    i_priority    : i_arbiter_priority    ,
+    i_weight_valid: i_arbiter_weight_valid,
+    i_weight      : i_arbiter_weight      ,
+    i_request     : mcmd_valid            ,
+    o_grant       : mcmd_grant            ,
+    i_free        : mcmd_ack              ,
+  );
+
+  inst u_mreq_mux: pzcorebus_mreq_mux::<PKG> #(
+    SLAVES: SLAVES               ,
+    KIND  : selector_kind::ONEHOT,
+  )(
+    i_mcmd_select : mcmd_grant  ,
+    i_mdata_select: mdata_grant ,
+    slave_if      : aligner_if  ,
+    master_if     : switch_if[0],
+  );
+
+  always_comb {
+    switch_if[0].slave <> switch_if[1].master;
+    if !(sresp_idle && ((!mcmd_done) || switch_if[0].is_mcmd_no_data())) {
+      switch_if[0].scmd_accept = false;
+      switch_if[1].mcmd_valid  = false;
+    }
+  }
+
+  if WAIT_FOR_SRESP :g_sresp {
+    var sresp_select: logic<SLAVES>;
+
+    always_comb {
+      o_sresp_select = sresp_select;
+    }
+
+    always_ff {
+      if_reset {
+        sresp_idle = true;
+      } else if i_sresp_last_ack {
+        sresp_idle = true;
+      } else if switch_if[1].mcmd_non_posted_ack() {
+        sresp_idle = false;
+      }
+    }
+
+    always_ff {
+      if_reset {
+        sresp_select = '0;
+      } else if switch_if[1].mcmd_non_posted_ack() {
+        sresp_select = mcmd_grant;
+      }
+    }
+  } else {
+    always_comb {
+      o_sresp_select = '0;
+    }
+
+    always_comb {
+      sresp_idle = true;
+    }
+  }
+
+//--------------------------------------------------------------
+//  Master MReq Alignment
+//--------------------------------------------------------------
+  if is_mem_profile(PKG::BUS_CONFIG) && MASTER_ALIGNER :g_master_aligner {
+    inst u_aligner: pzcorebus_mreq_aligner_core::<PKG> #(
+      WAIT_FOR_DATA          : WAIT_FOR_MDATA         ,
+      THROUGH_NO_DATA_COMMAND: true                   ,
+      SLAVE_FIFO             : MASTER_FIFO            ,
+      SLAVE_FIFO_MCMD_DEPTH  : MASTER_FIFO_MCMD_DEPTH ,
+      SLAVE_FIFO_MDATA_DEPTH : MASTER_FIFO_MDATA_DEPTH,
+    )(
+      i_clk    : i_clk       ,
+      i_rst    : i_rst       ,
+      slave_if : switch_if[1],
+      master_if: master_if   ,
+    );
+  } else if MASTER_FIFO {
+    inst u_fifo: pzcorebus_mreq_fifo::<PKG> #(
+      MCMD_DEPTH : MASTER_FIFO_MCMD_DEPTH ,
+      MDATA_DEPTH: MASTER_FIFO_MDATA_DEPTH,
+    )(
+      i_clk    : i_clk       ,
+      i_rst    : i_rst       ,
+      slave_if : switch_if[1],
+      master_if: master_if   ,
+    );
+  } else {
+    always_comb {
+      switch_if[1].slave_mreq <> master_if;
+    }
+  }
+}

@@ -1,0 +1,20 @@
+//========================================
+//
+// Copyright (c) 2025 PEZY Computing, K.K.
+//
+//========================================
+pub proto module pzbcm_sram_wrapper_proto #(
+  param WORDS           : u16 ,
+  param DATA_WIDTH      : u16 ,
+  param POINTER_WIDTH   : u16 ,
+  param N_PORT          : u16 ,
+  param SRAM_CONFIG_TYPE: type,
+)(
+  i_clk    : input  clock                       ,
+  i_enable : input  logic<N_PORT>               ,
+  i_pointer: input  logic<N_PORT, POINTER_WIDTH>,
+  i_write  : input  logic                       ,
+  i_data   : input  logic<DATA_WIDTH>           ,
+  o_data   : output logic<DATA_WIDTH>           ,
+  i_config : input  SRAM_CONFIG_TYPE            ,
+);

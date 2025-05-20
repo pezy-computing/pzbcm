@@ -1,0 +1,121 @@
+//========================================
+//
+// Copyright (c) 2026 PEZY Computing, K.K.
+//
+//========================================
+pub module pzcorebus_m_to_1_switch::<PKG: pzcorebus_proto_pkg> #(
+  param SLAVES                 : u32                       = 2                                       ,
+  param EXTERNAL_DECODE        : bbool                     = false                                   ,
+  param WAIT_FOR_MDATA         : bbool                     = false                                   ,
+  param WAIT_FOR_SRESP         : bbool                     = false                                   ,
+  param PRIORITY_ENABLE        : bbool                     = false                                   ,
+  param PRIORITY_WIDTH         : u32                       = 1                                       ,
+  param WEIGHT_ENABLE          : bbool                     = false                                   ,
+  param WEIGHT_WIDTH           : u32                       = 1                                       ,
+  param INITIAL_WEIGHT         : bit<SLAVES, WEIGHT_WIDTH> = '1                                      ,
+  param SELECTOR_KIND          : selector_kind             = selector_kind::BINARY                   ,
+  param SELECT_WIDTH           : u32                       = calc_select_width(SLAVES, SELECTOR_KIND),
+  param SELECT_LSB             : u32                       = PKG::BUS_CONFIG.id_width - SELECT_WIDTH ,
+  param SLAVE_FIFO             : bbool                     = false                                   ,
+  param SLAVE_FIFO_MCMD_DEPTH  : u32                       = 2                                       ,
+  param SLAVE_FIFO_MDATA_DEPTH : u32                       = 2                                       ,
+  param SLAVE_FIFO_SRESP_DEPTH : u32                       = 2                                       ,
+  param MASTER_FIFO            : bbool                     = false                                   ,
+  param MASTER_FIFO_MCMD_DEPTH : u32                       = 2                                       ,
+  param MASTER_FIFO_MDATA_DEPTH: u32                       = 2                                       ,
+  param MASTER_FIFO_SRESP_DEPTH: u32                       = 2                                       ,
+  param MASETR_ALIGNER         : bbool                     = false                                   ,
+)(
+  i_clk                 : input   clock                                                          ,
+  i_rst                 : input   reset                                                          ,
+  i_arbiter_kind        : input   pzbcm_arbiter_kind            = pzbcm_arbiter_kind::ROUND_ROBIN,
+  i_arbiter_init        : input   logic                         = false                          ,
+  i_arbiter_priority    : input   logic<SLAVES, PRIORITY_WIDTH> = '0                             ,
+  i_arbiter_weight_valid: input   logic                         = false                          ,
+  i_arbiter_weight      : input   logic<SLAVES, WEIGHT_WIDTH>   = '0                             ,
+  o_sresp               : output  PKG::pzcorebus_bundled_sresp  = _                              ,
+  i_sresp_select        : input   logic<SELECT_WIDTH>           = '0                             ,
+  slave_if              : modport pzcorebus_if::<PKG>::slave[SLAVES]                             ,
+  master_if             : modport pzcorebus_if::<PKG>::master                                    ,
+) {
+  import $std::selector_pkg::*;
+  import pzbcm_arbiter_pkg::*;
+
+  const SRESP_SELECTOR_KIND: selector_kind = if WAIT_FOR_SRESP ? selector_kind::ONEHOT : SELECTOR_KIND;
+  const SRESP_SELECT_WIDTH : u32           = if WAIT_FOR_SRESP ? SLAVES                : SELECT_WIDTH ;
+
+  inst slave_switch_if : pzcorebus_if::<PKG>[SLAVES];
+  inst mastre_switch_if: pzcorebus_if::<PKG>;
+
+  var sresp_last_ack: logic                    ;
+  var sresp_select  : logic<SLAVES>            ;
+  var select        : logic<SRESP_SELECT_WIDTH>;
+
+  for i in 0..SLAVES: g_slave {
+    always_comb {
+      slave_if[i] <> slave_switch_if[i].master;
+    }
+  }
+
+  inst u_mreq_switch: pzcorebus_mreq_m_to_1_switch::<PKG> #(
+    SLAVES                 : SLAVES                 ,
+    PRIORITY_ENABLE        : PRIORITY_ENABLE        ,
+    PRIORITY_WIDTH         : PRIORITY_WIDTH         ,
+    WEIGHT_ENABLE          : WEIGHT_ENABLE          ,
+    WEIGHT_WIDTH           : WEIGHT_WIDTH           ,
+    INITIAL_WEIGHT         : INITIAL_WEIGHT         ,
+    WAIT_FOR_MDATA         : WAIT_FOR_MDATA         ,
+    WAIT_FOR_SRESP         : WAIT_FOR_SRESP         ,
+    SLAVE_FIFO             : SLAVE_FIFO             ,
+    SLAVE_FIFO_MCMD_DEPTH  : SLAVE_FIFO_MCMD_DEPTH  ,
+    SLAVE_FIFO_MDATA_DEPTH : SLAVE_FIFO_MDATA_DEPTH ,
+    MASTER_FIFO            : MASTER_FIFO            ,
+    MASTER_FIFO_MCMD_DEPTH : MASTER_FIFO_MCMD_DEPTH ,
+    MASTER_FIFO_MDATA_DEPTH: MASTER_FIFO_MDATA_DEPTH,
+    MASTER_ALIGNER         : MASETR_ALIGNER         ,
+  )(
+    i_clk                 : i_clk                 ,
+    i_rst                 : i_rst                 ,
+    i_arbiter_kind        : i_arbiter_kind        ,
+    i_arbiter_init        : i_arbiter_init        ,
+    i_arbiter_priority    : i_arbiter_priority    ,
+    i_arbiter_weight_valid: i_arbiter_weight_valid,
+    i_arbiter_weight      : i_arbiter_weight      ,
+    o_sresp_select        : sresp_select          ,
+    i_sresp_last_ack      : sresp_last_ack        ,
+    slave_if              : slave_switch_if       ,
+    master_if             : mastre_switch_if      ,
+  );
+
+  always_comb {
+    if WAIT_FOR_SRESP {
+      select = sresp_select as SRESP_SELECT_WIDTH;
+    } else {
+      select = i_sresp_select as SRESP_SELECT_WIDTH;
+    }
+  }
+
+  inst u_sresp_switch: pzcorebus_sresp_m_to_1_switch::<PKG> #(
+    SLAVES                 : SLAVES                           ,
+    EXTERNAL_DECODE        : EXTERNAL_DECODE || WAIT_FOR_SRESP,
+    SELECTOR_KIND          : SRESP_SELECTOR_KIND              ,
+    SELECT_WIDTH           : SRESP_SELECT_WIDTH               ,
+    SELECT_LSB             : SELECT_LSB                       ,
+    SLAVE_FIFO             : SLAVE_FIFO                       ,
+    SLAVE_FIFO_SRESP_DEPTH : SLAVE_FIFO_SRESP_DEPTH           ,
+    MASTER_FIFO            : MASTER_FIFO                      ,
+    MASTER_FIFO_SRESP_DEPTH: MASTER_FIFO_SRESP_DEPTH          ,
+  )(
+    i_clk           : i_clk           ,
+    i_rst           : i_rst           ,
+    o_sresp         : o_sresp         ,
+    i_sresp_select  : select          ,
+    o_sresp_last_ack: sresp_last_ack  ,
+    slave_if        : slave_switch_if ,
+    master_if       : mastre_switch_if,
+  );
+
+  always_comb {
+    mastre_switch_if.slave <> master_if;
+  }
+}

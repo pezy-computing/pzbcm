@@ -1,0 +1,46 @@
+//========================================
+//
+// Copyright (c) 2025 PEZY Computing, K.K.
+//
+//========================================
+pub module pzcorebus_debug_mlengh_counter::<BUS_PKG: pzcorebus_proto_pkg> #(
+  param COUNT_WIDTH: u32                    = 16   ,
+  param TARGET_MCMD: bit<TARGET_MCMD_WIDTH> = '0   ,
+  param BURST_COUNT: bbool                  = false,
+)(
+  i_clk     : input clock                             ,
+  i_rst     : input reset                             ,
+  i_enable  : input logic                             ,
+  i_clear   : input logic                             ,
+  corebus_if: modport pzcorebus_if::<BUS_PKG>::monitor,
+  o_count   : output logic<COUNT_WIDTH>               ,
+) {
+  import pzcorebus_debug_pkg::*;
+
+  var count          : logic<COUNT_WIDTH>;
+  var target_mcmd_ack: logic;
+
+  always_comb {
+    o_count = count;
+  }
+
+  always_comb {
+    target_mcmd_ack =
+      corebus_if.mcmd_ack()
+      && pzcorebus_debug_pkg::is_target_mcmd(corebus_if.mcmd, TARGET_MCMD);
+  }
+
+  always_ff {
+    if_reset {
+      count = 0 as COUNT_WIDTH;
+    } else if i_clear {
+      count = 0 as COUNT_WIDTH;
+    } else if i_enable && target_mcmd_ack {
+      if BURST_COUNT {
+        count += (corebus_if.get_mburst_length() as COUNT_WIDTH);
+      } else {
+        count += (corebus_if.get_mlength_unpacked() as COUNT_WIDTH);
+      }
+    }
+  }
+}

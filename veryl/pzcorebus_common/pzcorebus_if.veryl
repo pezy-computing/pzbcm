@@ -1,0 +1,563 @@
+//========================================
+//
+// Copyright (c) 2025 PEZY Computing, K.K.
+//
+//========================================
+pub interface pzcorebus_if::<PKG: pzcorebus_proto_pkg> {
+  import PKG::*;
+  import pzcorebus_common_pkg::pzcorebus_mcmd_info;
+  import pzcorebus_common_pkg::pzcorebus_mdata_info;
+  import pzcorebus_common_pkg::pzcorebus_sresp_info;
+  import pzcorebus_common_pkg::pzcorebus_signal_info;
+
+  const MCMD_INFO : pzcorebus_mcmd_info  = BUS_CONFIG.mcmd_info ;
+  const MDATA_INFO: pzcorebus_mdata_info = BUS_CONFIG.mdata_info;
+  const SRESP_INFO: pzcorebus_sresp_info = BUS_CONFIG.sresp_info;
+  const IS_CSR    : bbool                = pzcorebus_common_pkg::is_csr_profile(BUS_CONFIG);
+  const IS_MEM    : bbool                = pzcorebus_common_pkg::is_mem_profile(BUS_CONFIG);
+  const IS_MEM_H  : bbool                = pzcorebus_common_pkg::is_mem_h_profile(BUS_CONFIG);
+
+  var scmd_accept : logic                 ;
+  var mcmd_valid  : logic                 ;
+  var mcmd        : pzcorebus_mcmd        ;
+  var mid         : pzcorebus_mid         ;
+  var maddr       : pzcorebus_maddr       ;
+  var mlength     : pzcorebus_mlength     ;
+  var mparam      : pzcorebus_mparam      ;
+  var minfo       : pzcorebus_minfo       ;
+  var sdata_accept: logic                 ;
+  var mdata_valid : logic                 ;
+  var mdata       : pzcorebus_mdata       ;
+  var mdata_byteen: pzcorebus_mdata_byteen;
+  var mdata_last  : pzcorebus_mdata_last  ;
+  var mresp_accept: logic                 ;
+  var sresp_valid : logic                 ;
+  var sresp       : pzcorebus_sresp       ;
+  var sid         : pzcorebus_sid         ;
+  var serror      : pzcorebus_serror      ;
+  var sdata       : pzcorebus_sdata       ;
+  var sinfo       : pzcorebus_sinfo       ;
+  var sresp_uniten: pzcorebus_sresp_uniten;
+  var sresp_last  : pzcorebus_sresp_last  ;
+
+//--------------------------------------------------------------
+//  Internal functions
+//--------------------------------------------------------------
+  function pack_field::<
+    PACKER: type                 ,
+    T     : type                 ,
+    INFO  : pzcorebus_signal_info,
+  >(
+    packer: input PACKER,
+    value : input T     ,
+  ) -> PACKER {
+    const WIDTH: u16 = if INFO.width >: 0 ? INFO.width : 1;
+
+    var packer_next: PACKER;
+    packer_next = packer;
+
+    if INFO.width >: 0 {
+      packer_next[INFO.pos+:WIDTH] = value;
+    }
+
+    return packer_next;
+  }
+
+  function unpack_field::<
+    PACKER: type                 ,
+    T     : type                 ,
+    INFO  : pzcorebus_signal_info,
+  >(packer: input PACKER) -> T {
+    const WIDTH: u16 = if INFO.width >: 0 ? INFO.width : 1;
+    if INFO.width >: 0 {
+      return packer[INFO.pos+:WIDTH] as T;
+    } else {
+      return 'x as T;
+    }
+  }
+
+//--------------------------------------------------------------
+//  API
+//--------------------------------------------------------------
+  alias package utils_pkg = pzcorebus_utils_pkg::<PKG>;
+
+  function get_mcmd() -> pzcorebus_bundled_mcmd {
+    var bundled_mcmd: pzcorebus_bundled_mcmd;
+    bundled_mcmd.mcmd    = mcmd;
+    bundled_mcmd.mid     = mid;
+    bundled_mcmd.maddr   = maddr;
+    bundled_mcmd.mlength = mlength;
+    bundled_mcmd.mparam  = mparam;
+    bundled_mcmd.minfo   = minfo;
+    if IS_CSR {
+      bundled_mcmd.mdata        = mdata;
+      bundled_mcmd.mdata_byteen = mdata_byteen;
+    } else {
+      bundled_mcmd.mdata        = '0;
+      bundled_mcmd.mdata_byteen = '0;
+    }
+
+    return bundled_mcmd;
+  }
+
+  function put_mcmd(bundled_mcmd: input pzcorebus_bundled_mcmd) {
+    mcmd    = bundled_mcmd.mcmd;
+    mid     = bundled_mcmd.mid;
+    maddr   = bundled_mcmd.maddr;
+    mlength = bundled_mcmd.mlength;
+    mparam  = bundled_mcmd.mparam;
+    minfo   = bundled_mcmd.minfo;
+    if IS_CSR {
+      mdata        = bundled_mcmd.mdata;
+      mdata_byteen = bundled_mcmd.mdata_byteen;
+    }
+  }
+
+  function get_mdata() -> pzcorebus_bundled_mdata {
+    var bundled_mdata: pzcorebus_bundled_mdata;
+
+    if IS_MEM {
+      bundled_mdata.mdata        = mdata;
+      bundled_mdata.mdata_byteen = mdata_byteen;
+      bundled_mdata.mdata_last   = mdata_last;
+    } else {
+      bundled_mdata.mdata        = '0;
+      bundled_mdata.mdata_byteen = '0;
+      bundled_mdata.mdata_last   = '0;
+    }
+
+    return bundled_mdata;
+  }
+
+  function put_mdata(bundled_mdata: input pzcorebus_bundled_mdata) {
+    if IS_MEM {
+      mdata        = bundled_mdata.mdata;
+      mdata_byteen = bundled_mdata.mdata_byteen;
+      mdata_last   = bundled_mdata.mdata_last;
+    }
+  }
+
+  function get_sresp() -> pzcorebus_bundled_sresp {
+    var bundled_sresp: pzcorebus_bundled_sresp;
+
+    bundled_sresp.sresp        = sresp;
+    bundled_sresp.sid          = sid;
+    bundled_sresp.serror       = serror;
+    bundled_sresp.sdata        = sdata;
+    bundled_sresp.sinfo        = sinfo;
+    bundled_sresp.sresp_uniten = sresp_uniten;
+    bundled_sresp.sresp_last   = sresp_last;
+
+    return bundled_sresp;
+  }
+
+  function put_sresp(bundled_sresp: input pzcorebus_bundled_sresp) {
+    sresp        = bundled_sresp.sresp;
+    sid          = bundled_sresp.sid;
+    serror       = bundled_sresp.serror;
+    sdata        = bundled_sresp.sdata;
+    sinfo        = bundled_sresp.sinfo;
+    sresp_uniten = bundled_sresp.sresp_uniten;
+    sresp_last   = bundled_sresp.sresp_last;
+  }
+
+  function get_packed_mcmd() -> pzcorebus_packed_mcmd {
+    var packer: pzcorebus_mcmd_packer;
+
+    packer = pack_field::<pzcorebus_mcmd_packer, pzcorebus_mcmd, MCMD_INFO.mcmd>(packer, mcmd);
+    packer = pack_field::<pzcorebus_mcmd_packer, pzcorebus_mid, MCMD_INFO.mid>(packer, mid);
+    packer = pack_field::<pzcorebus_mcmd_packer, pzcorebus_maddr, MCMD_INFO.maddr>(packer, maddr);
+    packer = pack_field::<pzcorebus_mcmd_packer, pzcorebus_mlength,  MCMD_INFO.mlength>(packer, mlength);
+    packer = pack_field::<pzcorebus_mcmd_packer, pzcorebus_mparam, MCMD_INFO.mparam>(packer, mparam);
+    packer = pack_field::<pzcorebus_mcmd_packer, pzcorebus_minfo, MCMD_INFO.minfo>(packer, minfo);
+    if IS_CSR {
+      packer = pack_field::<pzcorebus_mcmd_packer, pzcorebus_mdata, MCMD_INFO.mdata>(packer, mdata);
+      packer = pack_field::<pzcorebus_mcmd_packer, pzcorebus_mdata_byteen, MCMD_INFO.mdata_byteen>(packer, mdata_byteen);
+    }
+
+    return packer as pzcorebus_packed_mcmd;
+  }
+
+  function put_packed_mcmd(packed_mcmd: input pzcorebus_packed_mcmd) {
+    let packer: pzcorebus_mcmd_packer = packed_mcmd as pzcorebus_mcmd_packer;
+
+    mcmd    = unpack_field::<pzcorebus_mcmd_packer, pzcorebus_mcmd, MCMD_INFO.mcmd>(packer);
+    mid     = unpack_field::<pzcorebus_mcmd_packer, pzcorebus_mid, MCMD_INFO.mid>(packer);
+    maddr   = unpack_field::<pzcorebus_mcmd_packer, pzcorebus_maddr, MCMD_INFO.maddr>(packer);
+    mlength = unpack_field::<pzcorebus_mcmd_packer, pzcorebus_mlength, MCMD_INFO.mlength>(packer);
+    mparam  = unpack_field::<pzcorebus_mcmd_packer, pzcorebus_mparam, MCMD_INFO.mparam>(packer);
+    minfo   = unpack_field::<pzcorebus_mcmd_packer, pzcorebus_minfo, MCMD_INFO.minfo>(packer);
+    if IS_CSR {
+      mdata        = unpack_field::<pzcorebus_mcmd_packer, pzcorebus_mdata, MCMD_INFO.mdata>(packer);
+      mdata_byteen = unpack_field::<pzcorebus_mcmd_packer, pzcorebus_minfo, MCMD_INFO.mdata_byteen>(packer);
+    }
+  }
+
+  function get_packed_mdata() -> pzcorebus_packed_mdata {
+    var packer: pzcorebus_mdata_packer;
+
+    if IS_MEM {
+      packer = pack_field::<pzcorebus_mdata_packer, pzcorebus_mdata, MDATA_INFO.mdata>(packer, mdata);
+      packer = pack_field::<pzcorebus_mdata_packer, pzcorebus_mdata_byteen, MDATA_INFO.mdata_byteen>(packer, mdata_byteen);
+      packer = pack_field::<pzcorebus_mdata_packer, pzcorebus_mdata_last, MDATA_INFO.mdata_last>(packer, mdata_last);
+    } else {
+      packer = '0;
+    }
+
+    return packer as pzcorebus_packed_mdata;
+  }
+
+  function put_packed_mdata(packed_mdata: input pzcorebus_packed_mdata) {
+    if IS_MEM {
+      let packer: pzcorebus_mdata_packer = packed_mdata as pzcorebus_mdata_packer;
+      mdata        = unpack_field::<pzcorebus_mdata_packer, pzcorebus_mdata, MDATA_INFO.mdata>(packer);
+      mdata_byteen = unpack_field::<pzcorebus_mdata_packer, pzcorebus_mdata_byteen, MDATA_INFO.mdata_byteen>(packer);
+      mdata_last   = unpack_field::<pzcorebus_mdata_packer, pzcorebus_mdata_last, MDATA_INFO.mdata_last>(packer);
+    }
+  }
+
+  function get_packed_sresp() -> pzcorebus_packed_sresp {
+    var packer: pzcorebus_sresp_packer;
+
+    packer = pack_field::<pzcorebus_sresp_packer, pzcorebus_sresp, SRESP_INFO.sresp>(packer, sresp);
+    packer = pack_field::<pzcorebus_sresp_packer, pzcorebus_sid, SRESP_INFO.sid>(packer, sid);
+    packer = pack_field::<pzcorebus_sresp_packer, pzcorebus_serror, SRESP_INFO.serror>(packer, serror);
+    packer = pack_field::<pzcorebus_sresp_packer, pzcorebus_sdata, SRESP_INFO.sdata>(packer, sdata);
+    packer = pack_field::<pzcorebus_sresp_packer, pzcorebus_sinfo, SRESP_INFO.sinfo>(packer, sinfo);
+    packer = pack_field::<pzcorebus_sresp_packer, pzcorebus_sresp_uniten, SRESP_INFO.sresp_uniten>(packer, sresp_uniten);
+    packer = pack_field::<pzcorebus_sresp_packer, pzcorebus_sresp_last, SRESP_INFO.sresp_last>(packer, sresp_last);
+
+    return packer as pzcorebus_packed_sresp;
+  }
+
+  function put_packed_sresp(packed_sresp: input pzcorebus_packed_sresp) {
+    let packer: pzcorebus_sresp_packer = packed_sresp as pzcorebus_sresp_packer;
+    sresp        = unpack_field::<pzcorebus_sresp_packer, pzcorebus_sresp, SRESP_INFO.sresp>(packer);
+    sid          = unpack_field::<pzcorebus_sresp_packer, pzcorebus_sid, SRESP_INFO.sid>(packer);
+    serror       = unpack_field::<pzcorebus_sresp_packer, pzcorebus_serror, SRESP_INFO.serror>(packer);
+    sdata        = unpack_field::<pzcorebus_sresp_packer, pzcorebus_sdata, SRESP_INFO.sdata>(packer);
+    sinfo        = unpack_field::<pzcorebus_sresp_packer, pzcorebus_sinfo, SRESP_INFO.sinfo>(packer);
+    sresp_uniten = unpack_field::<pzcorebus_sresp_packer, pzcorebus_sresp_uniten, SRESP_INFO.sresp_uniten>(packer);
+    sresp_last   = unpack_field::<pzcorebus_sresp_packer, pzcorebus_sresp_last, SRESP_INFO.sresp_last>(packer);
+  }
+
+  function mcmd_kind() -> pzcorebus_mcmd_kind {
+    return utils_pkg::mcmd_kind(mcmd);
+  }
+
+  function is_mcmd_posted() -> logic {
+    return utils_pkg::is_mcmd_posted(mcmd);
+  }
+
+  function is_mcmd_non_posted() -> logic {
+    return utils_pkg::is_mcmd_non_posted(mcmd);
+  }
+
+  function is_mcmd_no_data() -> logic {
+    return utils_pkg::is_mcmd_no_data(mcmd);
+  }
+
+  function is_mcmd_with_data() -> logic {
+    return utils_pkg::is_mcmd_with_data(mcmd);
+  }
+
+  function is_mcmd_atomic() -> logic {
+    return utils_pkg::is_mcmd_atomic(mcmd);
+  }
+
+  function is_mcmd_message() -> logic {
+    return utils_pkg::is_mcmd_message(mcmd);
+  }
+
+  function is_mcmd_with_response_data() -> logic {
+    return utils_pkg::is_mcmd_with_response_data(mcmd);
+  }
+
+  function mcmd_ack() -> logic {
+    return scmd_accept && mcmd_valid;
+  }
+
+  function mcmd_posted_ack() -> logic {
+    return mcmd_ack() && is_mcmd_posted();
+  }
+
+  function mcmd_non_posted_ack() -> logic {
+    return mcmd_ack() && is_mcmd_non_posted();
+  }
+
+  function mcmd_no_data_ack() -> logic {
+    return mcmd_ack() && is_mcmd_no_data();
+  }
+
+  function mcmd_with_data_ack() -> logic {
+    return mcmd_ack() && is_mcmd_with_data();
+  }
+
+  function mcmd_posted_valid() -> logic {
+    return mcmd_valid && is_mcmd_posted();
+  }
+
+  function mcmd_non_posted_valid() -> logic {
+    return mcmd_valid && is_mcmd_non_posted();
+  }
+
+  function mcmd_no_data_valid() -> logic {
+    return mcmd_valid && is_mcmd_no_data();
+  }
+
+  function mcmd_with_data_valid() -> logic {
+    return mcmd_valid && is_mcmd_with_data();
+  }
+
+  function mdata_ack() -> logic {
+    if IS_MEM {
+      return sdata_accept && mdata_valid;
+    } else {
+      return '0;
+    }
+  }
+
+  function mdata_last_ack() -> logic {
+    return mdata_ack() && mdata_last;
+  }
+
+  function is_sresp_no_data() -> logic {
+    return utils_pkg::is_sresp_no_data(sresp);
+  }
+
+  function is_sresp_with_data() -> logic {
+    return utils_pkg::is_sresp_with_data(sresp);
+  }
+
+  function sresp_ack() -> logic {
+    return mresp_accept && sresp_valid;
+  }
+
+  function sresp_no_data_ack() -> logic {
+    return sresp_ack() && is_sresp_no_data();
+  }
+
+  function sresp_with_data_ack() -> logic {
+    return sresp_ack() && is_sresp_with_data();
+  }
+
+  function sresp_last_ack() -> logic {
+    if IS_MEM {
+      return sresp_ack() && sresp_last[0];
+    } else {
+      return sresp_ack();
+    }
+  }
+
+  function sresp_sublast_ack() -> logic {
+    const FLAG_POS: u16 = $bits(pzcorebus_sresp_last) - 1;
+    if IS_MEM {
+      return sresp_ack() && sresp_last[FLAG_POS];
+    } else {
+      return sresp_ack();
+    }
+  }
+
+  function get_mlength_unpacked() -> pzcorebus_mlength_unpacked {
+    return utils_pkg::get_mlength_unpacked(mcmd, mlength);
+  }
+
+  function get_mlength_aligned() -> pzcorebus_mlength_unpacked {
+    return utils_pkg::get_mlength_aligned(mcmd, maddr, mlength);
+  }
+
+  function get_mburst_length() -> pzcorebus_mburst_length {
+    return utils_pkg::get_mburst_length(mcmd, maddr, mlength);
+  }
+
+  function get_sresp_length() -> pzcorebus_mlength_unpacked {
+    case mcmd_kind() {
+      pzcorebus_mcmd_kind::MESSAGE: return BUS_CONFIG.data_size as pzcorebus_mlength_unpacked;
+      default                     : return get_mlength_unpacked();
+    }
+  }
+
+  function get_sresp_offset() -> pzcorebus_sresp_offset {
+    const OFFSET_LSB  : u16 = pzcorebus_common_pkg::get_sresp_offset_lsb(BUS_CONFIG);
+    const OFFSET_WIDTH: u16 = $bits(pzcorebus_sresp_offset);
+
+    if IS_MEM_H && (mcmd_kind() == pzcorebus_mcmd_kind::READ) {
+      return maddr[OFFSET_LSB+:OFFSET_WIDTH];
+    } else {
+      return 0 as pzcorebus_sresp_offset;
+    }
+  }
+
+//--------------------------------------------------------------
+//  MOdport
+//--------------------------------------------------------------
+  modport master_mcmd {
+    scmd_accept               : input ,
+    mcmd_valid                : output,
+    mcmd                      : output,
+    mid                       : output,
+    maddr                     : output,
+    mlength                   : output,
+    mparam                    : output,
+    minfo                     : output,
+    put_mcmd                  : import,
+    put_packed_mcmd           : import,
+    mcmd_kind                 : import,
+    is_mcmd_posted            : import,
+    is_mcmd_non_posted        : import,
+    is_mcmd_no_data           : import,
+    is_mcmd_with_data         : import,
+    is_mcmd_atomic            : import,
+    is_mcmd_message           : import,
+    is_mcmd_with_response_data: import,
+    mcmd_ack                  : import,
+    mcmd_posted_ack           : import,
+    mcmd_non_posted_ack       : import,
+    mcmd_no_data_ack          : import,
+    mcmd_with_data_ack        : import,
+    mcmd_posted_valid         : import,
+    mcmd_non_posted_valid     : import,
+    mcmd_no_data_valid        : import,
+    mcmd_with_data_valid      : import,
+    get_mlength_unpacked      : import,
+    get_mlength_aligned       : import,
+    get_mburst_length         : import,
+  }
+
+  modport master_mdata {
+    sdata_accept     : input ,
+    mdata_valid      : output,
+    mdata            : output,
+    mdata_byteen     : output,
+    mdata_last       : output,
+    put_mdata        : import,
+    put_packed_mdata : import,
+    mdata_ack        : import,
+    mdata_last_ack   : import,
+  }
+
+  modport master_mreq {
+    ..same(master_mcmd, master_mdata)
+  }
+
+  modport master_sresp {
+    mresp_accept       : output,
+    sresp_valid        : input ,
+    sresp              : input ,
+    sid                : input ,
+    serror             : input ,
+    sdata              : input ,
+    sinfo              : input ,
+    sresp_uniten       : input ,
+    sresp_last         : input ,
+    get_sresp          : import,
+    get_packed_sresp   : import,
+    is_sresp_no_data   : import,
+    is_sresp_with_data : import,
+    sresp_ack          : import,
+    sresp_no_data_ack  : import,
+    sresp_with_data_ack: import,
+    sresp_last_ack     : import,
+    sresp_sublast_ack  : import,
+  }
+
+  modport master {
+    ..same(master_mreq, master_sresp)
+  }
+
+  modport slave_mcmd {
+    get_mcmd                  : import,
+    get_packed_mcmd           : import,
+    mcmd_kind                 : import,
+    is_mcmd_posted            : import,
+    is_mcmd_non_posted        : import,
+    is_mcmd_no_data           : import,
+    is_mcmd_with_data         : import,
+    is_mcmd_atomic            : import,
+    is_mcmd_message           : import,
+    is_mcmd_with_response_data: import,
+    mcmd_ack                  : import,
+    mcmd_posted_ack           : import,
+    mcmd_non_posted_ack       : import,
+    mcmd_no_data_ack          : import,
+    mcmd_with_data_ack        : import,
+    mcmd_posted_valid         : import,
+    mcmd_non_posted_valid     : import,
+    mcmd_no_data_valid        : import,
+    mcmd_with_data_valid      : import,
+    get_mlength_unpacked      : import,
+    get_mlength_aligned       : import,
+    get_mburst_length         : import,
+    ..converse(master_mcmd)
+  }
+
+  modport slave_mdata {
+    get_mdata         : import,
+    get_packed_mdata  : import,
+    mdata_ack         : import,
+    mdata_last_ack    : import,
+    ..converse(master_mdata)
+  }
+
+  modport slave_mreq {
+    ..same(slave_mcmd, slave_mdata)
+  }
+
+  modport slave_sresp {
+    put_sresp          : import,
+    put_packed_sresp   : import,
+    is_sresp_no_data   : import,
+    is_sresp_with_data : import,
+    sresp_ack          : import,
+    sresp_no_data_ack  : import,
+    sresp_with_data_ack: import,
+    sresp_last_ack     : import,
+    sresp_sublast_ack  : import,
+    ..converse(master_sresp)
+  }
+
+  modport slave {
+    ..same(slave_mreq, slave_sresp)
+  }
+
+  modport monitor {
+    get_mcmd                  : import,
+    get_mdata                 : import,
+    get_sresp                 : import,
+    get_packed_mcmd           : import,
+    get_packed_mdata          : import,
+    get_packed_sresp          : import,
+    mcmd_kind                 : import,
+    is_mcmd_posted            : import,
+    is_mcmd_non_posted        : import,
+    is_mcmd_no_data           : import,
+    is_mcmd_with_data         : import,
+    is_mcmd_atomic            : import,
+    is_mcmd_message           : import,
+    is_mcmd_with_response_data: import,
+    mcmd_ack                  : import,
+    mcmd_posted_ack           : import,
+    mcmd_non_posted_ack       : import,
+    mcmd_no_data_ack          : import,
+    mcmd_with_data_ack        : import,
+    mcmd_posted_valid         : import,
+    mcmd_non_posted_valid     : import,
+    mcmd_no_data_valid        : import,
+    mcmd_with_data_valid      : import,
+    mdata_ack                 : import,
+    mdata_last_ack            : import,
+    is_sresp_no_data          : import,
+    is_sresp_with_data        : import,
+    sresp_ack                 : import,
+    sresp_no_data_ack         : import,
+    sresp_with_data_ack       : import,
+    sresp_last_ack            : import,
+    sresp_sublast_ack         : import,
+    get_mlength_unpacked      : import,
+    get_mlength_aligned       : import,
+    get_mburst_length         : import,
+    get_sresp_length          : import,
+    get_sresp_offset          : import,
+    ..input
+  }
+}

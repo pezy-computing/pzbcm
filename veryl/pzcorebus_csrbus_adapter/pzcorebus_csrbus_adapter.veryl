@@ -1,0 +1,523 @@
+//========================================
+//
+// Copyright (c) 2026 PEZY Computing, K.K.
+//
+//========================================
+pub module pzcorebus_csrbus_adapter::<
+  MEMBUS_PKG: pzcorebus_proto_pkg,
+  CSRBUS_PKG: pzcorebus_proto_pkg,
+> #(
+  param MAX_NP_REUQESTS     : u32   = 2                                   ,
+  param SRESP_INFO_DEPTH    : u32   = MAX_NP_REUQESTS                     ,
+  param CSRBUS_ADDRESS_WIDTH: u32   = CSRBUS_PKG::BUS_CONFIG.address_width,
+  param SLAVE_SLICER_MCMD   : bbool = true                                ,
+  param SLAVE_SLICER_MDATA  : bbool = true                                ,
+  param SLAVE_SLICER_SRESP  : bbool = true                                ,
+  param MASTER_SLICER_MCMD  : bbool = true                                ,
+  param MASTER_SLICER_SRESP : bbool = true                                ,
+)(
+  i_clk               : input   clock                             ,
+  i_rst               : input   reset                             ,
+  i_base_id           : input   CSRBUS_PKG::pzcorebus_id          ,
+  i_force_np_write    : input   logic                             ,
+  i_wait_for_all_sresp: input   logic                             ,
+  membus_slave_if     : modport pzcorebus_if::<MEMBUS_PKG>::slave ,
+  csrbus_master_if    : modport pzcorebus_if::<CSRBUS_PKG>::master,
+) {
+  const UNITEN_COUNT_WIDTH: u32 = $clog2(MEMBUS_PKG::BUS_CONFIG.max_data_size);
+  const UNIT_OFFSET_LSB   : u32 = $clog2(MEMBUS_PKG::BUS_CONFIG.unit_data_width / 8);
+  const UNIT_OFFSET_WIDTH : u32 = $clog2(MEMBUS_PKG::BUS_CONFIG.data_size);
+  const UNIT_ADDRESS_WIDTH: u32 = CSRBUS_ADDRESS_WIDTH - UNIT_OFFSET_LSB;
+  const DATA_COUNT_WIDTH  : u32 = UNIT_OFFSET_WIDTH;
+
+  gen MINFO_WIDTH: u32 = MEMBUS_PKG::BUS_CONFIG.request_info_width + 2;
+
+  alias package MEMBUS_INTERNAL_PKG = pzcorebus_pkg::<
+    MEMBUS_PKG::BUS_CONFIG.profile            , //profile
+    MEMBUS_PKG::BUS_CONFIG.id_width           , //id_width
+    MEMBUS_PKG::BUS_CONFIG.address_width      , //address_width
+    MEMBUS_PKG::BUS_CONFIG.data_width         , //data_width
+    MEMBUS_PKG::BUS_CONFIG.use_byte_enable    , //use_byte_enable
+    MEMBUS_PKG::BUS_CONFIG.max_length         , //max_length
+    0                                         , //atomic_command_width
+    0                                         , //message_code_width
+    MINFO_WIDTH                               , //request_info_width
+    MEMBUS_PKG::BUS_CONFIG.response_info_width, //response_info_width
+    MEMBUS_PKG::BUS_CONFIG.unit_data_width    , //unit_data_width
+    MEMBUS_PKG::BUS_CONFIG.max_data_width     , //max_data_width
+    MEMBUS_PKG::BUS_CONFIG.response_boundary  , //response_boundary
+  >;
+
+  struct pzcorebus_sideband_info {
+    minfo             : MEMBUS_PKG::pzcorebus_minfo,
+    force_np_write    : logic,
+    wait_for_all_sresp: logic,
+  }
+
+  struct pzcorebus_sresp_info {
+    sresp          : MEMBUS_PKG::pzcorebus_sresp,
+    sid            : MEMBUS_PKG::pzcorebus_id   ,
+    uniten_offset  : logic<UNITEN_COUNT_WIDTH>  ,
+    ignore_response: logic                      ,
+  }
+
+  inst membus_if: pzcorebus_if::<MEMBUS_INTERNAL_PKG>;
+  inst slicer_if: pzcorebus_if::<MEMBUS_INTERNAL_PKG>;
+  inst csrbus_if: pzcorebus_if::<CSRBUS_PKG>         ;
+
+  var sideband_info    : pzcorebus_sideband_info                  ;
+  var info_fifo_empty  : logic                                    ;
+  var info_fifo_full   : logic                                    ;
+  var info_fifo_push   : logic                                    ;
+  var info_fifo_pop    : logic                                    ;
+  var sresp_info       : pzcorebus_sresp_info[2]                  ;
+  var sresp_count_empty: logic                                    ;
+  var sresp_count_push : logic                                    ;
+  var sresp_count      : MEMBUS_PKG::pzcorebus_mlength_unpacked[2];
+
+//--------------------------------------------------------------
+//  Slicer
+//--------------------------------------------------------------
+  always_comb {
+    membus_if.master <> membus_slave_if;
+    membus_if.minfo = get_sideband_info(membus_slave_if.minfo, i_force_np_write, i_wait_for_all_sresp);
+  }
+
+  inst u_slicer: pzcorebus_slicer::<MEMBUS_INTERNAL_PKG> #(
+    MCMD_VALID : SLAVE_SLICER_MCMD ,
+    MDATA_VALID: SLAVE_SLICER_MDATA,
+    SRESP_VALID: SLAVE_SLICER_SRESP,
+  )(
+    i_clk    : i_clk    ,
+    i_rst    : i_rst    ,
+    slave_if : membus_if,
+    master_if: slicer_if,
+  );
+
+  function get_sideband_info(
+    minfo             : input MEMBUS_PKG::pzcorebus_minfo,
+    force_np_write    : input logic                      ,
+    wait_for_all_sresp: input logic                      ,
+  ) -> MEMBUS_INTERNAL_PKG::pzcorebus_minfo {
+    var info: pzcorebus_sideband_info           ;
+
+    info.minfo              = minfo;
+    info.force_np_write     = force_np_write;
+    info.wait_for_all_sresp = wait_for_all_sresp;
+
+    return info as MEMBUS_INTERNAL_PKG::pzcorebus_minfo;
+  }
+
+//--------------------------------------------------------------
+//  Request paht
+//--------------------------------------------------------------
+  :g_mreq_path {
+    var busy               : logic                                          ;
+    var write_data_inactive: logic                                          ;
+    var read_valid         : logic                                          ;
+    var write_valid        : logic                                          ;
+    var length_count       : MEMBUS_INTERNAL_PKG::pzcorebus_mlength_unpacked;
+    var length_count_last  : logic                                          ;
+    var data_count         : logic<DATA_COUNT_WIDTH>                        ;
+    var data_count_last    : logic                                          ;
+    var mcmd               : MEMBUS_INTERNAL_PKG::pzcorebus_mcmd[2]         ;
+    var maddr              : MEMBUS_INTERNAL_PKG::pzcorebus_maddr           ;
+    var mreq_count         : MEMBUS_INTERNAL_PKG::pzcorebus_mlength_unpacked;
+    var mreq_count_next    : MEMBUS_INTERNAL_PKG::pzcorebus_mlength_unpacked;
+    var update             : logic<2>                                       ;
+
+    always_comb {
+      length_count_last = length_count == (1 as MEMBUS_INTERNAL_PKG::pzcorebus_mlength_unpacked);
+      data_count_last   = data_count == ((MEMBUS_PKG::BUS_CONFIG.data_size - 1) as DATA_COUNT_WIDTH);
+      mreq_count_next   = mreq_count + (1 as MEMBUS_INTERNAL_PKG::pzcorebus_mlength_unpacked);
+      update[0]         = csrbus_if.mcmd_ack();
+      update[1]         = write_valid && write_data_inactive;
+    }
+
+    always_ff {
+      if_reset {
+        busy = false;
+      } else if (update != '0) && length_count_last {
+        busy = false;
+      } else if slicer_if.mcmd_ack() {
+        busy = true;
+      }
+    }
+
+    always_comb {
+      mcmd[0] = get_mcmd(slicer_if.mcmd, slicer_if.minfo as pzcorebus_sideband_info);
+    }
+
+    always_ff {
+      if_reset {
+        mcmd[1]       = pzcorebus_common_pkg::pzcorebus_mcmd::NULL;
+        sideband_info = '0;
+      } else if slicer_if.mcmd_ack() {
+        mcmd[1]       = mcmd[0];
+        sideband_info = slicer_if.minfo as pzcorebus_sideband_info;
+      }
+    }
+
+    always_ff {
+      if_reset {
+        length_count = 0 as MEMBUS_INTERNAL_PKG::pzcorebus_mlength_unpacked;
+        data_count   = 0 as DATA_COUNT_WIDTH;
+        maddr        = 0 as CSRBUS_PKG::pzcorebus_maddr;
+      } else if slicer_if.mcmd_ack() {
+        length_count = slicer_if.get_mlength_unpacked();
+        data_count   = slicer_if.maddr[UNIT_OFFSET_LSB+:UNIT_OFFSET_WIDTH];
+        maddr        = get_maddr_initial(slicer_if.maddr);
+      } else if update != '0 {
+        length_count -= (1 as MEMBUS_INTERNAL_PKG::pzcorebus_mlength_unpacked);
+        data_count   += (1 as DATA_COUNT_WIDTH);
+        maddr        = get_maddr_next(maddr);
+      }
+    }
+
+    always_ff {
+      if_reset {
+        mreq_count = 0 as MEMBUS_INTERNAL_PKG::pzcorebus_mlength_unpacked;
+      } else if (update != '0) && length_count_last {
+        mreq_count = 0 as MEMBUS_INTERNAL_PKG::pzcorebus_mlength_unpacked;
+      } else if update[0] {
+        mreq_count = mreq_count_next;
+      }
+    }
+
+    always_comb {
+      slicer_if.scmd_accept =
+        (!busy) && ((!mcmd[0][pzcorebus_common_pkg::NON_POSTED_BIT]) || (!info_fifo_full));
+
+      write_data_inactive = is_write_data_inactive(slicer_if.mdata_byteen, data_count);
+      read_valid          = busy && (mcmd[1] == pzcorebus_common_pkg::pzcorebus_mcmd::READ);
+      write_valid         = busy && mcmd[1][pzcorebus_common_pkg::WITH_DATA_BIT] && slicer_if.mdata_valid;
+      if read_valid {
+        slicer_if.sdata_accept = false;
+        csrbus_if.mcmd_valid   = true;
+      } else if write_valid {
+        slicer_if.sdata_accept = (csrbus_if.scmd_accept || write_data_inactive) && (data_count_last || length_count_last);
+        csrbus_if.mcmd_valid   = !write_data_inactive;
+      } else {
+        slicer_if.sdata_accept = false;
+        csrbus_if.mcmd_valid   = false;
+      }
+
+      csrbus_if.mcmd         = mcmd[1];
+      csrbus_if.mid          = 0 as CSRBUS_PKG::pzcorebus_id;
+      csrbus_if.maddr        = maddr;
+      csrbus_if.minfo        = sideband_info.minfo;
+      csrbus_if.mdata        = get_mdata(slicer_if.mdata, data_count);
+      csrbus_if.mdata_byteen = get_mdata_byteen(slicer_if.mdata_byteen, data_count);
+    }
+
+    always_comb {
+      csrbus_if.mlength     = '0;
+      csrbus_if.mparam      = '0;
+      csrbus_if.mdata_valid = false;
+      csrbus_if.mdata_last  = false;
+    }
+
+    always_comb {
+      info_fifo_push = slicer_if.mcmd_ack() && mcmd[0][pzcorebus_common_pkg::NON_POSTED_BIT];
+      sresp_info[0]  = get_sresp_info(slicer_if.get_mcmd(), sideband_info);
+    }
+
+    always_comb {
+      sresp_count_push = (update != '0) && length_count_last && csrbus_if.is_mcmd_non_posted();
+      if update[0] {
+        sresp_count[0] = mreq_count_next;
+      } else {
+        sresp_count[0] = mreq_count;
+      }
+    }
+  }
+
+  function get_mcmd(
+    mcmd         : input pzcorebus_common_pkg::pzcorebus_mcmd,
+    sideband_info: input pzcorebus_sideband_info             ,
+  ) -> pzcorebus_common_pkg::pzcorebus_mcmd {
+    if sideband_info.force_np_write && (mcmd == pzcorebus_common_pkg::pzcorebus_mcmd::WRITE) {
+      return pzcorebus_common_pkg::pzcorebus_mcmd::WRITE_NP;
+    } else if sideband_info.force_np_write && (mcmd == pzcorebus_common_pkg::pzcorebus_mcmd::FULL_WRITE) {
+      return pzcorebus_common_pkg::pzcorebus_mcmd::FULL_WRITE_NP;
+    } else {
+      return mcmd;
+    }
+  }
+
+  function get_maddr_initial(
+    maddr: input MEMBUS_INTERNAL_PKG::pzcorebus_maddr,
+  ) -> CSRBUS_PKG::pzcorebus_maddr {
+    var maddr_initial: logic<CSRBUS_ADDRESS_WIDTH>;
+    maddr_initial = {maddr[UNIT_OFFSET_LSB+:UNIT_ADDRESS_WIDTH], (0 as UNIT_OFFSET_LSB)};
+    return maddr_initial as CSRBUS_PKG::pzcorebus_maddr;
+  }
+
+  function get_maddr_next(
+    maddr: input CSRBUS_PKG::pzcorebus_maddr,
+  ) -> CSRBUS_PKG::pzcorebus_maddr {
+    var maddr_next: logic<UNIT_ADDRESS_WIDTH>;
+    maddr_next = maddr[UNIT_OFFSET_LSB+:UNIT_ADDRESS_WIDTH] + (1 as UNIT_ADDRESS_WIDTH);
+    return (maddr_next << UNIT_OFFSET_LSB) as CSRBUS_PKG::pzcorebus_maddr;
+  }
+
+  function get_mdata(
+    mdata     : input MEMBUS_INTERNAL_PKG::pzcorebus_mdata,
+    data_count: input logic<DATA_COUNT_WIDTH>             ,
+  ) -> CSRBUS_PKG::pzcorebus_mdata {
+    return mdata[data_count step $bits(CSRBUS_PKG::pzcorebus_mdata)];
+  }
+
+  function get_mdata_byteen(
+    mdata_byteen: input MEMBUS_INTERNAL_PKG::pzcorebus_mdata_byteen,
+    data_count  : input logic<DATA_COUNT_WIDTH>                    ,
+  ) -> CSRBUS_PKG::pzcorebus_mdata_byteen {
+    if !CSRBUS_PKG::BUS_CONFIG.use_byte_enable {
+      return '0;
+    } else if !MEMBUS_INTERNAL_PKG::BUS_CONFIG.use_byte_enable {
+      return '1;
+    } else {
+      return mdata_byteen[data_count step $bits(CSRBUS_PKG::pzcorebus_mdata_byteen)];
+    }
+  }
+
+  function is_write_data_inactive(
+    mdata_byteen: input MEMBUS_INTERNAL_PKG::pzcorebus_mdata_byteen,
+    data_count  : input logic<DATA_COUNT_WIDTH>                    ,
+  ) -> logic {
+    const STEP: u32 = CSRBUS_PKG::BUS_CONFIG.data_width / 8;
+    if !MEMBUS_PKG::BUS_CONFIG.use_byte_enable {
+      return false;
+    } else {
+      return mdata_byteen[data_count step STEP] == '0;
+    }
+  }
+
+  function get_sresp_info(
+    mcmd         : input MEMBUS_INTERNAL_PKG::pzcorebus_bundled_mcmd,
+    sideband_info: input pzcorebus_sideband_info                    ,
+  ) -> pzcorebus_sresp_info {
+    var info: pzcorebus_sresp_info;
+
+    case mcmd.mcmd {
+      pzcorebus_common_pkg::pzcorebus_mcmd::READ: {
+        info.sresp           = pzcorebus_common_pkg::pzcorebus_sresp::RESPONSE_WITH_DATA;
+        info.ignore_response = false;
+      }
+      pzcorebus_common_pkg::pzcorebus_mcmd::WRITE     ,
+      pzcorebus_common_pkg::pzcorebus_mcmd::FULL_WRITE: {
+        info.sresp           = pzcorebus_common_pkg::pzcorebus_sresp::RESPONSE;
+        info.ignore_response = sideband_info.force_np_write;
+      }
+      default: {
+        info.sresp           = pzcorebus_common_pkg::pzcorebus_sresp::RESPONSE;
+        info.ignore_response = false;
+      }
+    }
+    info.sid           = mcmd.mid;
+    info.uniten_offset = mcmd.maddr[UNIT_OFFSET_LSB+:UNITEN_COUNT_WIDTH];
+
+    return info;
+  }
+
+//--------------------------------------------------------------
+//  Response path
+//--------------------------------------------------------------
+  inst u_sresp_info_fifo: $std::fifo #(
+    TYPE : pzcorebus_sresp_info,
+    DEPTH: SRESP_INFO_DEPTH    ,
+  )(
+    i_clk        : i_clk          ,
+    i_rst        : i_rst          ,
+    i_clear      : false          ,
+    o_empty      : info_fifo_empty,
+    o_almost_full: _              ,
+    o_full       : info_fifo_full ,
+    o_word_count : _              ,
+    i_push       : info_fifo_push ,
+    i_data       : sresp_info[0]  ,
+    i_pop        : info_fifo_pop  ,
+    o_data       : sresp_info[1]  ,
+  );
+
+  inst u_sresp_count_fifo: $std::fifo #(
+    TYPE : MEMBUS_PKG::pzcorebus_mlength_unpacked,
+    DEPTH: SRESP_INFO_DEPTH                      ,
+  )(
+    i_clk        : i_clk            ,
+    i_rst        : i_rst            ,
+    i_clear      : false            ,
+    o_empty      : sresp_count_empty,
+    o_almost_full: _                ,
+    o_full       : _                ,
+    o_word_count : _                ,
+    i_push       : sresp_count_push ,
+    i_data       : sresp_count[0]   ,
+    i_pop        : info_fifo_pop    ,
+    o_data       : sresp_count[1]   ,
+  );
+
+  :g_sresp_path {
+    var sresp_done        : logic<3>                                          ;
+    var busy              : logic                                             ;
+    var length_count      : MEMBUS_INTERNAL_PKG::pzcorebus_mlength_unpacked[2];
+    var length_count_next : MEMBUS_INTERNAL_PKG::pzcorebus_mlength_unpacked   ;
+    var uniten_count_end  : logic<2, UNITEN_COUNT_WIDTH>                      ;
+    var uniten_count_start: logic<2, UNITEN_COUNT_WIDTH>                      ;
+    var uniten_count_next : logic<UNITEN_COUNT_WIDTH>                         ;
+    var data_count        : logic<DATA_COUNT_WIDTH>                           ;
+    var data_count_last   : logic                                             ;
+    var sresp_valid       : logic<3>                                          ;
+    var sdata             : MEMBUS_INTERNAL_PKG::pzcorebus_sdata              ;
+    var serror            : logic                                             ;
+
+    always_comb {
+      sresp_done[0] = csrbus_if.sresp_ack() && sresp_valid[1];
+      sresp_done[1] = sresp_valid[2];
+      sresp_done[2] = (!sresp_count_empty) && (sresp_count[1] == (0 as MEMBUS_PKG::pzcorebus_mlength_unpacked));
+      info_fifo_pop = sresp_done != '0;
+    }
+
+    always_ff {
+      if_reset {
+        busy = false;
+      } else if sresp_done != '0 {
+        busy = false;
+      } else if csrbus_if.sresp_ack() {
+        busy = true;
+      }
+    }
+
+    always_comb {
+      if busy {
+        length_count[0]       = length_count[1];
+        uniten_count_end[0]   = uniten_count_end[1];
+        uniten_count_start[0] = uniten_count_start[1];
+      } else {
+        length_count[0]       = 0 as MEMBUS_PKG::pzcorebus_mlength_unpacked;
+        uniten_count_end[0]   = sresp_info[1].uniten_offset;
+        uniten_count_start[0] = sresp_info[1].uniten_offset;
+      }
+
+      length_count_next = length_count[0] + (1 as MEMBUS_PKG::pzcorebus_mlength_unpacked);
+      uniten_count_next = uniten_count_end[0] + (1 as UNITEN_COUNT_WIDTH);
+      data_count        = uniten_count_end[0][0+:DATA_COUNT_WIDTH];
+      data_count_last   = data_count == '1;
+    }
+
+    always_ff {
+      if_reset {
+        length_count[1]       = 0 as MEMBUS_PKG::pzcorebus_mlength_unpacked;
+        uniten_count_end[1]   = 0 as UNITEN_COUNT_WIDTH;
+        uniten_count_start[1] = 0 as UNITEN_COUNT_WIDTH;
+      } else if csrbus_if.sresp_ack() {
+        length_count[1]     = length_count_next;
+        uniten_count_end[1] = uniten_count_next;
+        if slicer_if.sresp_valid {
+          uniten_count_start[1] = uniten_count_next;
+        }
+      }
+    }
+
+    always_comb {
+      sresp_valid[0] = (sresp_info[1].sresp == pzcorebus_common_pkg::pzcorebus_sresp::RESPONSE_WITH_DATA) && data_count_last;
+      sresp_valid[1] = is_length_count_last(length_count_next, sresp_count_empty, sresp_count[1]);
+      sresp_valid[2] = is_length_count_last(length_count[0], sresp_count_empty, sresp_count[1]);
+      if info_fifo_empty {
+        csrbus_if.mresp_accept = false;
+        slicer_if.sresp_valid  = false;
+      } else if sresp_info[1].ignore_response || (sresp_valid == '0) {
+        csrbus_if.mresp_accept = true;
+        slicer_if.sresp_valid  = false;
+      } else {
+        csrbus_if.mresp_accept = slicer_if.mresp_accept;
+        slicer_if.sresp_valid  = csrbus_if.sresp_valid || sresp_valid[2];
+      }
+
+      slicer_if.sresp        = sresp_info[1].sresp;
+      slicer_if.sid          = sresp_info[1].sid;
+      slicer_if.serror       = csrbus_if.serror || serror;
+      slicer_if.sdata        = sdata;
+      slicer_if.sinfo        = '0;
+      slicer_if.sresp_uniten = get_sresp_uniten(uniten_count_start[0], uniten_count_end[0]);
+      slicer_if.sresp_last   = if sresp_valid[2:1] != '0 ? '1 : '0;
+    }
+
+    always_ff {
+      if_reset {
+        serror = false;
+      } else if slicer_if.sresp_ack() || (sresp_done != '0) {
+        serror = false;
+      } else if csrbus_if.sresp_ack() && csrbus_if.serror {
+        serror = true;
+      }
+    }
+
+    for i in 0..MEMBUS_INTERNAL_PKG::BUS_CONFIG.data_size :g_sdata {
+      if (i + 1) == MEMBUS_INTERNAL_PKG::BUS_CONFIG.data_size :g {
+        always_comb {
+          sdata[i step MEMBUS_INTERNAL_PKG::BUS_CONFIG.unit_data_width] = csrbus_if.sdata;
+        }
+      } else {
+        var sdata_stored: logic<MEMBUS_INTERNAL_PKG::BUS_CONFIG.unit_data_width>;
+        var match       : logic                                                 ;
+
+        always_comb {
+          match = data_count == (i as DATA_COUNT_WIDTH);
+          if match {
+            sdata[i step MEMBUS_INTERNAL_PKG::BUS_CONFIG.unit_data_width] = csrbus_if.sdata;
+          } else {
+            sdata[i step MEMBUS_INTERNAL_PKG::BUS_CONFIG.unit_data_width] = sdata_stored;
+          }
+        }
+
+        always_ff {
+          if csrbus_if.sresp_ack() && match {
+            sdata_stored = csrbus_if.sdata;
+          }
+        }
+      }
+    }
+  }
+
+  function is_length_count_last(
+    length_count: input MEMBUS_INTERNAL_PKG::pzcorebus_mlength_unpacked,
+    empty       : input logic                                          ,
+    sresp_count : input MEMBUS_INTERNAL_PKG::pzcorebus_mlength_unpacked,
+  ) -> logic {
+    return (!empty) && (sresp_count >: (0 as MEMBUS_INTERNAL_PKG::pzcorebus_mlength_unpacked)) && (length_count == sresp_count);
+  }
+
+  function get_sresp_uniten(
+    count_start: input logic<UNITEN_COUNT_WIDTH>,
+    count_end  : input logic<UNITEN_COUNT_WIDTH>,
+  ) -> MEMBUS_INTERNAL_PKG::pzcorebus_sresp_uniten {
+    var uniten: MEMBUS_INTERNAL_PKG::pzcorebus_sresp_uniten;
+
+    if pzcorebus_common_pkg::is_mem_h_profile(MEMBUS_INTERNAL_PKG::BUS_CONFIG) {
+      for i in 0..MEMBUS_INTERNAL_PKG::BUS_CONFIG.data_size {
+        uniten[i] = ((i as UNITEN_COUNT_WIDTH) >= count_start) && ((i as UNITEN_COUNT_WIDTH) <= count_end);
+      }
+    } else {
+      uniten = '0;
+    }
+
+    return uniten;
+  }
+
+//--------------------------------------------------------------
+//  Buffer
+//--------------------------------------------------------------
+  inst u_buffer: pzcorebus_csrbus_adapter_buffer::<CSRBUS_PKG> #(
+    ENTRIES            : MAX_NP_REUQESTS    ,
+    MASTER_SLICER_MCMD : MASTER_SLICER_MCMD ,
+    MASTER_SLICER_SRESP: MASTER_SLICER_SRESP,
+  )(
+    i_clk               : i_clk                           ,
+    i_rst               : i_rst                           ,
+    i_base_id           : i_base_id                       ,
+    i_wait_for_all_sresp: sideband_info.wait_for_all_sresp,
+    slave_if            : csrbus_if                       ,
+    master_if           : csrbus_master_if                ,
+  );
+}

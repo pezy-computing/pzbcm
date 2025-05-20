@@ -1,0 +1,227 @@
+//========================================
+//
+// Copyright (c) 2026 PEZY Computing, K.K.
+//
+//========================================
+pub module pzcorebus_mreq_1_to_m_switch::<PKG: pzcorebus_proto_pkg> #(
+  param MASTERS                : u32           = 2                                        ,
+  param ENABLE_BROADCAST       : bbool         = false                                    ,
+  param WAIT_FOR_MDATA         : bbool         = false                                    ,
+  param WAIT_FOR_MDATA_LAST    : bbool         = false                                    ,
+  param EXTERNAL_DECODE        : bbool         = false                                    ,
+  param SELECTOR_KIND          : selector_kind = selector_kind::BINARY                    ,
+  param SELECT_WIDTH           : u32           = calc_select_width(MASTERS, SELECTOR_KIND),
+  param SELECT_LSB             : u32           = PKG::BUS_CONFIG.id_width - SELECT_WIDTH  ,
+  param SLAVE_FIFO             : bbool         = false                                    ,
+  param SLAVE_FIFO_MCMD_DEPTH  : u32           = 2                                        ,
+  param SLAVE_FIFO_MDATA_DEPTH : u32           = 2                                        ,
+  param MASTER_FIFO            : bbool         = false                                    ,
+  param MASTER_FIFO_MCMD_DEPTH : u32           = 2                                        ,
+  param MASTER_FIFO_MDATA_DEPTH: u32           = 2                                        ,
+  param ALIGH_OUT              : bbool         = false                                    ,
+)(
+  i_clk        : input   clock                                    ,
+  i_rst        : input   reset                                    ,
+  o_mcmd       : output  PKG::pzcorebus_bundled_mcmd = _          ,
+  i_mcmd_select: input   logic<SELECT_WIDTH>         = '0         ,
+  slave_if     : modport pzcorebus_if::<PKG>::slave_mreq          ,
+  master_if    : modport pzcorebus_if::<PKG>::master_mreq[MASTERS],
+) {
+  import $std::selector_pkg::*;
+  import pzcorebus_common_pkg::*;
+
+  const BROADCAST: bbool = is_csr_profile(PKG::BUS_CONFIG) && ENABLE_BROADCAST;
+
+//--------------------------------------------------------------
+//  Slave Mreq Alignment
+//--------------------------------------------------------------
+  inst aligner_if: pzcorebus_if::<PKG>;
+
+  if is_mem_profile(PKG::BUS_CONFIG) :g_slave_aligner {
+    inst u_aligner: pzcorebus_mreq_aligner_core::<PKG> #(
+      WAIT_FOR_DATA          : WAIT_FOR_MDATA        ,
+      THROUGH_NO_DATA_COMMAND: !WAIT_FOR_MDATA_LAST  ,
+      SLAVE_FIFO             : SLAVE_FIFO            ,
+      SLAVE_FIFO_MCMD_DEPTH  : SLAVE_FIFO_MCMD_DEPTH ,
+      SLAVE_FIFO_MDATA_DEPTH : SLAVE_FIFO_MDATA_DEPTH,
+    )(
+      i_clk    : i_clk     ,
+      i_rst    : i_rst     ,
+      slave_if : slave_if  ,
+      master_if: aligner_if,
+    );
+  } else if SLAVE_FIFO {
+    inst u_fifo: pzcorebus_mreq_fifo::<PKG> #(
+      MCMD_DEPTH : SLAVE_FIFO_MCMD_DEPTH ,
+      MDATA_DEPTH: SLAVE_FIFO_MDATA_DEPTH,
+    )(
+      i_clk    : i_clk     ,
+      i_rst    : i_rst     ,
+      slave_if : slave_if  ,
+      master_if: aligner_if,
+    );
+  } else {
+    always_comb {
+      slave_if <> aligner_if.master_mreq;
+    }
+  }
+
+//--------------------------------------------------------------
+//  Switch
+//--------------------------------------------------------------
+  inst switch_if: pzcorebus_if::<PKG>[MASTERS];
+
+  var select        : logic<SELECT_WIDTH>         ;
+  var mcmd_select   : logic<MASTERS>              ;
+  var mdata_select  : logic<MASTERS>              ;
+  var scmd_accept   : logic<MASTERS>              ;
+  var mcmd_valid    : logic                       ;
+  var mcmd          : PKG::pzcorebus_bundled_mcmd ;
+  var mcmd_broadcast: logic                       ;
+  var sdata_accept  : logic<MASTERS>              ;
+  var mdata_valid   : logic                       ;
+  var mdata         : PKG::pzcorebus_bundled_mdata;
+
+  if EXTERNAL_DECODE :g_select {
+    always_comb {
+      o_mcmd = aligner_if.get_mcmd();
+    }
+
+    always_comb {
+      select = i_mcmd_select;
+    }
+  } else {
+    always_comb {
+      o_mcmd = 0 as PKG::pzcorebus_bundled_mcmd;
+    }
+
+    always_comb {
+      select = aligner_if.maddr[SELECT_LSB+:SELECT_WIDTH];
+    }
+  }
+
+  if SELECTOR_KIND == selector_kind::BINARY || !EXTERNAL_DECODE :g_mcmd_select {
+    always_comb {
+      for i in 0..MASTERS {
+        mcmd_select[i] = select == (i as SELECT_WIDTH);
+      }
+    }
+  } else {
+    always_comb {
+      mcmd_select = select;
+    }
+  }
+
+  if is_mem_profile(PKG::BUS_CONFIG) :g_mdata_select {
+    var mdata_select_latched: logic<MASTERS>;
+
+    always_comb {
+      if aligner_if.mcmd_with_data_valid() {
+        mdata_select = mcmd_select;
+      } else {
+        mdata_select = mdata_select_latched;
+      }
+    }
+
+    always_ff {
+      if_reset {
+        mdata_select_latched = '0;
+      } else if aligner_if.mcmd_with_data_valid() {
+        mdata_select_latched = mcmd_select;
+      }
+    }
+  } else {
+    always_comb {
+      mdata_select = '0;
+    }
+  }
+
+  always_comb {
+    aligner_if.scmd_accept  = &scmd_accept;
+    aligner_if.sdata_accept = |sdata_accept;
+    mcmd_valid              = aligner_if.mcmd_valid;
+    mcmd                    = aligner_if.get_mcmd();
+    mdata_valid             = aligner_if.mdata_valid;
+    mdata                   = aligner_if.get_mdata();
+
+    if BROADCAST {
+      mcmd_broadcast = mcmd.mcmd == pzcorebus_mcmd::BROADCAST;
+    } else {
+      mcmd_broadcast = false;
+    }
+  }
+
+  for i in 0..MASTERS :g_switch {
+    var mcmd_done  : logic;
+    var mcmd_active: logic;
+
+    always_comb {
+      mcmd_active = (!mcmd_done) && (mcmd_broadcast || mcmd_select[i]);
+      if mcmd_active {
+        scmd_accept[i]          = switch_if[i].scmd_accept;
+        switch_if[i].mcmd_valid = mcmd_valid;
+      } else {
+        scmd_accept[i]          = true;
+        switch_if[i].mcmd_valid = false;
+      }
+      switch_if[i].put_mcmd(mcmd);
+
+      if mdata_select[i] {
+        sdata_accept[i]          = switch_if[i].sdata_accept;
+        switch_if[i].mdata_valid = aligner_if.mdata_valid;
+      } else {
+        sdata_accept[i]          = false;
+        switch_if[i].mdata_valid = false;
+      }
+      switch_if[i].put_mdata(mdata);
+    }
+
+    if BROADCAST :g {
+      always_ff {
+        if_reset {
+          mcmd_done = false;
+        } else if aligner_if.mcmd_ack() {
+          mcmd_done = false;
+        } else if switch_if[i].mcmd_ack() {
+          mcmd_done = true;
+        }
+      }
+    } else {
+      always_comb {
+        mcmd_done = false;
+      }
+    }
+  }
+
+//--------------------------------------------------------------
+//  Master Mreq Alignment
+//--------------------------------------------------------------
+  for i in 0..MASTERS :g_master_aligner {
+    if is_mem_profile(PKG::BUS_CONFIG) && ALIGH_OUT :g {
+      inst u_aligner: pzcorebus_mreq_aligner_core::<PKG> #(
+        SLAVE_FIFO            : MASTER_FIFO            ,
+        SLAVE_FIFO_MCMD_DEPTH : MASTER_FIFO_MCMD_DEPTH ,
+        SLAVE_FIFO_MDATA_DEPTH: MASTER_FIFO_MDATA_DEPTH,
+      )(
+        i_clk    : i_clk       ,
+        i_rst    : i_rst       ,
+        slave_if : switch_if[i],
+        master_if: master_if[i],
+      );
+    } else if MASTER_FIFO {
+      inst u_fifo: pzcorebus_mreq_fifo::<PKG> #(
+        MCMD_DEPTH : MASTER_FIFO_MCMD_DEPTH ,
+        MDATA_DEPTH: MASTER_FIFO_MDATA_DEPTH,
+      )(
+        i_clk    : i_clk       ,
+        i_rst    : i_rst       ,
+        slave_if : switch_if[i],
+        master_if: master_if[i],
+      );
+    } else {
+      always_comb {
+        switch_if[i].slave_mreq <> master_if[i];
+      }
+    }
+  }
+}

@@ -1,0 +1,104 @@
+//========================================
+//
+// Copyright (c) 2026 PEZY Computing, K.K.
+//
+//========================================
+pub module pzcorebus_sresp_m_to_1_switch::<PKG: pzcorebus_proto_pkg> #(
+  param SLAVES                 : u32           = 2                                       ,
+  param EXTERNAL_DECODE        : bbool         = false                                   ,
+  param SELECTOR_KIND          : selector_kind = selector_kind::BINARY                   ,
+  param SELECT_WIDTH           : u32           = calc_select_width(SLAVES, SELECTOR_KIND),
+  param SELECT_LSB             : u32           = PKG::BUS_CONFIG.id_width - SELECT_WIDTH ,
+  param SLAVE_FIFO             : bbool         = false                                   ,
+  param SLAVE_FIFO_SRESP_DEPTH : u32           = 2                                       ,
+  param MASTER_FIFO            : bbool         = false                                   ,
+  param MASTER_FIFO_SRESP_DEPTH: u32           = 2                                       ,
+)(
+  i_clk           : input   clock                                   ,
+  i_rst           : input   reset                                   ,
+  o_sresp         : output  PKG::pzcorebus_bundled_sresp = _        ,
+  i_sresp_select  : input   logic<SELECT_WIDTH>          = '0       ,
+  o_sresp_last_ack: output  logic                        = _        ,
+  slave_if        : modport pzcorebus_if::<PKG>::slave_sresp[SLAVES],
+  master_if       : modport pzcorebus_if::<PKG>::master_sresp       ,
+){
+  import $std::selector_pkg::*;
+
+//--------------------------------------------------------------
+//  Slave FIFO
+//--------------------------------------------------------------
+  inst fifo_if: pzcorebus_if::<PKG>[SLAVES];
+
+  for i in 0..SLAVES :g_slave_fifo {
+    if SLAVE_FIFO : g {
+      inst u_fifo: pzcorebus_sresp_fifo::<PKG> #(
+        SRESP_DEPTH: SLAVE_FIFO_SRESP_DEPTH,
+      )(
+        i_clk    : i_clk      ,
+        i_rst    : i_rst      ,
+        slave_if : slave_if[i],
+        master_if: fifo_if[i] ,
+      );
+    } else {
+      always_comb {
+        slave_if[i] <> fifo_if[i].master_sresp;
+      }
+    }
+  }
+
+//--------------------------------------------------------------
+//  Switch
+//--------------------------------------------------------------
+  inst switch_if   : pzcorebus_if::<PKG>;
+  var  sresp_select: logic<SELECT_WIDTH>;
+
+  always_comb {
+    o_sresp_last_ack = switch_if.sresp_last_ack();
+  }
+
+  if EXTERNAL_DECODE :g_sresp_select {
+    always_comb {
+      o_sresp = switch_if.get_sresp();
+    }
+
+    always_comb {
+      sresp_select = i_sresp_select;
+    }
+  } else {
+    always_comb {
+      o_sresp = 0 as PKG::pzcorebus_bundled_sresp;
+    }
+
+    always_comb {
+      sresp_select = switch_if.sid[SELECT_LSB+:SELECT_WIDTH];
+    }
+  }
+
+  inst u_switch: pzcorebus_sresp_mux::<PKG> #(
+    SLAVES      : SLAVES       ,
+    KIND        : SELECTOR_KIND,
+    SELECT_WIDTH: SELECT_WIDTH ,
+  )(
+    i_sresp_select: sresp_select,
+    slave_if      : fifo_if     ,
+    master_if     : switch_if   ,
+  );
+
+//--------------------------------------------------------------
+//  Master FIFO
+//--------------------------------------------------------------
+  if MASTER_FIFO : g_master_fifo {
+    inst u_fifo: pzcorebus_sresp_fifo::<PKG> #(
+      SRESP_DEPTH: MASTER_FIFO_SRESP_DEPTH,
+    )(
+      i_clk    : i_clk    ,
+      i_rst    : i_rst    ,
+      slave_if : switch_if,
+      master_if: master_if,
+    );
+  } else {
+    always_comb {
+      switch_if.slave_sresp <> master_if;
+    }
+  }
+}

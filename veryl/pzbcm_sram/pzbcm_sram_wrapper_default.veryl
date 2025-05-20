@@ -1,0 +1,65 @@
+//========================================
+//
+// Copyright (c) 2025 PEZY Computing, K.K.
+//
+//========================================
+pub module pzbcm_sram_wrapper_default for pzbcm_sram_wrapper_proto #(
+  param WORDS           : u16  = 256  ,
+  param DATA_WIDTH      : u16  = 32   ,
+  param POINTER_WIDTH   : u16  = 8    ,
+  param N_PORT          : u16  = 1    ,
+  param SRAM_CONFIG_TYPE: type = logic,
+)(
+  i_clk    : input  clock                       ,
+  i_enable : input  logic<N_PORT>               ,
+  i_pointer: input  logic<N_PORT, POINTER_WIDTH>,
+  i_write  : input  logic                       ,
+  i_data   : input  logic<DATA_WIDTH>           ,
+  o_data   : output logic<DATA_WIDTH>           ,
+  i_config : input  SRAM_CONFIG_TYPE            ,
+) {
+  var mea : logic               ;
+  var adra: logic<POINTER_WIDTH>;
+  var meb : logic               ;
+  var adrb: logic<POINTER_WIDTH>;
+
+  if N_PORT == 1 :g_single_port {
+    always_comb {
+      if i_write {
+        mea = i_enable[0];
+        meb = '0;
+      } else {
+        mea = '0;
+        meb = i_enable[0];
+      }
+
+      adra = i_pointer[0];
+      adrb = i_pointer[0];
+    }
+  } else :g_dual_port {
+    always_comb {
+      mea  = i_enable[0];
+      adra = i_pointer[0];
+      meb  = i_enable[1];
+      adrb = i_pointer[1];
+    }
+  }
+
+  inst u_ram: $std::ram #(
+    WORD_SIZE    : WORDS        ,
+    ADDRESS_WIDTH: POINTER_WIDTH,
+    DATA_WIDTH   : DATA_WIDTH   ,
+    BUFFER_OUT   : true         ,
+  ) (
+    i_clk : i_clk ,
+    i_rst : '0    ,
+    i_clr : '0    ,
+    i_mea : mea   ,
+    i_wea : '1    ,
+    i_adra: adra  ,
+    i_da  : i_data,
+    i_meb : meb   ,
+    i_adrb: adrb  ,
+    o_qb  : o_data,
+  );
+}

@@ -1,0 +1,79 @@
+//========================================
+//
+// Copyright (c) 2026 PEZY Computing, K.K.
+//
+//========================================
+pub module pzcorebus_mreq_mux::<PKG: pzcorebus_proto_pkg> #(
+  param SLAVES      : u32           = 2                              ,
+  param KIND        : selector_kind = selector_kind::ONEHOT          ,
+  param SELECT_WIDTH: u32           = calc_select_width(SLAVES, KIND),
+)(
+  i_mcmd_select : input   logic<SELECT_WIDTH>                    ,
+  i_mdata_select: input   logic<SELECT_WIDTH>                    ,
+  slave_if      : modport pzcorebus_if::<PKG>::slave_mreq[SLAVES],
+  master_if     : modport pzcorebus_if::<PKG>::master_mreq       ,
+){
+  import $std::selector_pkg::*;
+  import pzcorebus_common_pkg::is_mem_profile;
+
+  var s_scmd_accept : logic<SLAVES>                      ;
+  var s_mcmd_valid  : logic<SLAVES>                      ;
+  var s_mcmd        : PKG::pzcorebus_packed_mcmd<SLAVES> ;
+  var s_sdata_accept: logic<SLAVES>                      ;
+  var s_mdata_valid : logic<SLAVES>                      ;
+  var s_mdata       : PKG::pzcorebus_packed_mdata<SLAVES>;
+  var m_sdmc_accept : logic                              ;
+  var m_mcmd_valid  : logic                              ;
+  var m_mcmd        : PKG::pzcorebus_packed_mcmd         ;
+  var m_sdata_accept: logic                              ;
+  var m_mdata_valid : logic                              ;
+  var m_mdata       : PKG::pzcorebus_packed_mdata        ;
+
+  for i in 0..SLAVES :g_slave {
+    always_comb {
+      slave_if[i].scmd_accept = s_scmd_accept[i];
+      s_mcmd_valid[i]         = slave_if[i].mcmd_valid;
+      s_mcmd[i]               = slave_if[i].get_packed_mcmd();
+
+      slave_if[i].sdata_accept = s_sdata_accept[i];
+      s_mdata_valid[i]         = slave_if[i].mdata_valid;
+      s_mdata[i]               = slave_if[i].get_packed_mdata();
+    }
+  }
+
+  always_comb {
+    s_scmd_accept = $std::dispatch::<KIND, SLAVES, lbool>(i_mcmd_select, m_sdmc_accept, false);
+  }
+
+  always_comb {
+    m_mcmd_valid = $std::select::<KIND, SLAVES, lbool>(i_mcmd_select, s_mcmd_valid);
+    m_mcmd       = $std::select::<KIND, SLAVES, PKG::pzcorebus_packed_mcmd>(i_mcmd_select, s_mcmd);
+  }
+
+  if is_mem_profile(PKG::BUS_CONFIG) :g_mdata {
+    always_comb {
+      s_sdata_accept = $std::dispatch::<KIND, SLAVES, lbool>(i_mdata_select, m_sdata_accept, false);
+    }
+
+    always_comb {
+      m_mdata_valid = $std::select::<KIND, SLAVES, lbool>(i_mdata_select, s_mdata_valid);
+      m_mdata       = $std::select::<KIND, SLAVES, PKG::pzcorebus_packed_mdata>(i_mdata_select, s_mdata);
+    }
+  } else {
+    always_comb {
+      s_sdata_accept = '0;
+      m_mdata_valid  = '0;
+      m_mdata        = '0;
+    }
+  }
+
+  always_comb {
+    m_sdmc_accept        = master_if.scmd_accept;
+    master_if.mcmd_valid = m_mcmd_valid;
+    master_if.put_packed_mcmd(m_mcmd);
+
+    m_sdata_accept        = master_if.sdata_accept;
+    master_if.mdata_valid = m_mdata_valid;
+    master_if.put_packed_mdata(m_mdata);
+  }
+}

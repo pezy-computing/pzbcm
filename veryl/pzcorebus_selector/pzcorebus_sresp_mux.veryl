@@ -1,0 +1,44 @@
+//========================================
+//
+// Copyright (c) 2026 PEZY Computing, K.K.
+//
+//========================================
+pub module pzcorebus_sresp_mux::<PKG: pzcorebus_proto_pkg> #(
+  param SLAVES      : u32           = 2                              ,
+  param KIND        : selector_kind = selector_kind::ONEHOT          ,
+  param SELECT_WIDTH: u32           = calc_select_width(SLAVES, KIND),
+)(
+  i_sresp_select: input   logic<SELECT_WIDTH>                     ,
+  slave_if      : modport pzcorebus_if::<PKG>::slave_sresp[SLAVES],
+  master_if     : modport pzcorebus_if::<PKG>::master_sresp       ,
+){
+  import $std::selector_pkg::*;
+
+  var s_mresp_accept: logic<SLAVES>                      ;
+  var s_sresp_valid : logic<SLAVES>                      ;
+  var m_mresp_accept: logic                              ;
+  var m_sresp_valid : logic                              ;
+  var m_sresp       : PKG::pzcorebus_packed_sresp        ;
+
+  for i in 0..SLAVES :g_slave {
+    always_comb {
+      s_mresp_accept[i]       = slave_if[i].mresp_accept;
+      slave_if[i].sresp_valid = s_sresp_valid[i];
+      slave_if[i].put_packed_sresp(m_sresp);
+    }
+  }
+
+  always_comb {
+    m_mresp_accept = $std::select::<KIND, SLAVES, lbool>(i_sresp_select, s_mresp_accept);
+  }
+
+  always_comb {
+    s_sresp_valid = $std::dispatch::<KIND, SLAVES, lbool>(i_sresp_select, m_sresp_valid, false);
+  }
+
+  always_comb {
+    master_if.mresp_accept = m_mresp_accept;
+    m_sresp_valid          = master_if.sresp_valid;
+    m_sresp                = master_if.get_packed_sresp();
+  }
+}

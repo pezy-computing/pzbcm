@@ -1,0 +1,69 @@
+//========================================
+//
+// Copyright (c) 2026 PEZY Computing, K.K.
+//
+//========================================
+pub module pzcorebus_downsizer::<
+  SLAVE_PKG : pzcorebus_proto_pkg,
+  MASTER_PKG: pzcorebus_proto_pkg,
+> #(
+  param SLAVE_FIFO              : bbool = false,
+  param SLAVE_FIFO_MCMD_DEPTH   : u32   = 2    ,
+  param SLAVE_FIFO_MDATA_DEPTH  : u32   = 2    ,
+  param SLAVE_FIFO_SRESP_DEPTH  : u32   = 2    ,
+  param MASTER_FIFO             : bbool = false,
+  param MASTER_FIFO_MCMD_DEPTH  : u32   = 2    ,
+  param MASTER_FIFO_MDATA_DEPTH : u32   = 2    ,
+  param MASTER_FIFO_SRESP_DEPTH : u32   = 2    ,
+  param ALLIGNED_ACCESS_ONLY    : bbool = false,
+)(
+  i_clk    : input   clock                             ,
+  i_rst    : input   reset                             ,
+  slave_if : modport pzcorebus_if::<SLAVE_PKG>::slave  ,
+  master_if: modport pzcorebus_if::<MASTER_PKG>::master,
+) {
+  inst aligner_if: pzcorebus_if::<SLAVE_PKG> ;
+  inst fifo_if   : pzcorebus_if::<MASTER_PKG>;
+
+  inst u_aligner: pzcorebus_mreq_aligner::<SLAVE_PKG> #(
+    SLAVE_FIFO            : SLAVE_FIFO            ,
+    SLAVE_FIFO_MCMD_DEPTH : SLAVE_FIFO_MCMD_DEPTH ,
+    SLAVE_FIFO_MDATA_DEPTH: SLAVE_FIFO_MDATA_DEPTH,
+    SLAVE_FIFO_SRESP_DEPTH: SLAVE_FIFO_SRESP_DEPTH,
+  )(
+    i_clk    : i_clk     ,
+    i_rst    : i_rst     ,
+    slave_if : slave_if  ,
+    master_if: aligner_if,
+  );
+
+  inst u_request_path: pzcorebus_downsizer_request_path::<SLAVE_PKG, MASTER_PKG> #(
+    ALLIGNED_ACCESS_ONLY: ALLIGNED_ACCESS_ONLY,
+  )(
+    i_clk    : i_clk     ,
+    i_rst    : i_rst     ,
+    slave_if : aligner_if,
+    master_if: fifo_if   ,
+  );
+
+  inst u_response_path: pzcorebus_downsizer_response_path::<SLAVE_PKG, MASTER_PKG> (
+    i_clk    : i_clk     ,
+    i_rst    : i_rst     ,
+    slave_if : aligner_if,
+    master_if: fifo_if   ,
+  );
+
+  inst u_fifo: pzcorebus_fifo::<MASTER_PKG> #(
+    MCMD_DEPTH     : MASTER_FIFO_MCMD_DEPTH ,
+    MCMD_VALID     : MASTER_FIFO            ,
+    MDATA_DEPTH    : MASTER_FIFO_MDATA_DEPTH,
+    MDATA_VALID    : MASTER_FIFO            ,
+    SRESP_DEPTH    : MASTER_FIFO_SRESP_DEPTH,
+    SRESP_VALID    : MASTER_FIFO            ,
+  )(
+    i_clk    : i_clk    ,
+    i_rst    : i_rst    ,
+    slave_if : fifo_if  ,
+    master_if: master_if,
+  );
+}

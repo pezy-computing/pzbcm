@@ -1,0 +1,86 @@
+//========================================
+//
+// Copyright (c) 2025 PEZY Computing, K.K.
+//
+//========================================
+pub module pzcorebus_mcmd_fifo::<PKG: pzcorebus_proto_pkg>#(
+  param MCMD_DEPTH     : u32   = 2          ,
+  param MCMD_THRESHOLD : u32   = MCMD_DEPTH ,
+  param MCMD_VALID     : bbool = true       ,
+  param FLAG_FF_OUT    : bbool = true       ,
+  param DATA_FF_OUT    : bbool = true       ,
+  param RESET_DATA_FF  : bbool = true       ,
+)(
+  i_clk        : input   clock                                   ,
+  i_rst        : input   reset                                   ,
+  i_clear      : input   logic                            = false,
+  o_empty      : output  logic                            = _    ,
+  o_almost_full: output  logic                            = _    ,
+  o_full       : output  logic                            = _    ,
+  slave_if     : modport pzcorebus_if::<PKG>::slave_mcmd         ,
+  master_if    : modport pzcorebus_if::<PKG>::master_mcmd        ,
+) {
+  var scmd_accept: logic<2>;
+  var mcmd_valid : logic<2>;
+  var mcmd       : PKG::pzcorebus_packed_mcmd<2>;
+
+  always_comb {
+    slave_if.scmd_accept = scmd_accept[0];
+    mcmd_valid[0]        = slave_if.mcmd_valid;
+    mcmd[0]              = slave_if.get_packed_mcmd();
+  }
+
+  always_comb {
+    scmd_accept[1]       = master_if.scmd_accept;
+    master_if.mcmd_valid = mcmd_valid[1];
+    master_if.put_packed_mcmd(mcmd[1]);
+  }
+
+  if MCMD_VALID && MCMD_DEPTH >= 1 :g {
+    var status: logic<3>;
+
+    always_comb {
+      o_empty       = status[0];
+      o_almost_full = status[1];
+      o_full        = status[2];
+    }
+
+    always_comb {
+      scmd_accept[0] = !status[2];
+      mcmd_valid[1]  = !status[0];
+    }
+
+    inst u_fifo: $std::fifo #(
+      TYPE         : PKG::pzcorebus_packed_mcmd,
+      DEPTH        : MCMD_DEPTH                ,
+      THRESHOLD    : MCMD_THRESHOLD            ,
+      FLAG_FF_OUT  : FLAG_FF_OUT               ,
+      DATA_FF_OUT  : DATA_FF_OUT               ,
+      RESET_DATA_FF: RESET_DATA_FF             ,
+    )(
+      i_clk        : i_clk         ,
+      i_rst        : i_rst         ,
+      i_clear      : i_clear       ,
+      o_empty      : status[0]     ,
+      o_almost_full: status[1]     ,
+      o_full       : status[2]     ,
+      o_word_count : _             ,
+      i_push       : mcmd_valid[0] ,
+      i_data       : mcmd[0]       ,
+      i_pop        : scmd_accept[1],
+      o_data       : mcmd[1]       ,
+    );
+  } else {
+    always_comb {
+      o_empty       = '1;
+      o_almost_full = '0;
+      o_full        = '0;
+    }
+
+    always_comb {
+      scmd_accept[0] = scmd_accept[1];
+      mcmd_valid[1]  = mcmd_valid[0];
+      mcmd[1]        = mcmd[0];
+    }
+  }
+}

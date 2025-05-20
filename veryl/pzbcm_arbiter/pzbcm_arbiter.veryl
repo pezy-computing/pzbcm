@@ -1,0 +1,126 @@
+//========================================
+//
+// Copyright (c) 2026 PEZY Computing, K.K.
+//
+//========================================
+pub module pzbcm_arbiter #(
+  param REQUESTS       : u32                         = 2                                       ,
+  param ONEHOT_GRANT   : bbool                       = true                                    ,
+  param KEEP_RESULT    : bbool                       = true                                    ,
+  param GRANT_WIDTH    : u32                         = calc_grant_width(REQUESTS, ONEHOT_GRANT),
+  param FREE_WIDTH     : u32                         = REQUESTS                                ,
+  param PRIORITY_ENABLE: bbool                       = false                                   ,
+  param PRIORITY_WIDTH : u32                         = 1                                       ,
+  param WEIGHT_ENABLE  : bbool                       = false                                   ,
+  param WEIGHT_WIDTH   : u32                         = 1                                       ,
+  param INITIAL_WEIGHT : bit<REQUESTS, WEIGHT_WIDTH> = '1                                      ,
+)(
+  i_clk         : input  clock                                                            ,
+  i_rst         : input  reset                                                            ,
+  i_kind        : input  pzbcm_arbiter_kind              = pzbcm_arbiter_kind::ROUND_ROBIN,
+  i_init        : input  logic                           = false                          ,
+  i_priority    : input  logic<REQUESTS, PRIORITY_WIDTH> = '0                             ,
+  i_weight_valid: input  logic                           = false                          ,
+  i_weight      : input  logic<REQUESTS, WEIGHT_WIDTH>   = '0                             ,
+  i_request     : input  logic<REQUESTS>                                                  ,
+  o_grant       : output logic<GRANT_WIDTH>                                               ,
+  i_free        : input  logic<FREE_WIDTH>                                                ,
+) {
+  import pzbcm_arbiter_pkg::*;
+
+  if REQUESTS >= 2 :g {
+    var request: logic<REQUESTS>   ;
+    var grant  : logic<GRANT_WIDTH>;
+    var busy   : logic             ;
+
+    always_comb {
+      request = if !busy ? i_request : '0;
+    }
+
+    inst u_round_robin_arbiter: pzbcm_round_robin_arbiter #(
+      REQUESTS       : REQUESTS       ,
+      ONEHOT_GRANT   : ONEHOT_GRANT   ,
+      PRIORITY_ENABLE: PRIORITY_ENABLE,
+      PRIORITY_WIDTH : PRIORITY_WIDTH ,
+      WEIGHT_ENABLE  : WEIGHT_ENABLE  ,
+      WEIGHT_WIDTH   : WEIGHT_WIDTH   ,
+      INITIAL_WEIGHT : INITIAL_WEIGHT ,
+    )(
+      i_clk         : i_clk         ,
+      i_rst         : i_rst         ,
+      i_kind        : i_kind        ,
+      i_init        : i_init        ,
+      i_priority    : i_priority    ,
+      i_weight_valid: i_weight_valid,
+      i_weight      : i_weight      ,
+      i_request     : request       ,
+      o_grant       : grant         ,
+    );
+
+    if KEEP_RESULT :g_grant {
+      var free         : logic             ;
+      var current_grant: logic<GRANT_WIDTH>;
+      var grant_latched: logic<GRANT_WIDTH>;
+
+      always_comb {
+        o_grant = current_grant;
+      }
+
+      always_comb {
+        if !busy {
+          current_grant = grant;
+        } else {
+          current_grant = grant_latched;
+        }
+      }
+
+      always_ff {
+        if_reset {
+          busy = false;
+        } else if free {
+          busy = false;
+        } else if request != '0 {
+          busy = true;
+        }
+      }
+
+      always_ff {
+        if_reset {
+          grant_latched = 0 as GRANT_WIDTH;
+        } else if request != '0 {
+          grant_latched = grant;
+        }
+      }
+
+      if FREE_WIDTH == 1 :g_free {
+        always_comb {
+          free = i_free;
+        }
+      } else if ONEHOT_GRANT {
+        always_comb {
+          free = (i_free & current_grant) != '0;
+        }
+      } else {
+        always_comb {
+          free = i_free[current_grant];
+        }
+      }
+    } else {
+      always_comb {
+        o_grant = grant;
+      }
+
+      always_comb {
+        busy = false;
+      }
+    }
+  } else if ONEHOT_GRANT {
+    always_comb {
+      o_grant = '1;
+    }
+  } else {
+    always_comb {
+      o_grant = 0 as GRANT_WIDTH;
+    }
+  }
+}

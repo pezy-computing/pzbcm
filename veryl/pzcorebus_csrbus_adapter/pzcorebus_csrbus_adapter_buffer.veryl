@@ -1,0 +1,167 @@
+//========================================
+//
+// Copyright (c) 2026 PEZY Computing, K.K.
+//
+//========================================
+module pzcorebus_csrbus_adapter_buffer::<
+  CSRBUS_PKG: pzcorebus_proto_pkg,
+> #(
+  param ENTRIES            : u32   = 2   ,
+  param MASTER_SLICER_MCMD : bbool = true,
+  param MASTER_SLICER_SRESP: bbool = true,
+)(
+  i_clk               : input   clock                             ,
+  i_rst               : input   reset                             ,
+  i_base_id           : input   CSRBUS_PKG::pzcorebus_id          ,
+  i_wait_for_all_sresp: input   logic                             ,
+  slave_if            : modport pzcorebus_if::<CSRBUS_PKG>::slave ,
+  master_if           : modport pzcorebus_if::<CSRBUS_PKG>::master,
+) {
+  const INDEX_WIDTH: u32 = $clog2(ENTRIES);
+
+  struct pzcorebus_sresp_entry {
+    busy       : logic                     ,
+    sresp_valid: logic                     ,
+    serror     : logic                     ,
+    sdata      : CSRBUS_PKG::pzcorebus_data,
+  }
+
+  var  sresp_entries: pzcorebus_sresp_entry[ENTRIES];
+  inst bus_if       : pzcorebus_if::<CSRBUS_PKG>    ;
+
+//--------------------------------------------------------------
+//  Request
+//--------------------------------------------------------------
+  var mcmd_index: logic<INDEX_WIDTH>                ;
+  var mcmd_ready: logic<2>                          ;
+  var mcmd      : CSRBUS_PKG::pzcorebus_bundled_mcmd;
+
+  always_comb {
+    mcmd_ready[0] = slave_if.is_mcmd_posted();
+    mcmd_ready[1] = get_np_ready(mcmd_index, sresp_entries, i_wait_for_all_sresp);
+    if mcmd_ready != '0 {
+      slave_if.scmd_accept = bus_if.scmd_accept;
+      bus_if.mcmd_valid    = slave_if.mcmd_valid;
+    } else {
+      slave_if.scmd_accept = false;
+      bus_if.mcmd_valid    = false;
+    }
+
+    mcmd = slave_if.get_mcmd();
+    mcmd.mid = i_base_id | (mcmd_index as CSRBUS_PKG::pzcorebus_id);
+    bus_if.put_mcmd(mcmd);
+  }
+
+  always_comb {
+    slave_if.sdata_accept = false;
+    bus_if.mdata_valid    = false;
+    bus_if.mdata_last     = false;
+  }
+
+  always_ff {
+    if_reset {
+      mcmd_index = 0 as INDEX_WIDTH;
+    } else if slave_if.mcmd_non_posted_ack() {
+      if mcmd_index == ((ENTRIES - 1) as INDEX_WIDTH) {
+        mcmd_index = 0 as INDEX_WIDTH;
+      } else {
+        mcmd_index += (1 as INDEX_WIDTH);
+      }
+    }
+  }
+
+  function get_np_ready(
+    index             : input logic<INDEX_WIDTH>            ,
+    entires           : input pzcorebus_sresp_entry[ENTRIES],
+    wait_for_all_sresp: input logic                         ,
+  ) -> logic {
+    var busy: logic<ENTRIES>;
+
+    for i in 0..ENTRIES {
+      busy[i] = entires[i].busy;
+    }
+
+    return (!entires[index].busy) && ((!wait_for_all_sresp) || (busy == '0));
+  }
+
+//--------------------------------------------------------------
+//  Response
+//--------------------------------------------------------------
+  var sresp_entry: pzcorebus_sresp_entry;
+  var sresp_index: logic<INDEX_WIDTH>   ;
+
+  always_comb {
+    sresp_entry           = sresp_entries[sresp_index];
+    slave_if.sresp_valid  = sresp_entry.sresp_valid;
+    slave_if.sid          = 0 as CSRBUS_PKG::pzcorebus_id;
+    slave_if.sresp        = 0 as CSRBUS_PKG::pzcorebus_sresp;
+    slave_if.serror       = sresp_entry.serror;
+    slave_if.sdata        = sresp_entry.sdata;
+    slave_if.sinfo        = '0;
+    slave_if.sresp_uniten = '0;
+    slave_if.sresp_last   = '0;
+  }
+
+  always_ff {
+    if_reset {
+      sresp_index = 0 as INDEX_WIDTH;
+    } else if slave_if.sresp_ack() {
+      if sresp_index == ((ENTRIES - 1) as INDEX_WIDTH) {
+        sresp_index = 0 as INDEX_WIDTH;
+      } else {
+        sresp_index += (1 as INDEX_WIDTH);
+      }
+    }
+  }
+
+//--------------------------------------------------------------
+//  Response entry
+//--------------------------------------------------------------
+  always_comb {
+    bus_if.mresp_accept = true;
+  }
+
+  for i in 0..ENTRIES :g_sresp_entry {
+    const INDEX: bit<INDEX_WIDTH> = i as INDEX_WIDTH;
+
+    var init : logic;
+    var fill : logic;
+    var clear: logic;
+
+    always_comb {
+      init  = bus_if.mcmd_non_posted_ack() && (mcmd_index == INDEX);
+      fill  = bus_if.sresp_ack() && ((bus_if.sid as INDEX_WIDTH) == INDEX);
+      clear = slave_if.sresp_ack() && (sresp_index == INDEX);
+    }
+
+    always_ff {
+      if_reset {
+        sresp_entries[i] = '0;
+      } else if init {
+        sresp_entries[i].busy = true;
+      } else if fill {
+        sresp_entries[i].sresp_valid = true;
+        sresp_entries[i].serror      = bus_if.serror;
+        sresp_entries[i].sdata       = bus_if.sdata;
+      } else if clear {
+        sresp_entries[i].busy        = false;
+        sresp_entries[i].sresp_valid = false;
+      }
+    }
+
+    let _busy: logic = sresp_entries[i].busy;
+  }
+
+//--------------------------------------------------------------
+//  Slicer
+//--------------------------------------------------------------
+  inst u_slicer: pzcorebus_slicer::<CSRBUS_PKG> #(
+    MCMD_VALID : MASTER_SLICER_MCMD ,
+    SRESP_VALID: MASTER_SLICER_SRESP,
+  )(
+    i_clk    : i_clk    ,
+    i_rst    : i_rst    ,
+    slave_if : bus_if   ,
+    master_if: master_if,
+  );
+}

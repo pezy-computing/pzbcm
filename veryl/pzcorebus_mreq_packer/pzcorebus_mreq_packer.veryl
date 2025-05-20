@@ -1,0 +1,173 @@
+//========================================
+//
+// Copyright (c) 2025 PEZY Computing, K.K.
+//
+//========================================
+pub module pzcorebus_mreq_packer::<
+  BUS_PKG : pzcorebus_proto_pkg ,
+  SRAM_PKG: pzbcm_sram_proto_pkg,
+> #(
+  param MCMD_DEPTH   : u16    = 2 ,
+  param SLAVE_SLICER : bit<2> = '0,
+  param MASTER_SLICER: bit<2> = '0,
+)(
+  i_clk        : input   clock                          ,
+  i_rst        : input   reset                          ,
+  i_clear      : input   logic                          ,
+  o_empty      : output  logic<2>                       ,
+  o_full       : output  logic<2>                       ,
+  i_sram_config: input   SRAM_PKG::SRAM_CONFIG_TYPE     ,
+  slave_if     : modport pzcorebus_if::<BUS_PKG>::slave ,
+  master_if    : modport pzcorebus_if::<BUS_PKG>::master,
+) {
+  inst bus_if: pzcorebus_if::<BUS_PKG>[3];
+
+//--------------------------------------------------------------
+//  Slave slicer
+//--------------------------------------------------------------
+  inst u_slave_slicer: pzcorebus_slicer::<BUS_PKG> #(
+    MCMD_VALID : SLAVE_SLICER[0],
+    MDATA_VALID: SLAVE_SLICER[0],
+    SRESP_VALID: SLAVE_SLICER[1],
+  )(
+    i_clk    : i_clk    ,
+    i_rst    : i_rst    ,
+    slave_if : slave_if ,
+    master_if: bus_if[0],
+  );
+
+//--------------------------------------------------------------
+//  Command FIFO
+//--------------------------------------------------------------
+  inst u_mcmd_fifo: pzcorebus_mcmd_fifo::<BUS_PKG> #(
+    MCMD_DEPTH: MCMD_DEPTH,
+  )(
+    i_clk        : i_clk           ,
+    i_rst        : i_rst           ,
+    i_clear      : i_clear         ,
+    o_empty      : o_empty[0]      ,
+    o_almost_full: _               ,
+    o_full       : o_full[0]       ,
+    slave_if     : bus_if[0]       ,
+    master_if    : bus_if[1]       ,
+  );
+
+//--------------------------------------------------------------
+//  Data FIFO
+//--------------------------------------------------------------
+  inst u_mdata_fifo: pzcorebus_mreq_packer_mdata_fifo::<BUS_PKG, SRAM_PKG> (
+    i_clk        : i_clk        ,
+    i_rst        : i_rst        ,
+    i_clear      : i_clear      ,
+    o_empty      : o_empty[1]   ,
+    o_full       : o_full[1]    ,
+    i_sram_config: i_sram_config,
+    slave_if     : bus_if[0]    ,
+    master_if    : bus_if[1]    ,
+  );
+
+//--------------------------------------------------------------
+//  Request control
+//--------------------------------------------------------------
+  const WRITE_REQ_COUNT_WIDTH: u16 = $clog2(MCMD_DEPTH + 1);
+
+  var write_req_count_up  : logic;
+  var write_req_count_down: logic;
+  var write_req_count     : logic<WRITE_REQ_COUNT_WIDTH>;
+  var write_ready         : logic;
+  var write_done          : logic;
+  var write_command_ack   : logic;
+  var write_command_done  : logic;
+  var write_data_ack      : logic;
+  var write_data_done     : logic;
+
+  always_comb {
+    write_req_count_up   = bus_if[0].mdata_last_ack();
+    write_req_count_down = write_done;
+  }
+
+  always_ff {
+    if_reset {
+      write_req_count = 0 as WRITE_REQ_COUNT_WIDTH;
+    } else if i_clear {
+      write_req_count = 0 as WRITE_REQ_COUNT_WIDTH;
+    } else {
+      case {write_req_count_up, write_req_count_down} {
+        2'b10: write_req_count += 1 as WRITE_REQ_COUNT_WIDTH;
+        2'b01: write_req_count -= 1 as WRITE_REQ_COUNT_WIDTH;
+      }
+    }
+  }
+
+  always_comb {
+    write_command_ack = bus_if[1].mcmd_with_data_ack();
+    write_data_ack    = bus_if[1].mdata_last_ack();
+    write_done        =
+      (write_command_ack  && write_data_ack ) ||
+      (write_command_ack  && write_data_done) ||
+      (write_command_done && write_data_ack );
+  }
+
+  always_ff {
+    if_reset {
+      write_command_done = false;
+      write_data_done    = false;
+    } else if i_clear || write_done {
+      write_command_done = false;
+      write_data_done    = false;
+    } else {
+      if write_command_ack {
+        write_command_done = true;
+      }
+      if write_data_ack {
+        write_data_done = true;
+      }
+    }
+  }
+
+  always_comb {
+    write_ready =
+      (write_command_done || bus_if[1].mcmd_with_data_valid())
+      && (write_req_count != (0 as WRITE_REQ_COUNT_WIDTH));
+
+    if write_ready {
+      bus_if[1].scmd_accept  = (!write_command_done) && bus_if[2].scmd_accept;
+      bus_if[2].mcmd_valid   = (!write_command_done) && bus_if[1].mcmd_valid;
+      bus_if[1].sdata_accept = (!write_data_done   ) && bus_if[2].sdata_accept;
+      bus_if[2].mdata_valid  = (!write_data_done   ) && bus_if[1].mdata_valid;
+    } else if bus_if[1].is_mcmd_no_data() {
+      bus_if[1].scmd_accept  = bus_if[2].scmd_accept;
+      bus_if[2].mcmd_valid   = bus_if[1].mcmd_valid;
+      bus_if[1].sdata_accept = '0;
+      bus_if[2].mdata_valid  = '0;
+    } else {
+      bus_if[1].scmd_accept  = '0;
+      bus_if[2].mcmd_valid   = '0;
+      bus_if[1].sdata_accept = '0;
+      bus_if[2].mdata_valid  = '0;
+    }
+
+    bus_if[2].put_mcmd(bus_if[1].get_mcmd());
+    bus_if[2].put_mdata(bus_if[1].get_mdata());
+  }
+
+//--------------------------------------------------------------
+//  Through response
+//--------------------------------------------------------------
+  connect bus_if[0].slave_sresp <> bus_if[1].master_sresp;
+  connect bus_if[1].slave_sresp <> bus_if[2].master_sresp;
+
+//--------------------------------------------------------------
+//  Master slicer
+//--------------------------------------------------------------
+  inst u_master_slicer: pzcorebus_slicer::<BUS_PKG> #(
+    MCMD_VALID : MASTER_SLICER[0],
+    MDATA_VALID: MASTER_SLICER[0],
+    SRESP_VALID: MASTER_SLICER[1],
+  )(
+    i_clk    : i_clk    ,
+    i_rst    : i_rst    ,
+    slave_if : bus_if[2],
+    master_if: master_if,
+  );
+}

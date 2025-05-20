@@ -1,0 +1,41 @@
+pub module pzcorebus_sresp_demux::<PKG: pzcorebus_proto_pkg> #(
+  param MASTERS     : u32           = 2                               ,
+  param KIND        : selector_kind = selector_kind::ONEHOT           ,
+  param SELECT_WIDTH: u32           = calc_select_width(MASTERS, KIND),
+)(
+  i_sresp_select: input   logic<SELECT_WIDTH>                       ,
+  slave_if      : modport pzcorebus_if::<PKG>::slave_sresp          ,
+  master_if     : modport pzcorebus_if::<PKG>::master_sresp[MASTERS],
+) {
+  import $std::selector_pkg::*;
+
+  var s_mresp_accept: logic                               ;
+  var s_sresp_valid : logic                               ;
+  var s_sresp       : PKG::pzcorebus_packed_sresp         ;
+  var m_mresp_accept: logic<MASTERS>                      ;
+  var m_sresp_valid : logic<MASTERS>                      ;
+  var m_sresp       : PKG::pzcorebus_packed_sresp<MASTERS>;
+
+  always_comb {
+    s_mresp_accept       = slave_if.mresp_accept;
+    slave_if.sresp_valid = s_sresp_valid;
+    slave_if.put_packed_sresp(s_sresp);
+  }
+
+  always_comb {
+    m_mresp_accept = $std::dispatch::<KIND, MASTERS, lbool>(i_sresp_select, s_mresp_accept, false);
+  }
+
+  always_comb {
+    s_sresp_valid = $std::select::<KIND, MASTERS, lbool>(i_sresp_select, m_sresp_valid);
+    s_sresp       = $std::select::<KIND, MASTERS, PKG::pzcorebus_packed_sresp>(i_sresp_select, m_sresp);
+  }
+
+  for i in 0..MASTERS : g_master {
+    always_comb {
+      master_if[i].mresp_accept = m_mresp_accept[i];
+      m_sresp_valid[i]          = master_if[i].sresp_valid;
+      m_sresp[i]                = master_if[i].get_packed_sresp();
+    }
+  }
+}

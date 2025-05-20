@@ -1,0 +1,114 @@
+//========================================
+//
+// Copyright (c) 2025 PEZY Computing, K.K.
+//
+//========================================
+pub module pzbcm_sram_fifo::<PKG: pzbcm_sram_proto_pkg> #(
+  param TYPE           : type  = logic<PKG::DATA_WIDTH>,
+  param THRESHOLD      : u16   = PKG::WORDS            ,
+  param RESET_DATA_PATH: bbool = true                  ,
+)(
+  i_clk             : input  clock                ,
+  i_rst             : input  reset                ,
+  i_clear           : input  logic                ,
+  i_sram_config     : input  PKG::SRAM_CONFIG_TYPE,
+  o_empty           : output logic                ,
+  o_completely_empty: output logic                ,
+  o_almost_full     : output logic                ,
+  o_full            : output logic                ,
+  o_completely_full : output logic                ,
+  i_push            : input  logic                ,
+  i_data            : input  TYPE                 ,
+  i_pop             : input  logic                ,
+  o_data            : output TYPE                 ,
+) {
+  embed (inline) sv {{{
+    if ($bits(TYPE) != \{ PKG::DATA_WIDTH \}) begin : g_width_mismatch
+      $error("data width mismatch");
+    end
+  }}}
+
+  var empty      : logic;
+  var almost_full: logic;
+  var full       : logic;
+  var write_ack  : logic;
+  var read_ack   : logic;
+  var wp         : logic<PKG::POINTER_WIDTH>;
+  var rp         : logic<PKG::POINTER_WIDTH>;
+
+  inst sram_if: pzbcm_sram_if::<PKG>;
+
+  always_comb {
+    o_empty            = sram_if.fifo_empty;
+    o_completely_empty = sram_if.fifo_empty && empty && (!sram_if.read_busy);
+    o_almost_full      = almost_full;
+    o_full             = full;
+    o_completely_full  = full && sram_if.fifo_full;
+  }
+
+//--------------------------------------------------------------
+//  FIFO controller
+//--------------------------------------------------------------
+  always_comb {
+    write_ack = sram_if.write_ack();
+    read_ack  = sram_if.read_ack();
+  }
+
+  inst u_controller: $std::fifo_controller #(
+    TYPE             : logic             ,
+    DEPTH            : PKG::WORDS        ,
+    THRESHOLD        : THRESHOLD         ,
+    FLAG_FF_OUT      : true              ,
+    DATA_FF_OUT      : false             ,
+    PUSH_ON_CLEAR    : false             ,
+    RAM_WORDS        : PKG::WORDS        ,
+    RAM_POINTER_WIDTH: PKG::POINTER_WIDTH,
+    MATCH_COUNT_WIDTH: 0                 ,
+  )(
+    i_clk          : i_clk      ,
+    i_rst          : i_rst      ,
+    i_clear        : i_clear    ,
+    o_empty        : empty      ,
+    o_almost_full  : almost_full,
+    o_full         : full       ,
+    o_word_count   : _          ,
+    i_push         : write_ack  ,
+    i_data         : '0         ,
+    i_pop          : read_ack   ,
+    o_write_pointer: wp         ,
+    o_write_to_ff  : _          ,
+    o_write_to_ram : _          ,
+    o_read_pointer : rp         ,
+    o_read_from_ram: _          ,
+  );
+
+//--------------------------------------------------------------
+//  SRAM
+//--------------------------------------------------------------
+  always_comb {
+    sram_if.write_valid   = i_push && (!full);
+    sram_if.write_pointer = wp;
+    sram_if.write_data    = i_data;
+  }
+
+  always_comb {
+    sram_if.read_valid   = !empty;
+    sram_if.read_pointer = rp;
+    sram_if.read_info    = '0;
+  }
+
+  always_comb {
+    sram_if.read_data_ready = i_pop;
+    o_data                  = sram_if.read_data.data as TYPE;
+  }
+
+  inst u_sram: pzbcm_sram::<PKG> #(
+    OUTPUT_FIFO: true,
+  )(
+    i_clk        : i_clk        ,
+    i_rst        : i_rst        ,
+    i_clear      : i_clear      ,
+    i_sram_config: i_sram_config,
+    port_if      : sram_if      ,
+  );
+}

@@ -1,0 +1,39 @@
+//========================================
+//
+// Copyright (c) 2026 PEZY Computing, K.K.
+//
+//========================================
+pub module pzcorebus_id_assigner::<PKG: pzcorebus_proto_pkg> #(
+  param LOCAL_ID_WIDTH: u32 = PKG::BUS_CONFIG.id_width - 1             ,
+  param LOCAL_ID_LSB  : u32 = 0                                        ,
+  param BASE_ID_WIDTH : u32 = PKG::BUS_CONFIG.id_width - LOCAL_ID_WIDTH,
+  param BASE_ID_LSB   : u32 = LOCAL_ID_WIDTH                           ,
+  const BASE_ID_WIDTH_: u32 = if BASE_ID_WIDTH >: 0 ? BASE_ID_WIDTH : 1,
+)(
+  i_base_id: input   logic<BASE_ID_WIDTH_>      ,
+  slave_if : modport pzcorebus_if::<PKG>::slave ,
+  master_if: modport pzcorebus_if::<PKG>::master,
+){
+  import PKG::pzcorebus_id;
+
+  const ID_MASK: pzcorebus_id = (1 << LOCAL_ID_WIDTH) - 1;
+
+  function get_mid(
+    mid    : input pzcorebus_id         ,
+    base_id: input logic<BASE_ID_WIDTH_>,
+  ) -> pzcorebus_id {
+    return (base_id << BASE_ID_LSB) as pzcorebus_id | ((mid & ID_MASK) << LOCAL_ID_LSB) as pzcorebus_id;
+  }
+
+  function get_sid(
+    sid: input pzcorebus_id,
+  ) -> pzcorebus_id {
+    return ((sid >> LOCAL_ID_LSB) & ID_MASK) as pzcorebus_id;
+  }
+
+  always_comb {
+    slave_if <> master_if;
+    master_if.mid = get_mid(slave_if.mid, i_base_id);
+    slave_if.sid  = get_sid(master_if.sid);
+  }
+}
