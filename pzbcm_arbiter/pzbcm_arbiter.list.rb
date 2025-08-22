@@ -1,7 +1,6 @@
 ##========================================
 ##
 ## Copyright (c) 2022 PEZY Computing, K.K.
-##                    All Rights Reserved.
 ##
 ##========================================
 file_list   'pzbcm_min_max_finder/pzbcm_min_max_finder.list.rb'

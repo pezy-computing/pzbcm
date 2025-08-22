@@ -1,7 +1,6 @@
 ##========================================
 ##
 ## Copyright (c) 2024 PEZY Computing, K.K.
-##                    All Rights Reserved.
 ##
 ##========================================
 file_list   'pzcorebus_common/pzcorebus_common.list.rb'
