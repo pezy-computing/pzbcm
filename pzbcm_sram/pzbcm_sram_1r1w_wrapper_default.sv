@@ -1,7 +1,6 @@
 //========================================
 //
 // Copyright (c) 2023 PEZY Computing, K.K.
-//                    All Rights Reserved.
 //
 //========================================
 module pzbcm_sram_1r1w_wrapper_default

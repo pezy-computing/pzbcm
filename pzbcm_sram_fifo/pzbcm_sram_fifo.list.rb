@@ -1,7 +1,6 @@
 ##========================================
 ##
 ## Copyright (c) 2023 PEZY Computing, K.K.
-##                    All Rights Reserved.
 ##
 ##========================================
 ['pzbcm_fifo', 'pzbcm_sram'].each do |bcm|

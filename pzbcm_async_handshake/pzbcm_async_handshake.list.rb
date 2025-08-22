@@ -1,7 +1,6 @@
 ##========================================
 ##
 ## Copyright (c) 2022 PEZY Computing, K.K.
-##                    All Rights Reserved.
 ##
 ##========================================
 file_list   'pzbcm_edge_detector/pzbcm_edge_detector.list.rb'

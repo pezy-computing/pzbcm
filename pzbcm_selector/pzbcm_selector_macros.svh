@@ -1,7 +1,6 @@
 //========================================
 //
 // Copyright (c) 2024 PEZY Computing, K.K.
-//                    All Rights Reserved.
 //
 //========================================
 `ifndef INCLUDED_PZBCM_SELECTOR_MACROS_SVH

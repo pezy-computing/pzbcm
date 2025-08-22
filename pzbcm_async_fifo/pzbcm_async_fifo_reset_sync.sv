@@ -1,7 +1,6 @@
 //========================================
 //
 // Copyright (c) 2023 PEZY Computing, K.K.
-//                    All Rights Reserved.
 //
 //========================================
 module pzbcm_async_fifo_reset_sync #(

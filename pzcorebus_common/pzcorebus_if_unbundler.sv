@@ -1,7 +1,6 @@
 //========================================
 //
 // Copyright (c) 2022 PEZY Computing, K.K.
-//                    All Rights Reserved.
 //
 //========================================
 module pzcorebus_if_unbundler

@@ -1,7 +1,6 @@
 //========================================
 //
 // Copyright (c) 2024 PEZY Computing, K.K.
-//                    All Rights Reserved.
 //
 //========================================
 module pzcorebus_request_sva_checker
