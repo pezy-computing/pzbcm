@@ -17,7 +17,7 @@ module pzbcm_edge_detector #(
 );
   logic [WIDTH-1:0] d;
 
-  assign  o_edge    = ( i_d) ^ ( d) & (~i_clear);
+  assign  o_edge    = ( i_d  ^   d) & (~i_clear);
   assign  o_posedge = ( i_d) & (~d) & (~i_clear);
   assign  o_negedge = (~i_d) & ( d) & (~i_clear);
 
