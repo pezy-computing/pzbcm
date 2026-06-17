@@ -4,6 +4,8 @@
 //
 //========================================
 pub package pzcorebus_utils_pkg::<PKG: pzcorebus_proto_pkg> {
+  import $std::utils::clog2_clipped;
+
   const IS_CSR  : bbool = pzcorebus_common_pkg::is_csr_profile(PKG::BUS_CONFIG);
   const IS_MEM  : bbool = pzcorebus_common_pkg::is_mem_profile(PKG::BUS_CONFIG);
   const IS_MEM_H: bbool = pzcorebus_common_pkg::is_mem_h_profile(PKG::BUS_CONFIG);
@@ -81,7 +83,7 @@ pub package pzcorebus_utils_pkg::<PKG: pzcorebus_proto_pkg> {
     mlength: input PKG::pzcorebus_mlength,
   ) -> PKG::pzcorebus_mlength_unpacked {
     const OFFSET_LSB  : u16 = $clog2(PKG::BUS_CONFIG.unit_data_width) - 3;
-    const OFFSET_WIDTH: u16 = $std::utils::clog2_clipped(PKG::BUS_CONFIG.data_size, 1);
+    const OFFSET_WIDTH: u16 = clog2_clipped(PKG::BUS_CONFIG.data_size, 1);
 
     var offset: logic<OFFSET_WIDTH>;
     if PKG::BUS_CONFIG.data_size == 1 || is_mcmd_message(mcmd) || is_mcmd_atomic(mcmd) {
@@ -101,14 +103,14 @@ pub package pzcorebus_utils_pkg::<PKG: pzcorebus_proto_pkg> {
     if IS_CSR {
       return 1 as PKG::pzcorebus_mburst_length;
     } else {
-      var mlength_unpaced: PKG::pzcorebus_mlength_unpacked;
+      var mlength_aligned: PKG::pzcorebus_mlength_unpacked;
 
-      mlength_unpaced = get_mlength_unpacked(mcmd, mlength);
+      mlength_aligned = get_mlength_aligned(mcmd, maddr, mlength);
       if PKG::BUS_CONFIG.data_size >: 1 {
-        mlength_unpaced += ((PKG::BUS_CONFIG.data_size - 1) as PKG::pzcorebus_mlength_unpacked);
+        mlength_aligned += ((PKG::BUS_CONFIG.data_size - 1) as PKG::pzcorebus_mlength_unpacked);
       }
 
-      return (mlength_unpaced / PKG::BUS_CONFIG.data_size) as PKG::pzcorebus_mburst_length;
+      return (mlength_aligned / PKG::BUS_CONFIG.data_size) as PKG::pzcorebus_mburst_length;
     }
   }
 }
