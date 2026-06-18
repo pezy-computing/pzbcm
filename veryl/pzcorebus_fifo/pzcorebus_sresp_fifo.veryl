@@ -1,0 +1,86 @@
+//========================================
+//
+// Copyright (c) 2026 PEZY Computing, K.K.
+//
+//========================================
+pub module pzcorebus_sresp_fifo::<PKG: pzcorebus_proto_pkg> #(
+  param SRESP_DEPTH    : u32   = 2          ,
+  param SRESP_THRESHOLD: u32   = SRESP_DEPTH,
+  param SRESP_VALID    : bbool = true       ,
+  param FLAG_FF_OUT    : bbool = true       ,
+  param DATA_FF_OUT    : bbool = true       ,
+  param RESET_DATA_FF  : bbool = true       ,
+)(
+  i_clk        : input  clock                             ,
+  i_rst        : input  reset                             ,
+  i_clear      : input  logic = false                     ,
+  o_empty      : output logic = _                         ,
+  o_almost_full: output logic = _                         ,
+  o_full       : output logic = _                         ,
+  slave_if     : modport pzcorebus_if::<PKG>::slave_sresp ,
+  master_if    : modport pzcorebus_if::<PKG>::master_sresp,
+) {
+  var mresp_accept: logic<2>                      ;
+  var sresp_valid : logic<2>                      ;
+  var sresp       : PKG::pzcorebus_packed_sresp<2>;
+
+  always_comb {
+    mresp_accept[0]      = slave_if.mresp_accept;
+    slave_if.sresp_valid = sresp_valid[0];
+    slave_if.put_packed_sresp(sresp[0]);
+  }
+
+  always_comb {
+    master_if.mresp_accept = mresp_accept[1];
+    sresp_valid[1]         = master_if.sresp_valid;
+    sresp[1]               = master_if.get_packed_sresp();
+  }
+
+  if SRESP_VALID && SRESP_DEPTH >= 1 :g_sresp {
+    var status: logic<3>;
+
+    always_comb {
+      o_empty       = status[0];
+      o_almost_full = status[1];
+      o_full        = status[2];
+    }
+
+    always_comb {
+      sresp_valid[0]  = !status[0];
+      mresp_accept[1] = !status[2];
+    }
+
+    inst u_fifo: $std::fifo #(
+      TYPE         : PKG::pzcorebus_packed_sresp,
+      DEPTH        : SRESP_DEPTH                ,
+      THRESHOLD    : SRESP_THRESHOLD            ,
+      FLAG_FF_OUT  : FLAG_FF_OUT                ,
+      DATA_FF_OUT  : DATA_FF_OUT                ,
+      RESET_DATA_FF: RESET_DATA_FF              ,
+    )(
+      i_clk        : i_clk          ,
+      i_rst        : i_rst          ,
+      i_clear      : i_clear        ,
+      o_empty      : status[0]      ,
+      o_almost_full: status[1]      ,
+      o_full       : status[2]      ,
+      o_word_count : _              ,
+      i_push       : sresp_valid[1] ,
+      i_data       : sresp[1]       ,
+      i_pop        : mresp_accept[0],
+      o_data       : sresp[0]       ,
+    );
+  } else {
+    always_comb {
+      o_empty       = true;
+      o_almost_full = false;
+      o_full        = false;
+    }
+
+    always_comb {
+      mresp_accept[1] = mresp_accept[0];
+      sresp_valid[0]  = sresp_valid[1];
+      sresp[0]        = sresp[1];
+    }
+  }
+}

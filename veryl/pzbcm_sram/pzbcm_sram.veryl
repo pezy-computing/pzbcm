@@ -1,0 +1,311 @@
+//========================================
+//
+// Copyright (c) 2025 PEZY Computing, K.K.
+//
+//========================================
+pub module pzbcm_sram::<PKG: pzbcm_sram_proto_pkg>#(
+  param OUTPUT_FIFO    : bbool = true,
+  param WRITE_FIRST    : bbool = true,
+  param RESET_DATA_PATH: bbool = true,
+)(
+  i_clk        : input   clock                     ,
+  i_rst        : input   reset                     ,
+  i_clear      : input   logic                     ,
+  i_sram_config: input   PKG::SRAM_CONFIG_TYPE     ,
+  port_if      : modport pzbcm_sram_if::<PKG>::sram,
+) {
+  import PKG::*;
+
+  var write_ready      : logic<BANKS>;
+  var write_enable     : logic<BANKS>;
+  var read_ready       : logic<BANKS>;
+  var read_enable      : logic<BANKS>;
+  var read_enable_delay: logic<READ_LATENCY, BANKS>;
+  var read_data        : logic<BANKS, DATA_WIDTH>;
+  var read_data_valid  : logic<BANKS>;
+  var read_info        : READ_INFO_TYPE;
+  var read_busy        : logic;
+  var ram_read_data    : logic<DATA_WIDTH>;
+  var fifo_ready       : logic;
+
+//--------------------------------------------------------------
+//  SRAM instance
+//--------------------------------------------------------------
+  always_comb {
+    port_if.write_ready = write_ready != '0;
+    port_if.read_ready  = read_ready  != '0;
+  }
+
+  for i in 0..BANKS :g_bank {
+    var match_write  : logic;
+    var write_pointer: logic<RAM_POINTER_WIDTH>;
+    var match_read   : logic;
+    var read_pointer : logic<RAM_POINTER_WIDTH>;
+
+    always_comb {
+      match_write   = match_bank(i, port_if.write_pointer);
+      write_pointer = get_ram_pointer(port_if.write_pointer);
+      match_read    = match_bank(i, port_if.read_pointer);
+      read_pointer  = get_ram_pointer(port_if.read_pointer);
+
+      if !SINGLE_PORT {
+        write_ready[i]  = match_write;
+        write_enable[i] = port_if.write_valid && write_ready[i];
+        read_ready[i]   = match_read && fifo_ready;
+        read_enable[i]  = port_if.read_valid && read_ready[i];
+      } else if WRITE_FIRST {
+        write_ready[i]  = match_write;
+        write_enable[i] = port_if.write_valid && write_ready[i];
+        read_ready[i]   = match_read && fifo_ready && (!write_enable[i]);
+        read_enable[i]  = port_if.read_valid && read_ready[i];
+      } else {
+        read_ready[i]   = match_read && fifo_ready;
+        read_enable[i]  = port_if.read_valid && read_ready[i];
+        write_ready[i]  = match_write && (!read_enable[i]);
+        write_enable[i] = port_if.write_valid && write_ready[i];
+      }
+    }
+
+    if SINGLE_PORT :g {
+      var enable     : logic<1>;
+      var write      : logic;
+      var ram_pointer: logic<1, RAM_POINTER_WIDTH>;
+
+      always_comb {
+        enable[0] = write_enable[i] || read_enable[i];
+        if write_enable[i] {
+          write          = '1;
+          ram_pointer[0] = write_pointer;
+        } else {
+          write          = '0;
+          ram_pointer[0] = read_pointer;
+        }
+      }
+
+      inst u_sram_wrapper: SRAM_WRAPPER #(
+        WORDS           : RAM_WORDS        ,
+        DATA_WIDTH      : DATA_WIDTH       ,
+        POINTER_WIDTH   : RAM_POINTER_WIDTH,
+        N_PORT          : 1                ,
+        SRAM_CONFIG_TYPE: SRAM_CONFIG_TYPE ,
+      )(
+        i_clk    : i_clk             ,
+        i_enable : enable            ,
+        i_pointer: ram_pointer       ,
+        i_write  : write             ,
+        i_data   : port_if.write_data,
+        o_data   : read_data[i]      ,
+        i_config : i_sram_config     ,
+      );
+    } else {
+      var enable     : logic<2>                   ;
+      var ram_pointer: logic<2, RAM_POINTER_WIDTH>;
+
+      always_comb {
+        enable[0]      = write_enable[i];
+        ram_pointer[0] = write_pointer;
+        enable[1]      = read_enable[i];
+        ram_pointer[1] = read_pointer;
+      }
+
+      inst u_sram_wrapper: SRAM_WRAPPER #(
+        DATA_WIDTH      : DATA_WIDTH       ,
+        POINTER_WIDTH   : RAM_POINTER_WIDTH,
+        N_PORT          : 2                ,
+        SRAM_CONFIG_TYPE: SRAM_CONFIG_TYPE ,
+      )(
+        i_clk    : i_clk             ,
+        i_enable : enable            ,
+        i_pointer: ram_pointer       ,
+        i_write  : '0                ,
+        i_data   : port_if.write_data,
+        o_data   : read_data[i]      ,
+        i_config : i_sram_config     ,
+      );
+    }
+  }
+
+  function get_ram_pointer_map() -> bit<RAM_POINTER_WIDTH, 16> {
+    var map            : bit<RAM_POINTER_WIDTH, 16>;
+    var bank_lsb       : u16;
+    var bank_msb       : u16;
+    var ram_pointer_pos: u16;
+
+    if BANKS >= 2 {
+      bank_lsb = BANK_LSB;
+      bank_msb = bank_lsb - BANK_WIDTH - 1;
+    } else {
+      bank_lsb = 0;
+      bank_msb = 0;
+    }
+
+    ram_pointer_pos = 0;
+    for i in 0..POINTER_WIDTH {
+      if (BANKS == 1) || ((i <: bank_lsb) || (i >: bank_msb)) {
+        map[ram_pointer_pos] = i;
+        ram_pointer_pos += 1;
+      }
+    }
+
+    return map;
+  }
+
+  const POINTER_MAP: bit<RAM_POINTER_WIDTH, 16> = get_ram_pointer_map();
+
+  function get_ram_pointer(
+    pointer: input logic<POINTER_WIDTH>
+  ) -> logic<RAM_POINTER_WIDTH> {
+    if BANKS == 1 {
+      return pointer;
+    } else if BANK_LSB == 0 {
+      return (pointer >> BANK_WIDTH) as RAM_POINTER_WIDTH;
+    } else {
+      var ram_pointer: logic<RAM_POINTER_WIDTH>;
+      for i in 0..RAM_POINTER_WIDTH {
+        ram_pointer[i] = pointer[POINTER_MAP[i]];
+      }
+
+      return ram_pointer;
+    }
+  }
+
+  function match_bank(
+    bank_index: input u16                      ,
+    pointer   : input logic<POINTER_WIDTH>,
+  ) -> logic {
+    if BANKS == 1 {
+      return true;
+    } else {
+      let bank: logic<BANK_WIDTH> = pointer[BANK_LSB+:BANK_WIDTH];
+      return bank == (bank_index as BANK_WIDTH);
+    }
+  }
+
+//--------------------------------------------------------------
+//  Read Data
+//--------------------------------------------------------------
+  always_comb {
+    port_if.read_busy = read_busy;
+  }
+
+  always_comb {
+    read_busy       = read_enable_delay != '0;
+    read_data_valid = read_enable_delay[READ_LATENCY - 1];
+  }
+
+  always_ff {
+    if_reset {
+      read_enable_delay = '0;
+    } else if i_clear {
+      read_enable_delay = '0;
+    } else {
+      for i in 0..READ_LATENCY {
+        if i == 0 {
+          read_enable_delay[i] = read_enable;
+        } else {
+          read_enable_delay[i] = read_enable_delay[i - 1];
+        }
+      }
+    }
+  }
+
+  if READ_INFO :g_read_info {
+    inst u_read_info_delay: $std::delay #(
+      DELAY: READ_LATENCY  ,
+      TYPE : READ_INFO_TYPE,
+    ) (
+      i_clk: i_clk            ,
+      i_rst: i_rst            ,
+      i_d  : port_if.read_info,
+      o_d  : read_info        ,
+    );
+  } else {
+    always_comb {
+      read_info = 0 as READ_INFO_TYPE;
+    }
+  }
+
+  if BANKS == 1 :g_ram_read_data {
+    always_comb {
+      ram_read_data = read_data[0];
+    }
+  } else {
+    inst u_read_data_mux: $std::mux #(
+      WIDTH  : DATA_WIDTH                               ,
+      ENTRIES: BANKS                                    ,
+      KIND   : $std::selector_pkg::selector_kind::ONEHOT,
+    )(
+      i_select: read_data_valid,
+      i_data  : read_data      ,
+      o_data  : ram_read_data  ,
+    );
+  }
+
+//--------------------------------------------------------------
+//  Output FIFO
+//--------------------------------------------------------------
+  if OUTPUT_FIFO :g_output_fifo {
+    const FIFO_DATA_WIDTH: u16 = DATA_WIDTH + (if READ_INFO ? $bits(READ_INFO_TYPE) : 0);
+    const FIFO_DEPTH     : u16 = READ_LATENCY + 2;
+
+    var empty      : logic;
+    var almost_full: logic;
+    var full       : logic;
+    var push       : logic;
+    var push_data  : logic<FIFO_DATA_WIDTH>;
+    var pop        : logic;
+    var pop_data   : logic<FIFO_DATA_WIDTH>;
+
+    always_comb {
+      port_if.fifo_empty       = empty;
+      port_if.fifo_almost_full = almost_full;
+      port_if.fifo_full        = full;
+    }
+
+    always_comb {
+      fifo_ready = (!almost_full) || ((!read_busy) && (!full));
+    }
+
+    always_comb {
+      push      = read_data_valid != '0;
+      push_data = {read_info, ram_read_data} as FIFO_DATA_WIDTH;
+    }
+
+    always_comb {
+      pop                     = port_if.read_data_ready;
+      port_if.read_data_valid = !empty;
+      port_if.read_data       = pop_data as pzbcm_sram_read_data;
+    }
+
+    inst u_read_data_fifo: $std::fifo #(
+      WIDTH            : FIFO_DATA_WIDTH,
+      DEPTH            : FIFO_DEPTH     ,
+      THRESHOLD        : 2              ,
+      RESET_DATA_FF    : RESET_DATA_PATH,
+    )(
+      i_clk        : i_clk      ,
+      i_rst        : i_rst      ,
+      i_clear      : i_clear    ,
+      o_empty      : empty      ,
+      o_almost_full: almost_full,
+      o_full       : full       ,
+      o_word_count : _          ,
+      i_push       : push       ,
+      i_data       : push_data  ,
+      i_pop        : pop        ,
+      o_data       : pop_data   ,
+    );
+  } else {
+    always_comb {
+      fifo_ready = '1;
+    }
+
+    always_comb {
+      port_if.fifo_empty       = '1;
+      port_if.fifo_almost_full = '0;
+      port_if.fifo_full        = '0;
+      port_if.read_data_valid  = read_data_valid;
+      port_if.read_data        = pzbcm_sram_read_data'{ data: ram_read_data, info: read_info };
+    }
+  }
+}

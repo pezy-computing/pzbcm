@@ -1,0 +1,53 @@
+//========================================
+//
+// Copyright (c) 2022 PEZY Computing, K.K.
+//
+//========================================
+pub module pzhsbus_mux::<T: type> #(
+  param SLAVES       : u32           = 2                                       ,
+  param SELECTOR_KIND: selector_kind = selector_kind::ONEHOT                   ,
+  const SELECT_WIDTH : u32           = calc_select_width(SLAVES, SELECTOR_KIND),
+)(
+  i_select : input   logic<SELECT_WIDTH>           ,
+  slave_if : modport pzhsbus_if::<T>::slave[SLAVES],
+  master_if: modport pzhsbus_if::<T>::master       ,
+) {
+  import $std::selector_pkg::*;
+
+  var ready  : logic<SLAVES>;
+  var valid  : logic<SLAVES>;
+  var payload: T<SLAVES>    ;
+
+  for i in 0..SLAVES :g {
+    always_comb {
+      slave_if[i].ready = ready[i];
+      valid[i]          = slave_if[i].valid;
+      payload[i]        = slave_if[i].payload;
+    }
+  }
+
+  if SELECTOR_KIND == selector_kind::VECTOR :g_selector {
+    always_comb {
+      ready             = '0;
+      master_if.valid   = '0;
+      master_if.payload = 0 as T;
+      for i in 0..SLAVES {
+        if i_select[i] {
+          ready[i]          = master_if.ready;
+          master_if.valid   = valid[i];
+          master_if.payload = payload[i];
+          break;
+        }
+      }
+    }
+  } else {
+    always_comb {
+      ready = $std::dispatch::<SELECTOR_KIND, SLAVES, lbool>(i_select, master_if.ready, false);
+    }
+
+    always_comb {
+      master_if.valid   = $std::select::<SELECTOR_KIND, SLAVES, lbool>(i_select, valid);
+      master_if.payload = $std::select::<SELECTOR_KIND, SLAVES, T>(i_select, payload);
+    }
+  }
+}

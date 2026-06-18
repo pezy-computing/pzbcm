@@ -1,0 +1,61 @@
+//========================================
+//
+// Copyright (c) 2025 PEZY Computing, K.K.
+//
+//========================================
+pub proto package pzbcm_sram_proto_pkg {
+  const WORDS            : u16  ;
+  const DATA_WIDTH       : u16  ;
+  const BANKS            : u16  ;
+  const BANK_LSB         : u16  ;
+  const SINGLE_PORT      : bbool;
+  const READ_LATENCY     : u16  ;
+  const SRAM_CONFIG_TYPE : type ;
+  const READ_INFO        : bbool;
+  const READ_INFO_TYPE   : type ;
+  const POINTER_WIDTH    : u16  ;
+  const RAM_WORDS        : u16  ;
+  const RAM_POINTER_WIDTH: u16  ;
+  const BANK_WIDTH       : u16  ;
+
+  alias module SRAM_WRAPPER: pzbcm_sram_wrapper_proto;
+
+  struct pzbcm_sram_read_data {
+    info: READ_INFO_TYPE   ,
+    data: logic<DATA_WIDTH>,
+  }
+}
+
+pub package pzbcm_sram_pkg::<
+  words           : u16                                                  ,
+  data_width      : u16                                                  ,
+  banks           : u16                      = 1                         ,
+  bank_lsb        : u16                      = 0                         ,
+  single_port     : bbool                    = true                      ,
+  read_latency    : u16                      = 1                         ,
+  sram_config_type: type                     = lbool                     ,
+  read_info       : bbool                    = false                     ,
+  read_info_type  : type                     = lbool                     ,
+  sram_wrapper    : pzbcm_sram_wrapper_proto = pzbcm_sram_wrapper_default,
+> for pzbcm_sram_proto_pkg {
+  const WORDS            : u16   = words            ;
+  const DATA_WIDTH       : u16   = data_width       ;
+  const BANKS            : u16   = banks            ;
+  const BANK_LSB         : u16   = bank_lsb         ;
+  const SINGLE_PORT      : bbool = single_port      ;
+  const READ_LATENCY     : u16   = read_latency     ;
+  const SRAM_CONFIG_TYPE : type  = sram_config_type ;
+  const READ_INFO        : bbool = read_info        ;
+  const READ_INFO_TYPE   : type  = read_info_type   ;
+  const POINTER_WIDTH    : u16   = $clog2(WORDS)    ;
+  const RAM_WORDS        : u16   = WORDS / BANKS    ;
+  const RAM_POINTER_WIDTH: u16   = $clog2(RAM_WORDS);
+  const BANK_WIDTH       : u16   = if BANKS >= 2 ? $clog2(BANKS) : 1;
+
+  alias module SRAM_WRAPPER = sram_wrapper;
+
+  struct pzbcm_sram_read_data {
+    info: READ_INFO_TYPE   ,
+    data: logic<DATA_WIDTH>,
+  }
+}

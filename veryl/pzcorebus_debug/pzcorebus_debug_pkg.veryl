@@ -1,0 +1,61 @@
+//========================================
+//
+// Copyright (c) 2025 PEZY Computing, K.K.
+//
+//========================================
+pub package pzcorebus_debug_pkg {
+  import pzcorebus_common_pkg::pzcorebus_mcmd;
+  import pzcorebus_common_pkg::pzcorebus_sresp;
+
+  #[enum_encoding(onehot)]
+  enum pzcorebus_debug_target_mcmd {
+    READ         ,
+    WRITE        ,
+    WRITE_NP     ,
+    FULL_WRITE   ,
+    FULL_WRITE_NP,
+    BROADCAST    ,
+    ATOMIC       ,
+    ATOMIC_NP    ,
+    MESSAGE      ,
+    MESSAGE_NP   ,
+  }
+
+  #[enum_encoding(onehot)]
+  enum pzcorebus_debug_target_sresp {
+    RESPONSE          ,
+    RESPONSE_WITH_DATA,
+  }
+
+  const TARGET_MCMD_WIDTH : u16 = $bits(pzcorebus_debug_target_mcmd);
+  const TARGET_SRESP_WIDTH: u16 = $bits(pzcorebus_debug_target_sresp);
+
+  function is_target_mcmd(
+    mcmd       : input pzcorebus_mcmd        ,
+    target_mcmd: input bit<TARGET_MCMD_WIDTH>,
+  ) -> logic {
+    case mcmd {
+      pzcorebus_mcmd::READ         : return (target_mcmd & pzcorebus_debug_target_mcmd::READ         ) != '0;
+      pzcorebus_mcmd::WRITE        : return (target_mcmd & pzcorebus_debug_target_mcmd::WRITE        ) != '0;
+      pzcorebus_mcmd::WRITE_NP     : return (target_mcmd & pzcorebus_debug_target_mcmd::WRITE_NP     ) != '0;
+      pzcorebus_mcmd::FULL_WRITE   : return (target_mcmd & pzcorebus_debug_target_mcmd::FULL_WRITE   ) != '0;
+      pzcorebus_mcmd::FULL_WRITE_NP: return (target_mcmd & pzcorebus_debug_target_mcmd::FULL_WRITE_NP) != '0;
+      pzcorebus_mcmd::BROADCAST    : return (target_mcmd & pzcorebus_debug_target_mcmd::BROADCAST    ) != '0;
+      pzcorebus_mcmd::ATOMIC       : return (target_mcmd & pzcorebus_debug_target_mcmd::ATOMIC       ) != '0;
+      pzcorebus_mcmd::ATOMIC_NP    : return (target_mcmd & pzcorebus_debug_target_mcmd::ATOMIC_NP    ) != '0;
+      pzcorebus_mcmd::MESSAGE      : return (target_mcmd & pzcorebus_debug_target_mcmd::MESSAGE      ) != '0;
+      pzcorebus_mcmd::MESSAGE_NP   : return (target_mcmd & pzcorebus_debug_target_mcmd::MESSAGE_NP   ) != '0;
+      default:                       return false;
+    }
+  }
+
+  function is_target_sresp(
+    sresp       : input pzcorebus_sresp        ,
+    target_sresp: input bit<TARGET_SRESP_WIDTH>,
+  ) -> logic {
+    case sresp {
+      pzcorebus_sresp::RESPONSE: return (target_sresp & pzcorebus_debug_target_sresp::RESPONSE          ) != '0;
+      default                  : return (target_sresp & pzcorebus_debug_target_sresp::RESPONSE_WITH_DATA) != '0;
+    }
+  }
+}

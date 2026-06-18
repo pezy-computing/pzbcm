@@ -1,0 +1,55 @@
+//========================================
+//
+// Copyright (c) 2025 PEZY Computing, K.K.
+//
+//========================================
+module pzcorebus_mreq_packer_mdata_fifo::<
+  BUS_PKG : pzcorebus_proto_pkg ,
+  SRAM_PKG: pzbcm_sram_proto_pkg,
+> (
+  i_clk        : input   clock                                ,
+  i_rst        : input   reset                                ,
+  i_clear      : input   logic                                ,
+  o_empty      : output  logic                                ,
+  o_full       : output  logic                                ,
+  i_sram_config: input   SRAM_PKG::SRAM_CONFIG_TYPE           ,
+  slave_if     : modport pzcorebus_if::<BUS_PKG>::slave_mdata ,
+  master_if    : modport pzcorebus_if::<BUS_PKG>::master_mdata,
+) {
+  var empty    : logic                          ;
+  var full     : logic                          ;
+  var push     : logic                          ;
+  var push_data: BUS_PKG::pzcorebus_packed_mdata;
+  var pop      : logic                          ;
+  var pop_data : BUS_PKG::pzcorebus_packed_mdata;
+
+  always_comb {
+    slave_if.sdata_accept = !full;
+    push                  = slave_if.mdata_valid;
+    push_data             = slave_if.get_packed_mdata();
+  }
+
+  always_comb {
+    pop                   = master_if.sdata_accept;
+    master_if.mdata_valid = !empty;
+    master_if.put_packed_mdata(pop_data);
+  }
+
+  inst u_fifo: pzbcm_sram_fifo::<SRAM_PKG> #(
+    TYPE: BUS_PKG::pzcorebus_packed_mdata,
+  )(
+    i_clk             : i_clk        ,
+    i_rst             : i_rst        ,
+    i_clear           : i_clear      ,
+    i_sram_config     : i_sram_config,
+    o_empty           : empty        ,
+    o_completely_empty: o_empty      ,
+    o_almost_full     : _            ,
+    o_full            : full         ,
+    o_completely_full : o_full       ,
+    i_push            : push         ,
+    i_data            : push_data    ,
+    i_pop             : pop          ,
+    o_data            : pop_data     ,
+  );
+}

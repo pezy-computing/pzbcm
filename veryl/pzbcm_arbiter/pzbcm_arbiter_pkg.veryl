@@ -1,0 +1,24 @@
+//========================================
+//
+// Copyright (c) 2026 PEZY Computing, K.K.
+//
+//========================================
+pub package pzbcm_arbiter_pkg {
+  enum pzbcm_arbiter_kind {
+    FIXED_PRIORITY,
+    ROUND_ROBIN   ,
+  }
+
+  function calc_grant_width(
+    requests    : input u32  ,
+    onehot_grant: input bbool,
+  ) -> u32 {
+    if requests == 1 {
+      return 1;
+    } else if onehot_grant {
+      return requests;
+    } else {
+      return $clog2(requests);
+    }
+  }
+}

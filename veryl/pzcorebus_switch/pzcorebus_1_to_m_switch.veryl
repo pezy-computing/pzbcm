@@ -1,0 +1,100 @@
+pub module pzcorebus_1_to_m_switch::<PKG: pzcorebus_proto_pkg> #(
+  param MASTERS                : u32                        = 2                                        ,
+  param ENABLE_BROADCAST       : bbool                      = false                                    ,
+  param WAIT_FOR_MDATA         : bbool                      = false                                    ,
+  param WAIT_FOR_MDATA_LAST    : bbool                      = false                                    ,
+  param EXTERNAL_DECODE        : bbool                      = false                                    ,
+  param SELECTOR_KIND          : selector_kind              = selector_kind::BINARY                    ,
+  param SELECT_WIDTH           : u32                        = calc_select_width(MASTERS, SELECTOR_KIND),
+  param SELECT_LSB             : u32                        = PKG::BUS_CONFIG.id_width - SELECT_WIDTH  ,
+  param PRIORITY_ENABLE        : bbool                      = false                                    ,
+  param PRIORITY_WIDTH         : u32                        = 1                                        ,
+  param WEIGHT_ENABLE          : bbool                      = false                                    ,
+  param WEIGHT_WIDTH           : u32                        = 1                                        ,
+  param INITIAL_WEIGHT         : bit<MASTERS, WEIGHT_WIDTH> = '1                                       ,
+  param SLAVE_FIFO             : bbool                      = false                                    ,
+  param SLAVE_FIFO_MCMD_DEPTH  : u32                        = 2                                        ,
+  param SLAVE_FIFO_MDATA_DEPTH : u32                        = 2                                        ,
+  param SLAVE_FIFO_SRESP_DEPTH : u32                        = 2                                        ,
+  param MASTER_FIFO            : bbool                      = false                                    ,
+  param MASTER_FIFO_MCMD_DEPTH : u32                        = 2                                        ,
+  param MASTER_FIFO_MDATA_DEPTH: u32                        = 2                                        ,
+  param MASTER_FIFO_SRESP_DEPTH: u32                        = 2                                        ,
+  param ALIGH_OUT              : bbool                      = false                                    ,
+)(
+  i_clk                 : input   clock                                                           ,
+  i_rst                 : input   reset                                                           ,
+  i_arbiter_kind        : input   pzbcm_arbiter_kind             = pzbcm_arbiter_kind::ROUND_ROBIN,
+  i_arbiter_init        : input   logic                          = false                          ,
+  i_arbiter_priority    : input   logic<MASTERS, PRIORITY_WIDTH> = '0                             ,
+  i_arbiter_weight_valid: input   logic                          = false                          ,
+  i_arbiter_weight      : input   logic<MASTERS, WEIGHT_WIDTH>   = '0                             ,
+  o_mcmd                : output  PKG::pzcorebus_bundled_mcmd    = _                              ,
+  i_mcmd_select         : input   logic<SELECT_WIDTH>            = '0                             ,
+  slave_if              : modport pzcorebus_if::<PKG>::slave                                      ,
+  master_if             : modport pzcorebus_if::<PKG>::master[MASTERS]                            ,
+) {
+  import $std::selector_pkg::*;
+  import pzbcm_arbiter_pkg::pzbcm_arbiter_kind;
+
+  inst slave_switch_if : pzcorebus_if::<PKG>         ;
+  inst master_switch_if: pzcorebus_if::<PKG>[MASTERS];
+
+  always_comb {
+    slave_if <> slave_switch_if.master;
+  }
+
+  inst u_mreq_switch: pzcorebus_mreq_1_to_m_switch::<PKG> #(
+    MASTERS                : MASTERS                ,
+    ENABLE_BROADCAST       : ENABLE_BROADCAST       ,
+    WAIT_FOR_MDATA         : WAIT_FOR_MDATA         ,
+    WAIT_FOR_MDATA_LAST    : WAIT_FOR_MDATA_LAST    ,
+    EXTERNAL_DECODE        : EXTERNAL_DECODE        ,
+    SELECTOR_KIND          : SELECTOR_KIND          ,
+    SELECT_WIDTH           : SELECT_WIDTH           ,
+    SELECT_LSB             : SELECT_LSB             ,
+    SLAVE_FIFO             : SLAVE_FIFO             ,
+    SLAVE_FIFO_MCMD_DEPTH  : SLAVE_FIFO_MCMD_DEPTH  ,
+    SLAVE_FIFO_MDATA_DEPTH : SLAVE_FIFO_MDATA_DEPTH ,
+    MASTER_FIFO            : MASTER_FIFO            ,
+    MASTER_FIFO_MCMD_DEPTH : MASTER_FIFO_MCMD_DEPTH ,
+    MASTER_FIFO_MDATA_DEPTH: MASTER_FIFO_MDATA_DEPTH,
+    ALIGH_OUT              : ALIGH_OUT              ,
+  )(
+    i_clk        : i_clk           ,
+    i_rst        : i_rst           ,
+    o_mcmd       : o_mcmd          ,
+    i_mcmd_select: i_mcmd_select   ,
+    slave_if     : slave_switch_if ,
+    master_if    : master_switch_if,
+  );
+
+  inst u_sresp_switch: pzcorebus_sresp_1_to_m_switch::<PKG> #(
+    MASTERS                : MASTERS                ,
+    PRIORITY_ENABLE        : PRIORITY_ENABLE        ,
+    PRIORITY_WIDTH         : PRIORITY_WIDTH         ,
+    WEIGHT_ENABLE          : WEIGHT_ENABLE          ,
+    WEIGHT_WIDTH           : WEIGHT_WIDTH           ,
+    INITIAL_WEIGHT         : INITIAL_WEIGHT         ,
+    SLAVE_FIFO             : SLAVE_FIFO             ,
+    SLAVE_FIFO_SRESP_DEPTH : SLAVE_FIFO_SRESP_DEPTH ,
+    MASTER_FIFO            : MASTER_FIFO            ,
+    MASTER_FIFO_SRESP_DEPTH: MASTER_FIFO_SRESP_DEPTH,
+  )(
+    i_clk                 : i_clk                 ,
+    i_rst                 : i_rst                 ,
+    i_arbiter_kind        : i_arbiter_kind        ,
+    i_arbiter_init        : i_arbiter_init        ,
+    i_arbiter_priority    : i_arbiter_priority    ,
+    i_arbiter_weight_valid: i_arbiter_weight_valid,
+    i_arbiter_weight      : i_arbiter_weight      ,
+    slave_if              : slave_switch_if       ,
+    master_if             : master_switch_if      ,
+  );
+
+  for i in 0..MASTERS :g_master {
+    always_comb {
+      master_switch_if[i].slave <> master_if[i];
+    }
+  }
+}

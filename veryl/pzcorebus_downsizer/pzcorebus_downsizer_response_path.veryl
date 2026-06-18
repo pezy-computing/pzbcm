@@ -1,0 +1,137 @@
+//========================================
+//
+// Copyright (c) 2026 PEZY Computing, K.K.
+//
+//========================================
+module pzcorebus_downsizer_response_path::<
+  SLAVE_PKG : pzcorebus_proto_pkg,
+  MASTER_PKG: pzcorebus_proto_pkg,
+> (
+  i_clk    : input   clock                                   ,
+  i_rst    : input   reset                                   ,
+  slave_if : modport pzcorebus_if::<SLAVE_PKG>::slave_sresp  ,
+  master_if: modport pzcorebus_if::<MASTER_PKG>::master_sresp,
+){
+  const UNIT_WIDTH      : u32 = SLAVE_PKG::BUS_CONFIG.unit_data_width;
+  const MAX_DATA_SIZE   : u32 = SLAVE_PKG::BUS_CONFIG.max_data_size  ;
+  const SLAVE_DATA_SIZE : u32 = SLAVE_PKG::BUS_CONFIG.data_size      ;
+  const MASTER_DATA_SIZE: u32 = MASTER_PKG::BUS_CONFIG.data_size     ;
+
+  var unit_enable     : logic<SLAVE_DATA_SIZE>              ;
+  var tail_unit_enable: logic                               ;
+  var sresp_busy      : logic                               ;
+  var serror          : logic<2>                            ;
+  var sdata           : logic<SLAVE_DATA_SIZE, UNIT_WIDTH>  ;
+  var sinfo           : SLAVE_PKG::pzcorebus_sinfo<2>       ;
+  var sresp_uniten    : SLAVE_PKG::pzcorebus_sresp_uniten<2>;
+
+  always_comb {
+    unit_enable      = get_unit_enable(master_if.sresp_uniten);
+    tail_unit_enable = unit_enable[msb];
+  }
+
+  function get_unit_enable(
+    sresp_uniten: input MASTER_PKG::pzcorebus_sresp_uniten,
+  ) -> logic<SLAVE_DATA_SIZE> {
+    var unit_enable: logic<SLAVE_DATA_SIZE>;
+
+    unit_enable = '0;
+    for i in 0..(MAX_DATA_SIZE / SLAVE_DATA_SIZE) {
+      for j in 0..SLAVE_DATA_SIZE {
+        unit_enable[j] = unit_enable[j] || sresp_uniten[i * SLAVE_DATA_SIZE + j];
+      }
+    }
+
+    return unit_enable;
+  }
+
+  always_ff {
+    if_reset {
+      sresp_busy = false;
+    } else if slave_if.sresp_ack() {
+      sresp_busy = false;
+    } else if master_if.sresp_ack() {
+      sresp_busy = true;
+    }
+  }
+
+  always_comb {
+    serror[0]       = serror[1] | master_if.serror;
+    sresp_uniten[0] = sresp_uniten[1] | master_if.sresp_uniten;
+  }
+
+  always_ff {
+    if_reset {
+      serror[1]       = '0;
+      sresp_uniten[1] = '0;
+    } else if slave_if.sresp_ack() {
+      serror[1]       = '0;
+      sresp_uniten[1] = '0;
+    } else if master_if.sresp_ack() {
+      serror[1]       = serror[0];
+      sresp_uniten[1] = sresp_uniten[0];
+    }
+  }
+
+  if SLAVE_PKG::BUS_CONFIG.response_info_width >: 0 :g_sinfo {
+    always_comb {
+      sinfo[0] = if !sresp_busy ? master_if.sinfo : sinfo[1];
+    }
+
+    always_ff {
+      if_reset {
+        sinfo[1] = '0;
+      } else if (!sresp_busy) && master_if.sresp_ack() {
+        sinfo[1] = sinfo[0];
+      }
+    }
+  }
+
+  for i in 0..SLAVE_DATA_SIZE :g_sdata {
+    const LSB: u32 = UNIT_WIDTH * ((i % MASTER_DATA_SIZE) + 0) - 0;
+    const MSB: u32 = UNIT_WIDTH * ((i % MASTER_DATA_SIZE) + 1) - 1;
+
+    if (i + 1) == SLAVE_DATA_SIZE :g {
+      always_comb {
+        sdata[i] = master_if.sdata[MSB:LSB];
+      }
+    } else {
+      var sdata_latched: logic<UNIT_WIDTH>;
+
+      always_comb {
+        if unit_enable[i] {
+          sdata[i] = master_if.sdata[MSB:LSB];
+        } else {
+          sdata[i] = sdata_latched;
+        }
+      }
+
+      always_ff {
+        if unit_enable[i] && master_if.sresp_ack() {
+          sdata_latched = master_if.sdata[MSB:LSB];
+        }
+      }
+    }
+  }
+
+  always_comb {
+    if master_if.is_sresp_no_data()
+      || master_if.sresp_last != '0
+      || tail_unit_enable
+    {
+      master_if.mresp_accept = slave_if.mresp_accept;
+      slave_if.sresp_valid   = master_if.sresp_valid;
+    } else {
+      master_if.mresp_accept = true;
+      slave_if.sresp_valid   = false;
+    }
+
+    slave_if.sresp        = master_if.sresp;
+    slave_if.sid          = master_if.sid;
+    slave_if.serror       = serror[0];
+    slave_if.sdata        = sdata;
+    slave_if.sinfo        = sinfo[0];
+    slave_if.sresp_uniten = sresp_uniten[0];
+    slave_if.sresp_last   = master_if.sresp_last;
+  }
+}

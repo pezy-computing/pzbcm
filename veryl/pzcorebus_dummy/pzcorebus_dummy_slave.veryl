@@ -1,0 +1,257 @@
+//========================================
+//
+// Copyright (c) 2026 PEZY Computing, K.K.
+//
+//========================================
+pub module pzcorebus_dummy_slave::<PKG: pzcorebus_proto_pkg> #(
+  param TIE_OFF       : bbool                = false,
+  param SERROR        : bbool                = true ,
+  param CUSTOM_SDATA  : bbool                = false,
+  param SDATA         : PKG::pzcorebus_sdata = '0   ,
+  param REPORT_WARNING: bbool                = true ,
+)(
+  i_clk   : input   clock                     ,
+  i_rst   : input   reset                     ,
+  slave_if: modport pzcorebus_if::<PKG>::slave,
+) {
+  import pzcorebus_common_pkg::*;
+
+  const MEM_L_PROFILE: bbool = is_mem_l_profile(PKG::BUS_CONFIG);
+  const MEM_H_PROFILE: bbool = is_mem_h_profile(PKG::BUS_CONFIG);
+
+  if TIE_OFF :g {
+    always_comb {
+      slave_if.scmd_accept  = true;
+      slave_if.sdata_accept = true;
+      slave_if.sresp_valid  = false;
+      slave_if.sresp        = 0 as pzcorebus_sresp;
+      slave_if.sid          = '0;
+      slave_if.serror       = '0;
+      slave_if.sdata        = '0;
+      slave_if.sinfo        = '0;
+      slave_if.sresp_uniten = '0;
+      slave_if.sresp_last   = '0;
+    }
+  } else {
+    inst bus_if: pzcorebus_if::<PKG>;
+
+    var scmd_accept : logic                      ;
+    var sdata_accept: logic                      ;
+    var sresp_valid : logic<2>                   ;
+    var sresp       : pzcorebus_sresp            ;
+    var sid         : PKG::pzcorebus_sid         ;
+    var serror      : logic                      ;
+    var sresp_uniten: PKG::pzcorebus_sresp_uniten;
+    var sresp_last  : PKG::pzcorebus_sresp_last  ;
+
+    inst u_slicer: pzcorebus_slicer::<PKG> #(
+      FULL_BANDWIDTH: is_mem_profile(PKG::BUS_CONFIG),
+      MCMD_VALID    : false                          ,
+      MDATA_VALID   : false                          ,
+      SRESP_VALID   : true                           ,
+    )(
+      i_clk    : i_clk   ,
+      i_rst    : i_rst   ,
+      slave_if : slave_if,
+      master_if: bus_if  ,
+    );
+
+    always_comb {
+      bus_if.scmd_accept  = scmd_accept;
+      bus_if.sdata_accept = sdata_accept;
+      bus_if.sresp_valid  = sresp_valid[0] && sresp_valid[1];
+      bus_if.sresp        = sresp;
+      bus_if.sid          = sid;
+      bus_if.serror       = serror;
+      bus_if.sdata        = get_sdata();
+      bus_if.sinfo        = '0;
+      bus_if.sresp_uniten = sresp_uniten;
+      bus_if.sresp_last   = sresp_last;
+    }
+
+    always_ff {
+      if_reset {
+        sid    = '0;
+        sresp  = 0 as pzcorebus_sresp;
+        serror = false;
+      } else if bus_if.mcmd_non_posted_ack() {
+        sid = bus_if.mid;
+        case bus_if.mcmd_kind() {
+          pzcorebus_mcmd_kind::READ  ,
+          pzcorebus_mcmd_kind::ATOMIC: sresp = pzcorebus_sresp::RESPONSE_WITH_DATA;
+          default                    : sresp = pzcorebus_sresp::RESPONSE;
+        }
+        case bus_if.mcmd_kind() {
+          pzcorebus_mcmd_kind::BROADCAST: serror = false;
+          default                       : serror = SERROR;
+        }
+      }
+    }
+
+    if MEM_L_PROFILE || MEM_H_PROFILE :g_membus {
+      always_ff {
+        if_reset {
+          scmd_accept = true;
+        } else if bus_if.sresp_last_ack() {
+          scmd_accept = true;
+        } else if bus_if.mdata_last_ack() {
+          scmd_accept = !sresp_valid[0];
+        } else if bus_if.mcmd_ack() {
+          scmd_accept = bus_if.mcmd == pzcorebus_mcmd::MESSAGE;
+        }
+      }
+
+      always_ff {
+        if_reset {
+          sdata_accept = false;
+        } else if bus_if.mdata_last_ack() {
+          sdata_accept = false;
+        } else if bus_if.mcmd_with_data_ack() {
+          sdata_accept = true;
+        }
+      }
+
+      always_ff {
+        if_reset {
+          sresp_valid[0] = false;
+          sresp_valid[1] = false;
+        } else if bus_if.sresp_last_ack() {
+          sresp_valid[0] = false;
+          sresp_valid[1] = false;
+        } else if bus_if.mcmd_non_posted_ack() {
+          sresp_valid[0] = true;
+          sresp_valid[1] = bus_if.is_mcmd_with_response_data();
+        } else if bus_if.mdata_last_ack() {
+          sresp_valid[0] = sresp_valid[0];
+          sresp_valid[1] = sresp_valid[0];
+        }
+      }
+
+      if MEM_L_PROFILE :g_membus_l {
+        var sresp_count: PKG::pzcorebus_mburst_length;
+
+        always_comb {
+          sresp_uniten = '0;
+          sresp_last   = sresp_count == (1 as PKG::pzcorebus_mburst_length);
+        }
+
+        always_ff {
+          if_reset {
+            sresp_count = 0 as PKG::pzcorebus_mburst_length;
+          } else if bus_if.mcmd_non_posted_ack() {
+            sresp_count = bus_if.get_mburst_length();
+          } else if bus_if.sresp_ack() {
+            sresp_count -= (1 as PKG::pzcorebus_mburst_length);
+          }
+        }
+      } else :g_membus_h {
+        var mlength          : PKG::pzcorebus_mlength_unpacked;
+        var sresp_size       : PKG::pzcorebus_sresp_size      ;
+        var sresp_count      : PKG::pzcorebus_mlength_unpacked;
+        var sresp_count_next : PKG::pzcorebus_mlength_unpacked;
+        var sresp_offset     : PKG::pzcorebus_sresp_offset    ;
+        var sresp_offset_next: PKG::pzcorebus_sresp_offset    ;
+
+        always_comb {
+          sresp_uniten = get_sresp_uniten(sresp_offset, sresp_size);
+          sresp_last   = if sresp_count_next >= mlength ? '1 : '0;
+        }
+
+        always_comb {
+          sresp_size        = get_sresp_size(mlength, sresp_count, sresp_offset);
+          sresp_count_next  = sresp_count + (sresp_size as PKG::pzcorebus_mlength_unpacked);
+          sresp_offset_next = sresp_offset + (sresp_size as PKG::pzcorebus_sresp_offset);
+        }
+
+        always_ff {
+          if_reset {
+            mlength = 0 as PKG::pzcorebus_mlength_unpacked;
+          } else if bus_if.mcmd_non_posted_ack() {
+            mlength = bus_if.get_sresp_length();
+          }
+        }
+
+        always_ff {
+          if_reset {
+            sresp_count  = 0 as PKG::pzcorebus_mlength_unpacked;
+            sresp_offset = 0 as PKG::pzcorebus_sresp_offset;
+          } else if bus_if.mcmd_non_posted_ack() {
+            sresp_count  = 0 as PKG::pzcorebus_mlength_unpacked;
+            sresp_offset = bus_if.get_sresp_offset();
+          } else if bus_if.sresp_ack() {
+            sresp_count  = sresp_count_next;
+            sresp_offset = sresp_offset_next;
+          }
+        }
+      }
+    } else :g_csrbus {
+      always_comb {
+        scmd_accept    = !sresp_valid[0];
+        sdata_accept   = false;
+        sresp_valid[1] = true;
+        sresp_uniten   = '0;
+        sresp_last     = '0;
+      }
+
+      always_ff {
+        if_reset {
+          sresp_valid[0] = false;
+        } else if bus_if.sresp_ack() {
+          sresp_valid[0] = false;
+        } else if bus_if.mcmd_non_posted_ack() {
+          sresp_valid[0] = true;
+        }
+      }
+    }
+  }
+
+  function get_sdata() -> PKG::pzcorebus_sdata {
+    if CUSTOM_SDATA {
+      return SDATA;
+    } else if MEM_L_PROFILE || MEM_H_PROFILE {
+      return {32'hdead_beaf repeat (PKG::BUS_CONFIG.data_width / 32)} as PKG::pzcorebus_sdata;
+    } else {
+      return {32'hdead_dead repeat (PKG::BUS_CONFIG.data_width / 32)} as PKG::pzcorebus_sdata;
+    }
+  }
+
+  function get_sresp_size(
+    mlength     : input PKG::pzcorebus_mlength_unpacked,
+    sresp_count : input PKG::pzcorebus_mlength_unpacked,
+    sresp_offset: input PKG::pzcorebus_sresp_offset    ,
+  ) -> PKG::pzcorebus_sresp_size {
+    const DATA_SIZE   : u16 = PKG::BUS_CONFIG.data_size;
+    const OFFSET_WIDTH: u16 = pzcorebus_common_pkg::get_signal_width($clog2(DATA_SIZE), true);
+
+    var offset: logic<OFFSET_WIDTH>               ;
+    var size  : PKG::pzcorebus_mlength_unpacked[2];
+
+    offset  = sresp_offset as OFFSET_WIDTH;
+    size[0] = (DATA_SIZE as PKG::pzcorebus_mlength_unpacked) - (offset as PKG::pzcorebus_mlength_unpacked);
+    size[1] = mlength - sresp_count;
+
+    if size[0] <: size[1] {
+      return size[0];
+    } else {
+      return size[1];
+    }
+  }
+
+  function get_sresp_uniten(
+    sresp_offset: input PKG::pzcorebus_sresp_offset,
+    sresp_size  : input PKG::pzcorebus_sresp_size  ,
+  ) -> PKG::pzcorebus_sresp_uniten {
+    var start_index: PKG::pzcorebus_sresp_offset;
+    var end_index  : PKG::pzcorebus_sresp_offset;
+    var uniten     : PKG::pzcorebus_sresp_uniten;
+
+    start_index = sresp_offset;
+    end_index   = start_index + (sresp_size as PKG::pzcorebus_sresp_offset);
+    for i in 0..$bits(PKG::pzcorebus_sresp_uniten) {
+      let index: PKG::pzcorebus_sresp_offset = i as PKG::pzcorebus_sresp_offset;
+      uniten[i] = (index >= start_index) && (index <: end_index);
+    }
+
+    return uniten;
+  }
+}

@@ -1,0 +1,122 @@
+//========================================
+//
+// Copyright (c) 2026 PEZY Computing, K.K.
+//
+//========================================
+module pzcorebus_downsizer_request_path::<
+  SLAVE_PKG : pzcorebus_proto_pkg,
+  MASTER_PKG: pzcorebus_proto_pkg,
+> #(
+  param ALLIGNED_ACCESS_ONLY: bbool = false,
+)(
+  i_clk    : input   clock                                  ,
+  i_rst    : input   reset                                  ,
+  slave_if : modport pzcorebus_if::<SLAVE_PKG>::slave_mreq  ,
+  master_if: modport pzcorebus_if::<MASTER_PKG>::master_mreq,
+) {
+  const CONVERSION_RATIO: u32 = SLAVE_PKG::BUS_CONFIG.data_width / MASTER_PKG::BUS_CONFIG.data_width;
+  const DATA_COUNT_WIDTH: u32 = $clog2(CONVERSION_RATIO)        ;
+  const DATA_SIZE       : u32 = MASTER_PKG::BUS_CONFIG.data_size;
+
+  var mlength_count: SLAVE_PKG::pzcorebus_mlength_unpacked<2>;
+  var mdata_count  : logic<2, DATA_COUNT_WIDTH>              ;
+  var mdata_busy   : logic                                   ;
+
+  always_ff {
+    if_reset {
+      mdata_busy = false;
+    } else if slave_if.mdata_last_ack() {
+      mdata_busy = false;
+    } else if master_if.mdata_ack() {
+      mdata_busy = true;
+    }
+  }
+
+  always_comb {
+    if slave_if.mcmd_valid && (!mdata_busy) {
+      mlength_count[0] = get_initial_mlength_count(slave_if.get_mcmd());
+      mdata_count[0]   = get_initial_mdata_count(slave_if.get_mcmd());
+    } else {
+      mlength_count[0] = mlength_count[1];
+      mdata_count[0]   = mdata_count[1];
+    }
+  }
+
+  always_ff {
+    if_reset {
+      mlength_count[1] = 0 as SLAVE_PKG::pzcorebus_mlength_unpacked;
+      mdata_count[1]   = 0 as DATA_COUNT_WIDTH;
+    } else if master_if.mdata_ack() {
+      mlength_count[1] = mlength_count[0] - (DATA_SIZE as SLAVE_PKG::pzcorebus_mlength_unpacked);
+      mdata_count[1]   = mdata_count[1] + (1 as DATA_COUNT_WIDTH);
+    } else if slave_if.mcmd_with_data_ack() {
+      mlength_count[1] = mlength_count[0];
+      mdata_count[1]   = mdata_count[0];
+    }
+  }
+
+  function get_initial_mlength_count(
+    mcmd: input SLAVE_PKG::pzcorebus_bundled_mcmd,
+  ) -> SLAVE_PKG::pzcorebus_mlength_unpacked {
+    if ALLIGNED_ACCESS_ONLY {
+      return pzcorebus_utils_pkg::<SLAVE_PKG>::get_mlength_unpacked(mcmd.mcmd, mcmd.mlength);
+    } else {
+      return pzcorebus_utils_pkg::<SLAVE_PKG>::get_mlength_aligned(mcmd.mcmd, mcmd.maddr, mcmd.mlength);
+    }
+  }
+
+  function get_initial_mdata_count(
+    mcmd: input SLAVE_PKG::pzcorebus_bundled_mcmd,
+  ) -> logic<DATA_COUNT_WIDTH> {
+    const LSB: u32 = $clog2(MASTER_PKG::BUS_CONFIG.data_width / 8);
+
+    if ALLIGNED_ACCESS_ONLY
+      || pzcorebus_utils_pkg::<SLAVE_PKG>::is_mcmd_atomic(mcmd.mcmd)
+      || pzcorebus_utils_pkg::<SLAVE_PKG>::is_mcmd_message(mcmd.mcmd)
+    {
+      return 0 as DATA_COUNT_WIDTH;
+    } else {
+      return mcmd.maddr[LSB+:DATA_COUNT_WIDTH];
+    }
+  }
+
+  always_comb {
+    slave_if.scmd_accept = master_if.scmd_accept;
+    master_if.mcmd_valid = slave_if.mcmd_valid;
+    master_if.mcmd       = slave_if.mcmd;
+    master_if.mid        = slave_if.mid;
+    master_if.maddr      = slave_if.maddr;
+    master_if.mlength    = slave_if.mlength;
+    master_if.mparam     = slave_if.mparam;
+    master_if.minfo      = slave_if.minfo;
+  }
+
+  always_comb {
+    if mlength_count[0] <= (DATA_SIZE as SLAVE_PKG::pzcorebus_mlength_unpacked) || mdata_count[0] == '1 {
+      slave_if.sdata_accept = master_if.sdata_accept;
+      master_if.mdata_valid = slave_if.mdata_valid;
+      master_if.mdata_last  = slave_if.mdata_last;
+    } else {
+      slave_if.sdata_accept = false;
+      master_if.mdata_valid = slave_if.mdata_valid;
+      master_if.mdata_last  = false;
+    }
+
+    master_if.mdata        = get_mdata(slave_if.mdata, mdata_count[0]);
+    master_if.mdata_byteen = get_mdata_byteen(slave_if.mdata_byteen, mdata_count[0]);
+  }
+
+  function get_mdata(
+    mdata      : input MASTER_PKG::pzcorebus_mdata<CONVERSION_RATIO>,
+    mdata_count: input logic<DATA_COUNT_WIDTH>                      ,
+  ) -> MASTER_PKG::pzcorebus_mdata {
+    return mdata[mdata_count];
+  }
+
+  function get_mdata_byteen(
+    mdata_byteen: input MASTER_PKG::pzcorebus_mdata_byteen<CONVERSION_RATIO>,
+    mdata_count : input logic<DATA_COUNT_WIDTH>                             ,
+  ) -> MASTER_PKG::pzcorebus_mdata_byteen {
+    return mdata_byteen[mdata_count];
+  }
+}

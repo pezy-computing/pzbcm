@@ -1,0 +1,82 @@
+//========================================
+//
+// Copyright (c) 2025 PEZY Computing, K.K.
+//
+//========================================
+pub interface pzbcm_sram_if::<PKG: pzbcm_sram_proto_pkg> {
+  var write_ready     : logic                    ;
+  var write_valid     : logic                    ;
+  var write_pointer   : logic<PKG::POINTER_WIDTH>;
+  var write_data      : logic<PKG::DATA_WIDTH>   ;
+  var read_ready      : logic                    ;
+  var read_valid      : logic                    ;
+  var read_pointer    : logic<PKG::POINTER_WIDTH>;
+  var read_info       : PKG::READ_INFO_TYPE      ;
+  var read_data_ready : logic                    ;
+  var read_data_valid : logic                    ;
+  var read_data       : PKG::pzbcm_sram_read_data;
+  var read_busy       : logic                    ;
+  var fifo_empty      : logic                    ;
+  var fifo_almost_full: logic                    ;
+  var fifo_full       : logic                    ;
+
+  function write_ack() -> logic {
+    return write_ready && write_valid;
+  }
+
+  function read_ack() -> logic {
+    return read_ready && read_valid;
+  }
+
+  function read_data_ack() -> logic {
+    return read_data_ready && read_data_valid;
+  }
+
+  modport write_port {
+    write_ready  : input ,
+    write_valid  : output,
+    write_pointer: output,
+    write_data   : output,
+    write_ack    : import,
+  }
+
+  modport read_port {
+    read_ready     : input ,
+    read_valid     : output,
+    read_pointer   : output,
+    read_info      : output,
+    read_data_ready: output,
+    read_data_valid: input ,
+    read_data      : input ,
+    read_ack       : import,
+    read_data_ack  : import,
+  }
+
+  modport sram {
+    write_ready     : output,
+    write_valid     : input ,
+    write_pointer   : input ,
+    write_data      : input ,
+    read_ready      : output,
+    read_valid      : input ,
+    read_pointer    : input ,
+    read_info       : input ,
+    read_data_ready : input ,
+    read_data_valid : output,
+    read_data       : output,
+    read_busy       : output,
+    fifo_empty      : output,
+    fifo_almost_full: output,
+    fifo_full       : output,
+    write_ack       : import,
+    read_ack        : import,
+    read_data_ack   : import,
+  }
+
+  modport monitor {
+    write_ack    : import,
+    read_ack     : import,
+    read_data_ack: import,
+    ..input
+  }
+}

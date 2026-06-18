@@ -1,0 +1,121 @@
+//========================================
+//
+// Copyright (c) 2026 PEZY Computing, K.K.
+//
+//========================================
+pub module pzcorebus_sresp_1_to_m_switch::<PKG: pzcorebus_proto_pkg> #(
+  param MASTERS                : u32                        = 2    ,
+  param PRIORITY_ENABLE        : bbool                      = false,
+  param PRIORITY_WIDTH         : u32                        = 1    ,
+  param WEIGHT_ENABLE          : bbool                      = false,
+  param WEIGHT_WIDTH           : u32                        = 1    ,
+  param INITIAL_WEIGHT         : bit<MASTERS, WEIGHT_WIDTH> = '1   ,
+  param SLAVE_FIFO             : bbool                      = false,
+  param SLAVE_FIFO_SRESP_DEPTH : u32                        = 2    ,
+  param MASTER_FIFO            : bbool                      = false,
+  param MASTER_FIFO_SRESP_DEPTH: u32                        = 2    ,
+)(
+  i_clk                 : input   clock                                                           ,
+  i_rst                 : input   reset                                                           ,
+  i_arbiter_kind        : input   pzbcm_arbiter_kind             = pzbcm_arbiter_kind::ROUND_ROBIN,
+  i_arbiter_init        : input   logic                          = false                          ,
+  i_arbiter_priority    : input   logic<MASTERS, PRIORITY_WIDTH> = '0                             ,
+  i_arbiter_weight_valid: input   logic                          = false                          ,
+  i_arbiter_weight      : input   logic<MASTERS, WEIGHT_WIDTH>   = '0                             ,
+  slave_if              : modport pzcorebus_if::<PKG>::slave_sresp                                ,
+  master_if             : modport pzcorebus_if::<PKG>::master_sresp[MASTERS]                      ,
+) {
+  import pzbcm_arbiter_pkg::*;
+  import $std::selector_pkg::selector_kind;
+
+//--------------------------------------------------------------
+//  Slave FIFO
+//--------------------------------------------------------------
+  inst fifo_if: pzcorebus_if::<PKG>;
+
+  if SLAVE_FIFO :g_slave_fifo {
+    inst u_fifo: pzcorebus_sresp_fifo::<PKG> #(
+      SRESP_DEPTH: SLAVE_FIFO_SRESP_DEPTH,
+    )(
+      i_clk    : i_clk   ,
+      i_rst    : i_rst   ,
+      slave_if : slave_if,
+      master_if: fifo_if ,
+    );
+  } else {
+    always_comb {
+      slave_if <> fifo_if.master_sresp;
+    }
+  }
+
+//--------------------------------------------------------------
+//  Switch
+//--------------------------------------------------------------
+  inst switch_if: pzcorebus_if::<PKG>[MASTERS];
+
+  var sresp_valid: logic<MASTERS>;
+  var sresp_grant: logic<MASTERS>;
+  var sresp_free : logic         ;
+
+  for i in 0..MASTERS :g_sresp_valid {
+    always_comb {
+      sresp_valid[i] = switch_if[i].sresp_valid;
+    }
+  }
+
+  always_comb {
+    sresp_free = fifo_if.sresp_sublast_ack();
+  }
+
+  inst u_arbiter: pzbcm_arbiter #(
+    REQUESTS       : MASTERS        ,
+    ONEHOT_GRANT   : true           ,
+    KEEP_RESULT    : true           ,
+    FREE_WIDTH     : 1              ,
+    PRIORITY_ENABLE: PRIORITY_ENABLE,
+    PRIORITY_WIDTH : PRIORITY_WIDTH ,
+    WEIGHT_ENABLE  : WEIGHT_ENABLE  ,
+    WEIGHT_WIDTH   : WEIGHT_WIDTH   ,
+    INITIAL_WEIGHT : INITIAL_WEIGHT ,
+  )(
+    i_clk         : i_clk                 ,
+    i_rst         : i_rst                 ,
+    i_kind        : i_arbiter_kind        ,
+    i_init        : i_arbiter_init        ,
+    i_priority    : i_arbiter_priority    ,
+    i_weight_valid: i_arbiter_weight_valid,
+    i_weight      : i_arbiter_weight      ,
+    i_request     : sresp_valid           ,
+    o_grant       : sresp_grant           ,
+    i_free        : sresp_free            ,
+  );
+
+  inst u_switch: pzcorebus_sresp_demux::<PKG> #(
+    MASTERS: MASTERS              ,
+    KIND   : selector_kind::ONEHOT,
+  )(
+    i_sresp_select: sresp_grant,
+    slave_if      : fifo_if    ,
+    master_if     : switch_if  ,
+  );
+
+//--------------------------------------------------------------
+//  Master FIFO
+//--------------------------------------------------------------
+  for i in 0..MASTERS :g_master_fifo {
+    if MASTER_FIFO :g {
+      inst u_fifo: pzcorebus_sresp_fifo::<PKG> #(
+        SRESP_DEPTH: MASTER_FIFO_SRESP_DEPTH,
+      )(
+        i_clk    : i_clk       ,
+        i_rst    : i_rst       ,
+        slave_if : switch_if[i],
+        master_if: master_if[i],
+      );
+    } else {
+      always_comb {
+        switch_if[i].slave_sresp <> master_if[i];
+      }
+    }
+  }
+}

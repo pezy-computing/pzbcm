@@ -1,0 +1,45 @@
+//========================================
+//
+// Copyright (c) 2025 PEZY Computing, K.K.
+//
+//========================================
+pub module pzcorebus_debug_sresp_counter::<BUS_PKG: pzcorebus_proto_pkg> #(
+  param COUNT_WIDTH : u32                     = 16   ,
+  param TARGET_SRESP: bit<TARGET_SRESP_WIDTH> = '1   ,
+  param ERROR_ONLY  : bbool                   = false,
+  param LAST_ONLY   : bbool                   = false,
+)(
+  i_clk     : input   clock                           ,
+  i_rst     : input   reset                           ,
+  i_enable  : input   logic                           ,
+  i_clear   : input   logic                           ,
+  corebus_if: modport pzcorebus_if::<BUS_PKG>::monitor,
+  o_count   : output  logic<COUNT_WIDTH>              ,
+) {
+  import pzcorebus_debug_pkg::*;
+
+  var count           : logic<COUNT_WIDTH>;
+  var target_sresp_ack: logic;
+
+  always_comb {
+    o_count = count;
+  }
+
+  always_comb {
+    target_sresp_ack =
+      corebus_if.sresp_ack()
+      && is_target_sresp(corebus_if.sresp, TARGET_SRESP)
+      && (if ERROR_ONLY ? corebus_if.serror        : true)
+      && (if LAST_ONLY  ? corebus_if.sresp_last[0] : true);
+  }
+
+  always_ff {
+    if_reset {
+      count = 0 as COUNT_WIDTH;
+    } else if i_clear {
+      count = 0 as COUNT_WIDTH;
+    } else if i_enable && target_sresp_ack {
+      count += (1 as COUNT_WIDTH);
+    }
+  }
+}

@@ -1,0 +1,57 @@
+//========================================
+//
+// Copyright (c) 2026 PEZY Computing, K.K.
+//
+//========================================
+pub module pzcorebus_mreq_aligner::<PKG: pzcorebus_proto_pkg> #(
+  param WAIT_FOR_DATA          : bbool = false,
+  param THROUGH_NO_DATA_COMMAND: bbool = false,
+  param SLAVE_FIFO             : bbool = false,
+  param SLAVE_FIFO_MCMD_DEPTH  : u32   = 2    ,
+  param SLAVE_FIFO_MDATA_DEPTH : u32   = 2    ,
+  param SLAVE_FIFO_SRESP_DEPTH : u32   = 2    ,
+)(
+  i_clk       : input   clock                          ,
+  i_rst       : input   reset                          ,
+  o_mcmd      : output  PKG::pzcorebus_bundled_mcmd = _,
+  o_mcmd_done : output  logic                       = _,
+  o_mdata_done: output  logic                       = _,
+  slave_if    : modport pzcorebus_if::<PKG>::slave     ,
+  master_if   : modport pzcorebus_if::<PKG>::master    ,
+) {
+  inst bus_if: pzcorebus_if::<PKG>[2];
+
+  always_comb {
+    slave_if <> bus_if[0].master;
+  }
+
+  inst u_core: pzcorebus_mreq_aligner_core::<PKG> #(
+    WAIT_FOR_DATA          : WAIT_FOR_DATA          ,
+    THROUGH_NO_DATA_COMMAND: THROUGH_NO_DATA_COMMAND,
+    SLAVE_FIFO             : SLAVE_FIFO             ,
+    SLAVE_FIFO_MCMD_DEPTH  : SLAVE_FIFO_MCMD_DEPTH  ,
+    SLAVE_FIFO_MDATA_DEPTH : SLAVE_FIFO_MDATA_DEPTH ,
+  )(
+    i_clk       : i_clk       ,
+    i_rst       : i_rst       ,
+    o_mcmd      : o_mcmd      ,
+    o_mcmd_done : o_mcmd_done ,
+    o_mdata_done: o_mdata_done,
+    slave_if    : bus_if[0]   ,
+    master_if   : bus_if[1]   ,
+  );
+
+  inst u_sresp_fifo: pzcorebus_sresp_fifo::<PKG> #(
+    SRESP_VALID: SLAVE_FIFO            ,
+    SRESP_DEPTH: SLAVE_FIFO_SRESP_DEPTH,
+  )(
+    i_clk    : i_clk    ,
+    i_rst    : i_rst    ,
+    slave_if : bus_if[0],
+    master_if: bus_if[1],
+  );
+
+  always_comb {
+    bus_if[1].slave <> master_if;
+  }
+}
