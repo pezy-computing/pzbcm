@@ -238,8 +238,6 @@ pub module pzcorebus_csrbus_adapter::<
   ) -> pzcorebus_common_pkg::pzcorebus_mcmd {
     if sideband_info.force_np_write && (mcmd == pzcorebus_common_pkg::pzcorebus_mcmd::WRITE) {
       return pzcorebus_common_pkg::pzcorebus_mcmd::WRITE_NP;
-    } else if sideband_info.force_np_write && (mcmd == pzcorebus_common_pkg::pzcorebus_mcmd::FULL_WRITE) {
-      return pzcorebus_common_pkg::pzcorebus_mcmd::FULL_WRITE_NP;
     } else {
       return mcmd;
     }
@@ -304,8 +302,7 @@ pub module pzcorebus_csrbus_adapter::<
         info.sresp           = pzcorebus_common_pkg::pzcorebus_sresp::RESPONSE_WITH_DATA;
         info.ignore_response = false;
       }
-      pzcorebus_common_pkg::pzcorebus_mcmd::WRITE     ,
-      pzcorebus_common_pkg::pzcorebus_mcmd::FULL_WRITE: {
+      pzcorebus_common_pkg::pzcorebus_mcmd::WRITE: {
         info.sresp           = pzcorebus_common_pkg::pzcorebus_sresp::RESPONSE;
         info.ignore_response = sideband_info.force_np_write;
       }

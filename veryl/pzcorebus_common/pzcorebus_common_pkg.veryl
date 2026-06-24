@@ -21,15 +21,13 @@ pub package pzcorebus_common_pkg {
   enum pzcorebus_mcmd_kind: logic<3> {
     READ        = 3'b001,
     WRITE       = 3'b100,
-    FULL_WRITE  = 3'b101,
-    BROADCAST   = 3'b110,
-    ATOMIC      = 3'b111,
+    BROADCAST   = 3'b101,
+    ATOMIC      = 3'b110,
     MESSAGE     = 3'b010,
   }
 
   const PZCOREBUS_READ_COMMAND      : pzcorebus_mcmd_kind = pzcorebus_mcmd_kind::READ;
   const PZCOREBUS_WRITE_COMMAND     : pzcorebus_mcmd_kind = pzcorebus_mcmd_kind::WRITE;
-  const PZCOREBUS_FULL_WRITE_COMMAND: pzcorebus_mcmd_kind = pzcorebus_mcmd_kind::FULL_WRITE;
   const PZCOREBUS_BROADCAST_COMMAND : pzcorebus_mcmd_kind = pzcorebus_mcmd_kind::BROADCAST;
   const PZCOREBUS_ATOMIC_COMMAND    : pzcorebus_mcmd_kind = pzcorebus_mcmd_kind::ATOMIC;
   const PZCOREBUS_MESSAGE_COMMAND   : pzcorebus_mcmd_kind = pzcorebus_mcmd_kind::MESSAGE;
@@ -39,28 +37,24 @@ pub package pzcorebus_common_pkg {
   // [2:0] see pzcorebus_mcmd_kind
   enum pzcorebus_mcmd: logic<4> {
     NULL          = 4'b0_000,
-    READ          = {1'b1, pzcorebus_mcmd_kind::READ      },
-    WRITE         = {1'b0, pzcorebus_mcmd_kind::WRITE     },
-    WRITE_NP      = {1'b1, pzcorebus_mcmd_kind::WRITE     },
-    FULL_WRITE    = {1'b0, pzcorebus_mcmd_kind::FULL_WRITE},
-    FULL_WRITE_NP = {1'b1, pzcorebus_mcmd_kind::FULL_WRITE},
-    BROADCAST     = {1'b0, pzcorebus_mcmd_kind::BROADCAST },
-    ATOMIC        = {1'b0, pzcorebus_mcmd_kind::ATOMIC    },
-    ATOMIC_NP     = {1'b1, pzcorebus_mcmd_kind::ATOMIC    },
-    MESSAGE       = {1'b0, pzcorebus_mcmd_kind::MESSAGE   },
-    MESSAGE_NP    = {1'b1, pzcorebus_mcmd_kind::MESSAGE   },
+    READ          = {1'b1, pzcorebus_mcmd_kind::READ     },
+    WRITE         = {1'b0, pzcorebus_mcmd_kind::WRITE    },
+    WRITE_NP      = {1'b1, pzcorebus_mcmd_kind::WRITE    },
+    BROADCAST     = {1'b0, pzcorebus_mcmd_kind::BROADCAST},
+    ATOMIC        = {1'b0, pzcorebus_mcmd_kind::ATOMIC   },
+    ATOMIC_NP     = {1'b1, pzcorebus_mcmd_kind::ATOMIC   },
+    MESSAGE       = {1'b0, pzcorebus_mcmd_kind::MESSAGE  },
+    MESSAGE_NP    = {1'b1, pzcorebus_mcmd_kind::MESSAGE  },
   }
 
-  const PZCOREBUS_READ         : pzcorebus_mcmd = pzcorebus_mcmd::READ;
-  const PZCOREBUS_WRITE        : pzcorebus_mcmd = pzcorebus_mcmd::WRITE;
-  const PZCOREBUS_WRITE_NP     : pzcorebus_mcmd = pzcorebus_mcmd::WRITE_NP;
-  const PZCOREBUS_FULL_WRITE   : pzcorebus_mcmd = pzcorebus_mcmd::FULL_WRITE;
-  const PZCOREBUS_FULL_WRITE_NP: pzcorebus_mcmd = pzcorebus_mcmd::FULL_WRITE_NP;
-  const PZCOREBUS_BROADCAST    : pzcorebus_mcmd = pzcorebus_mcmd::BROADCAST;
-  const PZCOREBUS_ATOMIC       : pzcorebus_mcmd = pzcorebus_mcmd::ATOMIC;
-  const PZCOREBUS_ATOMIC_NP    : pzcorebus_mcmd = pzcorebus_mcmd::ATOMIC_NP;
-  const PZCOREBUS_MESSAGE      : pzcorebus_mcmd = pzcorebus_mcmd::MESSAGE;
-  const PZCOREBUS_MESSAGE_NP   : pzcorebus_mcmd = pzcorebus_mcmd::MESSAGE_NP;
+  const PZCOREBUS_READ      : pzcorebus_mcmd = pzcorebus_mcmd::READ;
+  const PZCOREBUS_WRITE     : pzcorebus_mcmd = pzcorebus_mcmd::WRITE;
+  const PZCOREBUS_WRITE_NP  : pzcorebus_mcmd = pzcorebus_mcmd::WRITE_NP;
+  const PZCOREBUS_BROADCAST : pzcorebus_mcmd = pzcorebus_mcmd::BROADCAST;
+  const PZCOREBUS_ATOMIC    : pzcorebus_mcmd = pzcorebus_mcmd::ATOMIC;
+  const PZCOREBUS_ATOMIC_NP : pzcorebus_mcmd = pzcorebus_mcmd::ATOMIC_NP;
+  const PZCOREBUS_MESSAGE   : pzcorebus_mcmd = pzcorebus_mcmd::MESSAGE;
+  const PZCOREBUS_MESSAGE_NP: pzcorebus_mcmd = pzcorebus_mcmd::MESSAGE_NP;
 
   const MCMD_KIND_WIDTH: u16 = $bits(pzcorebus_mcmd_kind);
   const MCMD_KIND_BIT  : u16 = 0;
