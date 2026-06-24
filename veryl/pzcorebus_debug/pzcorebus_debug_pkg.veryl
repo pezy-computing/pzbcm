@@ -9,16 +9,14 @@ pub package pzcorebus_debug_pkg {
 
   #[enum_encoding(onehot)]
   enum pzcorebus_debug_target_mcmd {
-    READ         ,
-    WRITE        ,
-    WRITE_NP     ,
-    FULL_WRITE   ,
-    FULL_WRITE_NP,
-    BROADCAST    ,
-    ATOMIC       ,
-    ATOMIC_NP    ,
-    MESSAGE      ,
-    MESSAGE_NP   ,
+    READ      ,
+    WRITE     ,
+    WRITE_NP  ,
+    BROADCAST ,
+    ATOMIC    ,
+    ATOMIC_NP ,
+    MESSAGE   ,
+    MESSAGE_NP,
   }
 
   #[enum_encoding(onehot)]
@@ -35,17 +33,15 @@ pub package pzcorebus_debug_pkg {
     target_mcmd: input bit<TARGET_MCMD_WIDTH>,
   ) -> logic {
     case mcmd {
-      pzcorebus_mcmd::READ         : return (target_mcmd & pzcorebus_debug_target_mcmd::READ         ) != '0;
-      pzcorebus_mcmd::WRITE        : return (target_mcmd & pzcorebus_debug_target_mcmd::WRITE        ) != '0;
-      pzcorebus_mcmd::WRITE_NP     : return (target_mcmd & pzcorebus_debug_target_mcmd::WRITE_NP     ) != '0;
-      pzcorebus_mcmd::FULL_WRITE   : return (target_mcmd & pzcorebus_debug_target_mcmd::FULL_WRITE   ) != '0;
-      pzcorebus_mcmd::FULL_WRITE_NP: return (target_mcmd & pzcorebus_debug_target_mcmd::FULL_WRITE_NP) != '0;
-      pzcorebus_mcmd::BROADCAST    : return (target_mcmd & pzcorebus_debug_target_mcmd::BROADCAST    ) != '0;
-      pzcorebus_mcmd::ATOMIC       : return (target_mcmd & pzcorebus_debug_target_mcmd::ATOMIC       ) != '0;
-      pzcorebus_mcmd::ATOMIC_NP    : return (target_mcmd & pzcorebus_debug_target_mcmd::ATOMIC_NP    ) != '0;
-      pzcorebus_mcmd::MESSAGE      : return (target_mcmd & pzcorebus_debug_target_mcmd::MESSAGE      ) != '0;
-      pzcorebus_mcmd::MESSAGE_NP   : return (target_mcmd & pzcorebus_debug_target_mcmd::MESSAGE_NP   ) != '0;
-      default:                       return false;
+      pzcorebus_mcmd::READ      : return (target_mcmd & pzcorebus_debug_target_mcmd::READ         ) != '0;
+      pzcorebus_mcmd::WRITE     : return (target_mcmd & pzcorebus_debug_target_mcmd::WRITE        ) != '0;
+      pzcorebus_mcmd::WRITE_NP  : return (target_mcmd & pzcorebus_debug_target_mcmd::WRITE_NP     ) != '0;
+      pzcorebus_mcmd::BROADCAST : return (target_mcmd & pzcorebus_debug_target_mcmd::BROADCAST    ) != '0;
+      pzcorebus_mcmd::ATOMIC    : return (target_mcmd & pzcorebus_debug_target_mcmd::ATOMIC       ) != '0;
+      pzcorebus_mcmd::ATOMIC_NP : return (target_mcmd & pzcorebus_debug_target_mcmd::ATOMIC_NP    ) != '0;
+      pzcorebus_mcmd::MESSAGE   : return (target_mcmd & pzcorebus_debug_target_mcmd::MESSAGE      ) != '0;
+      pzcorebus_mcmd::MESSAGE_NP: return (target_mcmd & pzcorebus_debug_target_mcmd::MESSAGE_NP   ) != '0;
+      default:                    return false;
     }
   }
 
