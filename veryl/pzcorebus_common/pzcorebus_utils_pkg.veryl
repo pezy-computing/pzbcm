@@ -30,6 +30,10 @@ pub package pzcorebus_utils_pkg::<PKG: pzcorebus_proto_pkg> {
     return mcmd[pzcorebus_common_pkg::WITH_DATA_BIT];
   }
 
+  function is_mcmd_broadcast(mcmd: input PKG::pzcorebus_mcmd) -> logic {
+    return IS_CSR && (mcmd_kind(mcmd) == PKG::pzcorebus_mcmd_kind::BROADCAST);
+  }
+
   function is_mcmd_atomic(mcmd: input PKG::pzcorebus_mcmd) -> logic {
     return IS_MEM && (mcmd_kind(mcmd) == PKG::pzcorebus_mcmd_kind::ATOMIC);
   }

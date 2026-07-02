@@ -261,6 +261,10 @@ pub interface pzcorebus_if::<PKG: pzcorebus_proto_pkg> {
     return utils_pkg::is_mcmd_with_data(mcmd);
   }
 
+  function is_mcmd_broadcast() -> logic {
+    return utils_pkg::is_mcmd_broadcast(mcmd);
+  }
+
   function is_mcmd_atomic() -> logic {
     return utils_pkg::is_mcmd_atomic(mcmd);
   }
@@ -407,6 +411,7 @@ pub interface pzcorebus_if::<PKG: pzcorebus_proto_pkg> {
     is_mcmd_non_posted        : import,
     is_mcmd_no_data           : import,
     is_mcmd_with_data         : import,
+    is_mcmd_broadcast         : import,
     is_mcmd_atomic            : import,
     is_mcmd_message           : import,
     is_mcmd_with_response_data: import,
@@ -473,6 +478,7 @@ pub interface pzcorebus_if::<PKG: pzcorebus_proto_pkg> {
     is_mcmd_non_posted        : import,
     is_mcmd_no_data           : import,
     is_mcmd_with_data         : import,
+    is_mcmd_broadcast         : import,
     is_mcmd_atomic            : import,
     is_mcmd_message           : import,
     is_mcmd_with_response_data: import,
@@ -532,6 +538,7 @@ pub interface pzcorebus_if::<PKG: pzcorebus_proto_pkg> {
     is_mcmd_non_posted        : import,
     is_mcmd_no_data           : import,
     is_mcmd_with_data         : import,
+    is_mcmd_broadcast         : import,
     is_mcmd_atomic            : import,
     is_mcmd_message           : import,
     is_mcmd_with_response_data: import,
