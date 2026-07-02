@@ -1,0 +1,111 @@
+//========================================
+//
+// Copyright (c) 2026 PEZY Computing, K.K.
+//
+//========================================
+module pzcorebus_upsizer_response_path::<
+  SLAVE_PKG : pzcorebus_proto_pkg,
+  MASTER_PKG: pzcorebus_proto_pkg,
+> (
+  i_clk    : input   clock                                   ,
+  i_rst    : input   reset                                   ,
+  slave_if : modport pzcorebus_if::<SLAVE_PKG>::slave_sresp  ,
+  master_if: modport pzcorebus_if::<MASTER_PKG>::master_sresp,
+) {
+  const UNIT_WIDTH             : u32 = SLAVE_PKG::BUS_CONFIG.unit_data_width;
+  const MAX_DATA_SIZE          : u32 = SLAVE_PKG::BUS_CONFIG.max_data_size;
+  const SLAVE_DATA_WIDTH       : u32 = SLAVE_PKG::BUS_CONFIG.data_width;
+  const SLAVE_DATA_SIZE        : u32 = SLAVE_PKG::BUS_CONFIG.data_size;
+  const MASTER_DATA_SIZE       : u32 = MASTER_PKG::BUS_CONFIG.data_size;
+  const UNIT_INDEX_WIDTH       : u32 = $clog2(MAX_DATA_SIZE);
+  const MASTER_UNIT_INDEX_WIDTH: u32 = $clog2(MASTER_DATA_SIZE);
+
+  var sresp_busy  : logic                         ;
+  var start_index : logic<UNIT_INDEX_WIDTH>       ;
+  var end_index   : logic<UNIT_INDEX_WIDTH>       ;
+  var sresp_index : logic<2, UNIT_INDEX_WIDTH>    ;
+  var master_index: logic<MASTER_UNIT_INDEX_WIDTH>;
+
+  always_ff {
+    if_reset {
+      sresp_busy = false;
+    } else if slave_if.sresp_sublast_ack() {
+      sresp_busy = false;
+    } else if slave_if.sresp_ack() {
+      sresp_busy = true;
+    }
+  }
+
+  always_comb {
+    start_index    = get_start_index(master_if.sresp_uniten);
+    end_index      = get_end_index(master_if.sresp_uniten);
+    sresp_index[0] = if !sresp_busy ? start_index : sresp_index[1];
+    master_index   = sresp_index[0] as MASTER_UNIT_INDEX_WIDTH;
+  }
+
+  always_ff {
+    if_reset {
+      sresp_index[1] = 0 as UNIT_INDEX_WIDTH;
+    } else if slave_if.sresp_ack() {
+      sresp_index[1] = sresp_index[0] + (SLAVE_DATA_SIZE as UNIT_INDEX_WIDTH);
+    }
+  }
+
+  function get_start_index(unit_enable: input SLAVE_PKG::pzcorebus_sresp_uniten) -> logic<UNIT_INDEX_WIDTH> {
+    var index: logic<UNIT_INDEX_WIDTH>;
+
+    index = 0 as UNIT_INDEX_WIDTH;
+    for i in 0..MAX_DATA_SIZE step += SLAVE_DATA_SIZE {
+      if unit_enable[i+:SLAVE_DATA_SIZE] != '0 {
+        index = i as UNIT_INDEX_WIDTH;
+        break;
+      }
+    }
+
+    return index;
+  }
+
+  function get_end_index(unit_enable: input SLAVE_PKG::pzcorebus_sresp_uniten) -> logic<UNIT_INDEX_WIDTH> {
+      var index: logic<UNIT_INDEX_WIDTH>;
+
+      index = (MAX_DATA_SIZE - SLAVE_DATA_SIZE) as UNIT_INDEX_WIDTH;
+      for i in 0..MAX_DATA_SIZE step += SLAVE_DATA_SIZE {
+        let pos: u32 = MAX_DATA_SIZE - SLAVE_DATA_SIZE - i;
+        if unit_enable[pos+:SLAVE_DATA_SIZE]  != '0 {
+          index = pos as UNIT_INDEX_WIDTH;
+          break;
+        }
+      }
+
+      return index;
+  }
+
+  always_comb {
+    if (sresp_index[0] == end_index) || master_if.is_sresp_no_data() {
+      master_if.mresp_accept = slave_if.mresp_accept;
+      slave_if.sresp_valid   = master_if.sresp_valid;
+      slave_if.sresp_last    = master_if.sresp_last;
+    } else {
+      master_if.mresp_accept = false;
+      slave_if.sresp_valid   = master_if.sresp_valid;
+      slave_if.sresp_last    = '0;
+    }
+
+    slave_if.sresp        = master_if.sresp;
+    slave_if.sid          = master_if.sid;
+    slave_if.serror       = master_if.serror;
+    slave_if.sdata        = master_if.sdata[master_index*UNIT_WIDTH+:SLAVE_DATA_WIDTH];
+    slave_if.sinfo        = master_if.sinfo;
+    slave_if.sresp_uniten = get_sresp_uniten(sresp_index[0], master_if.sresp_uniten);
+  }
+
+  function get_sresp_uniten(
+    sresp_index : input logic<UNIT_INDEX_WIDTH>          ,
+    sresp_uniten: input SLAVE_PKG::pzcorebus_sresp_uniten,
+  ) -> SLAVE_PKG::pzcorebus_sresp_uniten {
+    var uniten: SLAVE_PKG::pzcorebus_sresp_uniten;
+    uniten                               = '0;
+    uniten[sresp_index+:SLAVE_DATA_SIZE] = sresp_uniten[sresp_index+:SLAVE_DATA_SIZE];
+    return uniten;
+  }
+}

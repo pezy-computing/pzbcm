@@ -1,0 +1,128 @@
+//========================================
+//
+// Copyright (c) 2026 PEZY Computing, K.K.
+//
+//========================================
+module pzcorebus_upsizer_request_path::<
+  SLAVE_PKG : pzcorebus_proto_pkg,
+  MASTER_PKG: pzcorebus_proto_pkg,
+> (
+  i_clk    : input   clock                                  ,
+  i_rst    : input   reset                                  ,
+  slave_if : modport pzcorebus_if::<SLAVE_PKG>::slave_mreq  ,
+  master_if: modport pzcorebus_if::<MASTER_PKG>::master_mreq,
+) {
+  const CONVERSION_RATIO: u32 = MASTER_PKG::BUS_CONFIG.data_width / SLAVE_PKG::BUS_CONFIG.data_width;
+  const COUNTER_WIDTH   : u32 = $clog2(CONVERSION_RATIO);
+  const ADDRESS_LSB     : u32 = $clog2(SLAVE_PKG::BUS_CONFIG.data_width) - 3;
+
+  var mdata_busy         : logic               ;
+  var mdata_count        : logic<COUNTER_WIDTH>;
+  var mdata_count_latched: logic<COUNTER_WIDTH>;
+
+  always_ff {
+    if_reset {
+      mdata_busy = false;
+    } else if slave_if.mdata_last_ack() {
+      mdata_busy = false;
+    } else if slave_if.mdata_ack() {
+      mdata_busy = true;
+    }
+  }
+
+  always_comb {
+    if slave_if.mcmd_valid && (!mdata_busy) {
+      mdata_count = get_initial_mdata_count(slave_if.mcmd, slave_if.maddr);
+    } else {
+      mdata_count = mdata_count_latched;
+    }
+  }
+
+  always_ff {
+    if_reset {
+      mdata_count_latched = 0 as COUNTER_WIDTH;
+    } else if slave_if.mdata_ack() {
+      mdata_count_latched = mdata_count + (1 as COUNTER_WIDTH);
+    } else if slave_if.mcmd_with_data_ack() {
+      mdata_count_latched = mdata_count;
+    }
+  }
+
+  function get_initial_mdata_count(
+    mcmd : input SLAVE_PKG::pzcorebus_mcmd ,
+    maddr: input SLAVE_PKG::pzcorebus_maddr,
+  ) -> logic<COUNTER_WIDTH> {
+    if pzcorebus_utils_pkg::<SLAVE_PKG>::is_mcmd_atomic(mcmd)
+      || pzcorebus_utils_pkg::<SLAVE_PKG>::is_mcmd_message(mcmd)
+    {
+      return 0 as COUNTER_WIDTH;
+    } else {
+      return maddr[ADDRESS_LSB+:COUNTER_WIDTH];
+    }
+  }
+
+  var mdata       : SLAVE_PKG::pzcorebus_mdata<CONVERSION_RATIO>;
+  var mdata_byteen: SLAVE_PKG::pzcorebus_mdata_byteen<CONVERSION_RATIO>;
+
+  for i in 0..CONVERSION_RATIO :g_mdata {
+    var match_count: logic;
+
+    always_comb {
+      match_count = mdata_count == (i as COUNTER_WIDTH);
+    }
+
+    if (i + 1) == CONVERSION_RATIO :g {
+      always_comb {
+        mdata[i]        = slave_if.mdata;
+        mdata_byteen[i] = if match_count ? slave_if.mdata_byteen : '0;
+      }
+    } else {
+      var mdata_latched       : SLAVE_PKG::pzcorebus_mdata;
+      var mdata_byteen_latched: SLAVE_PKG::pzcorebus_mdata_byteen;
+
+      always_comb {
+        if match_count {
+          mdata[i]        = slave_if.mdata;
+          mdata_byteen[i] = slave_if.mdata_byteen;
+        } else {
+          mdata[i]        = mdata_latched;
+          mdata_byteen[i] = mdata_byteen_latched;
+        }
+      }
+
+      always_ff {
+        if match_count && slave_if.mdata_ack() {
+          mdata_latched = slave_if.mdata;
+        }
+      }
+
+      always_ff {
+        if_reset {
+          mdata_byteen_latched = '0;
+        } else if master_if.mdata_ack() {
+          mdata_byteen_latched = '0;
+        } else if match_count && slave_if.mdata_ack() {
+          mdata_byteen_latched = slave_if.mdata_byteen;
+        }
+      }
+    }
+  }
+
+  always_comb {
+    slave_if.scmd_accept = master_if.scmd_accept;
+    master_if.mcmd_valid = slave_if.mcmd_valid;
+    master_if.put_mcmd(slave_if.get_mcmd());
+
+    if (mdata_count == ((CONVERSION_RATIO - 1) as COUNTER_WIDTH)) || slave_if.mdata_last {
+      slave_if.sdata_accept = master_if.sdata_accept;
+      master_if.mdata_valid = slave_if.mdata_valid;
+    } else {
+      slave_if.sdata_accept = true;
+      master_if.mdata_valid = false;
+    }
+
+    master_if.mdata        = mdata;
+    master_if.mdata_byteen = mdata_byteen;
+    master_if.mdata_last   = slave_if.mdata_last;
+  }
+}
