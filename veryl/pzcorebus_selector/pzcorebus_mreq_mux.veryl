@@ -8,10 +8,10 @@ pub module pzcorebus_mreq_mux::<PKG: pzcorebus_proto_pkg> #(
   param KIND        : selector_kind = selector_kind::ONEHOT          ,
   param SELECT_WIDTH: u32           = calc_select_width(SLAVES, KIND),
 )(
-  i_mcmd_select : input   logic<SELECT_WIDTH>                    ,
-  i_mdata_select: input   logic<SELECT_WIDTH>                    ,
-  slave_if      : modport pzcorebus_if::<PKG>::slave_mreq[SLAVES],
-  master_if     : modport pzcorebus_if::<PKG>::master_mreq       ,
+  i_mcmd_select : input   logic<SELECT_WIDTH>                         ,
+  i_mdata_select: input   logic<SELECT_WIDTH>                         ,
+  slave_if      : modport pzcorebus_mreq_if::<PKG>::slave_mreq[SLAVES],
+  master_if     : modport pzcorebus_mreq_if::<PKG>::master_mreq       ,
 ){
   import $std::selector_pkg::*;
   import pzcorebus_common_pkg::is_mem_profile;

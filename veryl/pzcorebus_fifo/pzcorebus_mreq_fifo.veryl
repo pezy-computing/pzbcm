@@ -14,14 +14,14 @@ pub module pzcorebus_mreq_fifo::<PKG: pzcorebus_proto_pkg> #(
   param DATA_FF_OUT    : bbool = true       ,
   param RESET_DATA_FF  : bbool = true       ,
 )(
-  i_clk        : input   clock                                   ,
-  i_rst        : input   reset                                   ,
-  i_clear      : input   logic                            = false,
-  o_empty      : output  logic<2>                         = _    ,
-  o_almost_full: output  logic<2>                         = _    ,
-  o_full       : output  logic<2>                         = _    ,
-  slave_if     : modport pzcorebus_if::<PKG>::slave_mreq         ,
-  master_if    : modport pzcorebus_if::<PKG>::master_mreq        ,
+  i_clk        : input   clock                                        ,
+  i_rst        : input   reset                                        ,
+  i_clear      : input   logic                                 = false,
+  o_empty      : output  logic<2>                              = _    ,
+  o_almost_full: output  logic<2>                              = _    ,
+  o_full       : output  logic<2>                              = _    ,
+  slave_if     : modport pzcorebus_mreq_if::<PKG>::slave_mreq         ,
+  master_if    : modport pzcorebus_mreq_if::<PKG>::master_mreq        ,
 ) {
   import pzcorebus_common_pkg::is_mem_profile;
 

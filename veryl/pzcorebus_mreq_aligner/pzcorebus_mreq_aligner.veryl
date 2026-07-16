@@ -19,10 +19,15 @@ pub module pzcorebus_mreq_aligner::<PKG: pzcorebus_proto_pkg> #(
   slave_if    : modport pzcorebus_if::<PKG>::slave     ,
   master_if   : modport pzcorebus_if::<PKG>::master    ,
 ) {
-  inst bus_if: pzcorebus_if::<PKG>[2];
+  inst mreq_if : pzcorebus_mreq_if::<PKG>[2];
+  inst sresp_if: pzcorebus_sresp_if::<PKG>[2];
 
   always_comb {
-    slave_if <> bus_if[0].master;
+    slave_if <> mreq_if[0].master_mreq;
+  }
+
+  always_comb {
+    slave_if <> sresp_if[0].master_sresp;
   }
 
   inst u_core: pzcorebus_mreq_aligner_core::<PKG> #(
@@ -32,26 +37,30 @@ pub module pzcorebus_mreq_aligner::<PKG: pzcorebus_proto_pkg> #(
     SLAVE_FIFO_MCMD_DEPTH  : SLAVE_FIFO_MCMD_DEPTH  ,
     SLAVE_FIFO_MDATA_DEPTH : SLAVE_FIFO_MDATA_DEPTH ,
   )(
-    i_clk       : i_clk       ,
-    i_rst       : i_rst       ,
-    o_mcmd      : o_mcmd      ,
-    o_mcmd_done : o_mcmd_done ,
-    o_mdata_done: o_mdata_done,
-    slave_if    : bus_if[0]   ,
-    master_if   : bus_if[1]   ,
+    i_clk       : i_clk        ,
+    i_rst       : i_rst        ,
+    o_mcmd      : o_mcmd       ,
+    o_mcmd_done : o_mcmd_done  ,
+    o_mdata_done: o_mdata_done ,
+    slave_if    : mreq_if[0]   ,
+    master_if   : mreq_if[1]   ,
   );
 
   inst u_sresp_fifo: pzcorebus_sresp_fifo::<PKG> #(
     SRESP_VALID: SLAVE_FIFO            ,
     SRESP_DEPTH: SLAVE_FIFO_SRESP_DEPTH,
   )(
-    i_clk    : i_clk    ,
-    i_rst    : i_rst    ,
-    slave_if : bus_if[0],
-    master_if: bus_if[1],
+    i_clk    : i_clk      ,
+    i_rst    : i_rst      ,
+    slave_if : sresp_if[0],
+    master_if: sresp_if[1],
   );
 
   always_comb {
-    bus_if[1].slave <> master_if;
+    mreq_if[1].slave_mreq <> master_if;
+  }
+
+  always_comb {
+    sresp_if[1].slave_sresp <> master_if;
   }
 }

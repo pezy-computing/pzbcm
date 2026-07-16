@@ -44,8 +44,10 @@ pub module pzcorebus_m_to_1_switch::<PKG: pzcorebus_proto_pkg> #(
   const SRESP_SELECTOR_KIND: selector_kind = if WAIT_FOR_SRESP ? selector_kind::ONEHOT : SELECTOR_KIND;
   const SRESP_SELECT_WIDTH : u32           = if WAIT_FOR_SRESP ? SLAVES                : SELECT_WIDTH ;
 
-  inst slave_switch_if : pzcorebus_if::<PKG>[SLAVES];
-  inst mastre_switch_if: pzcorebus_if::<PKG>;
+  inst s_mreq_if : pzcorebus_mreq_if::<PKG>[SLAVES] ;
+  inst s_sreap_if: pzcorebus_sresp_if::<PKG>[SLAVES];
+  inst m_mreq_if : pzcorebus_mreq_if::<PKG>         ;
+  inst m_sreap_if: pzcorebus_sresp_if::<PKG>        ;
 
   var sresp_last_ack: logic                    ;
   var sresp_select  : logic<SLAVES>            ;
@@ -53,7 +55,11 @@ pub module pzcorebus_m_to_1_switch::<PKG: pzcorebus_proto_pkg> #(
 
   for i in 0..SLAVES: g_slave {
     always_comb {
-      slave_if[i] <> slave_switch_if[i].master;
+      slave_if[i] <> s_mreq_if[i].master_mreq;
+    }
+
+    always_comb {
+      slave_if[i] <> s_sreap_if[i].master_sresp;
     }
   }
 
@@ -83,8 +89,8 @@ pub module pzcorebus_m_to_1_switch::<PKG: pzcorebus_proto_pkg> #(
     i_arbiter_weight      : i_arbiter_weight      ,
     o_sresp_select        : sresp_select          ,
     i_sresp_last_ack      : sresp_last_ack        ,
-    slave_if              : slave_switch_if       ,
-    master_if             : mastre_switch_if      ,
+    slave_if              : s_mreq_if             ,
+    master_if             : m_mreq_if             ,
   );
 
   always_comb {
@@ -106,16 +112,20 @@ pub module pzcorebus_m_to_1_switch::<PKG: pzcorebus_proto_pkg> #(
     MASTER_FIFO            : MASTER_FIFO                      ,
     MASTER_FIFO_SRESP_DEPTH: MASTER_FIFO_SRESP_DEPTH          ,
   )(
-    i_clk           : i_clk           ,
-    i_rst           : i_rst           ,
-    o_sresp         : o_sresp         ,
-    i_sresp_select  : select          ,
-    o_sresp_last_ack: sresp_last_ack  ,
-    slave_if        : slave_switch_if ,
-    master_if       : mastre_switch_if,
+    i_clk           : i_clk         ,
+    i_rst           : i_rst         ,
+    o_sresp         : o_sresp       ,
+    i_sresp_select  : select        ,
+    o_sresp_last_ack: sresp_last_ack,
+    slave_if        : s_sreap_if    ,
+    master_if       : m_sreap_if    ,
   );
 
   always_comb {
-    mastre_switch_if.slave <> master_if;
+    m_mreq_if.slave_mreq <> master_if;
+  }
+
+  always_comb {
+    m_sreap_if.slave_sresp <> master_if;
   }
 }

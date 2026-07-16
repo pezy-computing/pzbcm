@@ -37,11 +37,17 @@ pub module pzcorebus_1_to_m_switch::<PKG: pzcorebus_proto_pkg> #(
   import $std::selector_pkg::*;
   import pzbcm_arbiter_pkg::pzbcm_arbiter_kind;
 
-  inst slave_switch_if : pzcorebus_if::<PKG>         ;
-  inst master_switch_if: pzcorebus_if::<PKG>[MASTERS];
+  inst s_mreq_if : pzcorebus_mreq_if::<PKG>          ;
+  inst s_sresp_if: pzcorebus_sresp_if::<PKG>         ;
+  inst m_mreq_if : pzcorebus_mreq_if::<PKG>[MASTERS] ;
+  inst m_sresp_if: pzcorebus_sresp_if::<PKG>[MASTERS];
 
   always_comb {
-    slave_if <> slave_switch_if.master;
+    slave_if <> s_mreq_if.master_mreq;
+  }
+
+  always_comb {
+    slave_if <> s_sresp_if.master_sresp;
   }
 
   inst u_mreq_switch: pzcorebus_mreq_1_to_m_switch::<PKG> #(
@@ -61,12 +67,12 @@ pub module pzcorebus_1_to_m_switch::<PKG: pzcorebus_proto_pkg> #(
     MASTER_FIFO_MDATA_DEPTH: MASTER_FIFO_MDATA_DEPTH,
     ALIGH_OUT              : ALIGH_OUT              ,
   )(
-    i_clk        : i_clk           ,
-    i_rst        : i_rst           ,
-    o_mcmd       : o_mcmd          ,
-    i_mcmd_select: i_mcmd_select   ,
-    slave_if     : slave_switch_if ,
-    master_if    : master_switch_if,
+    i_clk        : i_clk        ,
+    i_rst        : i_rst        ,
+    o_mcmd       : o_mcmd       ,
+    i_mcmd_select: i_mcmd_select,
+    slave_if     : s_mreq_if    ,
+    master_if    : m_mreq_if    ,
   );
 
   inst u_sresp_switch: pzcorebus_sresp_1_to_m_switch::<PKG> #(
@@ -88,13 +94,17 @@ pub module pzcorebus_1_to_m_switch::<PKG: pzcorebus_proto_pkg> #(
     i_arbiter_priority    : i_arbiter_priority    ,
     i_arbiter_weight_valid: i_arbiter_weight_valid,
     i_arbiter_weight      : i_arbiter_weight      ,
-    slave_if              : slave_switch_if       ,
-    master_if             : master_switch_if      ,
+    slave_if              : s_sresp_if            ,
+    master_if             : m_sresp_if            ,
   );
 
   for i in 0..MASTERS :g_master {
     always_comb {
-      master_switch_if[i].slave <> master_if[i];
+      m_mreq_if[i].slave_mreq <> master_if[i];
+    }
+
+    always_comb {
+      m_sresp_if[i].slave_sresp <> master_if[i];
     }
   }
 }

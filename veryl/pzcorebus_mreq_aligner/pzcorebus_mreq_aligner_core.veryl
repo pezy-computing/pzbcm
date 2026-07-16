@@ -10,18 +10,18 @@ pub module pzcorebus_mreq_aligner_core::<PKG: pzcorebus_proto_pkg> #(
   param SLAVE_FIFO_MCMD_DEPTH  : u32   = 2    ,
   param SLAVE_FIFO_MDATA_DEPTH : u32   = 2    ,
 )(
-  i_clk       : input   clock                               ,
-  i_rst       : input   reset                               ,
-  o_mcmd      : output  PKG::pzcorebus_bundled_mcmd      = _,
-  o_mcmd_done : output  logic                            = _,
-  o_mdata_done: output  logic                            = _,
-  slave_if    : modport pzcorebus_if::<PKG>::slave_mreq     ,
-  master_if   : modport pzcorebus_if::<PKG>::master_mreq    ,
+  i_clk       : input   clock                                    ,
+  i_rst       : input   reset                                    ,
+  o_mcmd      : output  PKG::pzcorebus_bundled_mcmd           = _,
+  o_mcmd_done : output  logic                                 = _,
+  o_mdata_done: output  logic                                 = _,
+  slave_if    : modport pzcorebus_mreq_if::<PKG>::slave_mreq     ,
+  master_if   : modport pzcorebus_mreq_if::<PKG>::master_mreq    ,
 ) {
 //--------------------------------------------------------------
 //  Slave IF FIFO
 //--------------------------------------------------------------
-  inst fifo_if: pzcorebus_if::<PKG>;
+  inst fifo_if: pzcorebus_mreq_if::<PKG>;
 
   inst u_slave_fifo: pzcorebus_mreq_fifo::<PKG> #(
     MCMD_VALID : SLAVE_FIFO            ,

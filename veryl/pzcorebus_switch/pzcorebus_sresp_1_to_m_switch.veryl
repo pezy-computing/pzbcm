@@ -22,8 +22,8 @@ pub module pzcorebus_sresp_1_to_m_switch::<PKG: pzcorebus_proto_pkg> #(
   i_arbiter_priority    : input   logic<MASTERS, PRIORITY_WIDTH> = '0                             ,
   i_arbiter_weight_valid: input   logic                          = false                          ,
   i_arbiter_weight      : input   logic<MASTERS, WEIGHT_WIDTH>   = '0                             ,
-  slave_if              : modport pzcorebus_if::<PKG>::slave_sresp                                ,
-  master_if             : modport pzcorebus_if::<PKG>::master_sresp[MASTERS]                      ,
+  slave_if              : modport pzcorebus_sresp_if::<PKG>::slave_sresp                          ,
+  master_if             : modport pzcorebus_sresp_if::<PKG>::master_sresp[MASTERS]                ,
 ) {
   import pzbcm_arbiter_pkg::*;
   import $std::selector_pkg::selector_kind;
@@ -31,7 +31,7 @@ pub module pzcorebus_sresp_1_to_m_switch::<PKG: pzcorebus_proto_pkg> #(
 //--------------------------------------------------------------
 //  Slave FIFO
 //--------------------------------------------------------------
-  inst fifo_if: pzcorebus_if::<PKG>;
+  inst fifo_if: pzcorebus_sresp_if::<PKG>;
 
   if SLAVE_FIFO :g_slave_fifo {
     inst u_fifo: pzcorebus_sresp_fifo::<PKG> #(
@@ -51,7 +51,7 @@ pub module pzcorebus_sresp_1_to_m_switch::<PKG: pzcorebus_proto_pkg> #(
 //--------------------------------------------------------------
 //  Switch
 //--------------------------------------------------------------
-  inst switch_if: pzcorebus_if::<PKG>[MASTERS];
+  inst switch_if: pzcorebus_sresp_if::<PKG>[MASTERS];
 
   var sresp_valid: logic<MASTERS>;
   var sresp_grant: logic<MASTERS>;

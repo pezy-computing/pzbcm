@@ -11,14 +11,14 @@ pub module pzcorebus_sresp_fifo::<PKG: pzcorebus_proto_pkg> #(
   param DATA_FF_OUT    : bbool = true       ,
   param RESET_DATA_FF  : bbool = true       ,
 )(
-  i_clk        : input  clock                             ,
-  i_rst        : input  reset                             ,
-  i_clear      : input  logic = false                     ,
-  o_empty      : output logic = _                         ,
-  o_almost_full: output logic = _                         ,
-  o_full       : output logic = _                         ,
-  slave_if     : modport pzcorebus_if::<PKG>::slave_sresp ,
-  master_if    : modport pzcorebus_if::<PKG>::master_sresp,
+  i_clk        : input  clock                                   ,
+  i_rst        : input  reset                                   ,
+  i_clear      : input  logic = false                           ,
+  o_empty      : output logic = _                               ,
+  o_almost_full: output logic = _                               ,
+  o_full       : output logic = _                               ,
+  slave_if     : modport pzcorebus_sresp_if::<PKG>::slave_sresp ,
+  master_if    : modport pzcorebus_sresp_if::<PKG>::master_sresp,
 ) {
   var mresp_accept: logic<2>                      ;
   var sresp_valid : logic<2>                      ;

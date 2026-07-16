@@ -10,6 +10,10 @@ pub proto package pzcorebus_proto_pkg {
 
   const BUS_CONFIG: pzcorebus_config;
 
+  const IS_CSR  : bbool;
+  const IS_MEM  : bbool;
+  const IS_MEM_H: bbool;
+
   type pzcorebus_id  ;
   type pzcorebus_data;
 
@@ -110,6 +114,10 @@ pub package pzcorebus_pkg::<
       max_data_width      : max_data_width      ,
       response_boundary   : response_boundary   ,
     );
+
+  const IS_CSR  : bbool = pzcorebus_common_pkg::is_csr_profile(BUS_CONFIG);
+  const IS_MEM  : bbool = pzcorebus_common_pkg::is_mem_profile(BUS_CONFIG);
+  const IS_MEM_H: bbool = pzcorebus_common_pkg::is_mem_h_profile(BUS_CONFIG);
 
   type pzcorebus_id   = logic<get_signal_width(BUS_CONFIG.id_width, true)>;
   type pzcorebus_data = logic<get_signal_width(BUS_CONFIG.data_width, true)>;

@@ -8,9 +8,9 @@ pub module pzcorebus_sresp_mux::<PKG: pzcorebus_proto_pkg> #(
   param KIND        : selector_kind = selector_kind::ONEHOT          ,
   param SELECT_WIDTH: u32           = calc_select_width(SLAVES, KIND),
 )(
-  i_sresp_select: input   logic<SELECT_WIDTH>                     ,
-  slave_if      : modport pzcorebus_if::<PKG>::slave_sresp[SLAVES],
-  master_if     : modport pzcorebus_if::<PKG>::master_sresp       ,
+  i_sresp_select: input   logic<SELECT_WIDTH>                           ,
+  slave_if      : modport pzcorebus_sresp_if::<PKG>::slave_sresp[SLAVES],
+  master_if     : modport pzcorebus_sresp_if::<PKG>::master_sresp       ,
 ){
   import $std::selector_pkg::*;
 

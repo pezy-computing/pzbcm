@@ -29,8 +29,8 @@ pub module pzcorebus_mreq_m_to_1_switch::<PKG: pzcorebus_proto_pkg> #(
   i_arbiter_weight      : input   logic<SLAVES, WEIGHT_WIDTH>   = '0                             ,
   o_sresp_select        : output  logic<SLAVES>                 = _                              ,
   i_sresp_last_ack      : input   logic                         = false                          ,
-  slave_if              : modport pzcorebus_if::<PKG>::slave_mreq[SLAVES]                        ,
-  master_if             : modport pzcorebus_if::<PKG>::master_mreq                               ,
+  slave_if              : modport pzcorebus_mreq_if::<PKG>::slave_mreq[SLAVES]                   ,
+  master_if             : modport pzcorebus_mreq_if::<PKG>::master_mreq                          ,
 ) {
   import pzbcm_arbiter_pkg::*;
   import pzcorebus_common_pkg::*;
@@ -39,10 +39,10 @@ pub module pzcorebus_mreq_m_to_1_switch::<PKG: pzcorebus_proto_pkg> #(
 //--------------------------------------------------------------
 //  Slave MReq Aligner
 //--------------------------------------------------------------
-  inst aligner_if: pzcorebus_if::<PKG>[SLAVES];
+  inst aligner_if: pzcorebus_mreq_if::<PKG>[SLAVES];
 
   for i in 0..SLAVES :g_slave_aligner {
-    if is_mem_profile(PKG::BUS_CONFIG) :g {
+    if PKG::IS_MEM :g {
       inst u_aligner: pzcorebus_mreq_aligner_core::<PKG> #(
         WAIT_FOR_DATA          : WAIT_FOR_MDATA        ,
         THROUGH_NO_DATA_COMMAND: true                  ,
@@ -75,7 +75,7 @@ pub module pzcorebus_mreq_m_to_1_switch::<PKG: pzcorebus_proto_pkg> #(
 //--------------------------------------------------------------
 //  Switch
 //--------------------------------------------------------------
-  inst switch_if: pzcorebus_if::<PKG>[2];
+  inst switch_if: pzcorebus_mreq_if::<PKG>[2];
 
   var mcmd_valid : logic<SLAVES>;
   var mcmd_grant : logic<SLAVES>;
@@ -90,7 +90,7 @@ pub module pzcorebus_mreq_m_to_1_switch::<PKG: pzcorebus_proto_pkg> #(
     }
   }
 
-  if is_mem_profile(PKG::BUS_CONFIG) :g_membus {
+  if PKG::IS_MEM :g_membus {
     var done      : logic<3>     ;
     var mdata_done: logic        ;
     var grant     : logic<SLAVES>;
@@ -178,7 +178,7 @@ pub module pzcorebus_mreq_m_to_1_switch::<PKG: pzcorebus_proto_pkg> #(
   );
 
   always_comb {
-    switch_if[0].slave <> switch_if[1].master;
+    switch_if[0].slave_mreq <> switch_if[1].master_mreq;
     if !(sresp_idle && ((!mcmd_done) || switch_if[0].is_mcmd_no_data())) {
       switch_if[0].scmd_accept = false;
       switch_if[1].mcmd_valid  = false;
@@ -222,7 +222,7 @@ pub module pzcorebus_mreq_m_to_1_switch::<PKG: pzcorebus_proto_pkg> #(
 //--------------------------------------------------------------
 //  Master MReq Alignment
 //--------------------------------------------------------------
-  if is_mem_profile(PKG::BUS_CONFIG) && MASTER_ALIGNER :g_master_aligner {
+  if PKG::IS_MEM && MASTER_ALIGNER :g_master_aligner {
     inst u_aligner: pzcorebus_mreq_aligner_core::<PKG> #(
       WAIT_FOR_DATA          : WAIT_FOR_MDATA         ,
       THROUGH_NO_DATA_COMMAND: true                   ,

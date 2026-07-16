@@ -24,7 +24,7 @@ pub module pzcorebus_upsizer::<
   inst aligner_if: pzcorebus_if::<SLAVE_PKG>;
   inst upsizer_if: pzcorebus_if::<MASTER_PKG>;
 
-  if !pzcorebus_utils_pkg::<SLAVE_PKG>::IS_CSR :g_aligner {
+  if SLAVE_PKG::IS_MEM :g_aligner {
     inst u_aligner: pzcorebus_mreq_aligner::<SLAVE_PKG> #(
       SLAVE_FIFO            : SLAVE_FIFO            ,
       SLAVE_FIFO_MCMD_DEPTH : SLAVE_FIFO_MCMD_DEPTH ,

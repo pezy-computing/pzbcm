@@ -20,24 +20,24 @@ pub module pzcorebus_mreq_1_to_m_switch::<PKG: pzcorebus_proto_pkg> #(
   param MASTER_FIFO_MDATA_DEPTH: u32           = 2                                        ,
   param ALIGH_OUT              : bbool         = false                                    ,
 )(
-  i_clk        : input   clock                                    ,
-  i_rst        : input   reset                                    ,
-  o_mcmd       : output  PKG::pzcorebus_bundled_mcmd = _          ,
-  i_mcmd_select: input   logic<SELECT_WIDTH>         = '0         ,
-  slave_if     : modport pzcorebus_if::<PKG>::slave_mreq          ,
-  master_if    : modport pzcorebus_if::<PKG>::master_mreq[MASTERS],
+  i_clk        : input   clock                                         ,
+  i_rst        : input   reset                                         ,
+  o_mcmd       : output  PKG::pzcorebus_bundled_mcmd = _               ,
+  i_mcmd_select: input   logic<SELECT_WIDTH>         = '0              ,
+  slave_if     : modport pzcorebus_mreq_if::<PKG>::slave_mreq          ,
+  master_if    : modport pzcorebus_mreq_if::<PKG>::master_mreq[MASTERS],
 ) {
   import $std::selector_pkg::*;
   import pzcorebus_common_pkg::*;
 
-  const BROADCAST: bbool = is_csr_profile(PKG::BUS_CONFIG) && ENABLE_BROADCAST;
+  const BROADCAST: bbool = PKG::IS_CSR && ENABLE_BROADCAST;
 
 //--------------------------------------------------------------
 //  Slave Mreq Alignment
 //--------------------------------------------------------------
-  inst aligner_if: pzcorebus_if::<PKG>;
+  inst aligner_if: pzcorebus_mreq_if::<PKG>;
 
-  if is_mem_profile(PKG::BUS_CONFIG) :g_slave_aligner {
+  if PKG::IS_MEM :g_slave_aligner {
     inst u_aligner: pzcorebus_mreq_aligner_core::<PKG> #(
       WAIT_FOR_DATA          : WAIT_FOR_MDATA        ,
       THROUGH_NO_DATA_COMMAND: !WAIT_FOR_MDATA_LAST  ,
@@ -69,7 +69,7 @@ pub module pzcorebus_mreq_1_to_m_switch::<PKG: pzcorebus_proto_pkg> #(
 //--------------------------------------------------------------
 //  Switch
 //--------------------------------------------------------------
-  inst switch_if: pzcorebus_if::<PKG>[MASTERS];
+  inst switch_if: pzcorebus_mreq_if::<PKG>[MASTERS];
 
   var select        : logic<SELECT_WIDTH>         ;
   var mcmd_select   : logic<MASTERS>              ;
@@ -197,7 +197,7 @@ pub module pzcorebus_mreq_1_to_m_switch::<PKG: pzcorebus_proto_pkg> #(
 //  Master Mreq Alignment
 //--------------------------------------------------------------
   for i in 0..MASTERS :g_master_aligner {
-    if is_mem_profile(PKG::BUS_CONFIG) && ALIGH_OUT :g {
+    if PKG::IS_MEM && ALIGH_OUT :g {
       inst u_aligner: pzcorebus_mreq_aligner_core::<PKG> #(
         SLAVE_FIFO            : MASTER_FIFO            ,
         SLAVE_FIFO_MCMD_DEPTH : MASTER_FIFO_MCMD_DEPTH ,
