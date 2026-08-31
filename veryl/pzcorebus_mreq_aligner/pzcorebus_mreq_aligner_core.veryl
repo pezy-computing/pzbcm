@@ -123,8 +123,11 @@ pub module pzcorebus_mreq_aligner_core::<PKG: pzcorebus_proto_pkg> #(
   always_comb {
     case mcmd_state {
       state::IDLE: {
-        mcmd_active =
-          !WAIT_FOR_DATA || fifo_if.is_mcmd_no_data() || fifo_if.mdata_valid || mdata_done;
+        if WAIT_FOR_DATA {
+          mcmd_active = fifo_if.is_mcmd_no_data() || fifo_if.mdata_valid || (mdata_state == state::DONE);
+        } else {
+          mcmd_active = true;
+        }
       }
       default: {
         mcmd_active =
