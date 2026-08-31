@@ -1,0 +1,62 @@
+//========================================
+//
+// Copyright (c) 2026 PEZY Computing, K.K
+//
+//========================================
+pub interface pzcorebus_bundled_if::<
+  PKG    : pzcorebus_proto_pkg,
+  N_MREQ : u32                ,
+  N_SRESP: u32                ,
+> {
+  var scmd_accept : logic                      [N_MREQ] ;
+  var mcmd_valid  : logic                      [N_MREQ] ;
+  var mcmd        : PKG::pzcorebus_mcmd        [N_MREQ] ;
+  var mid         : PKG::pzcorebus_mid         [N_MREQ] ;
+  var maddr       : PKG::pzcorebus_maddr       [N_MREQ] ;
+  var mlength     : PKG::pzcorebus_mlength     [N_MREQ] ;
+  var mparam      : PKG::pzcorebus_mparam      [N_MREQ] ;
+  var minfo       : PKG::pzcorebus_minfo       [N_MREQ] ;
+  var sdata_accept: logic                      [N_MREQ] ;
+  var mdata_valid : logic                      [N_MREQ] ;
+  var mdata       : PKG::pzcorebus_mdata       [N_MREQ] ;
+  var mdata_byteen: PKG::pzcorebus_mdata_byteen[N_MREQ] ;
+  var mdata_last  : PKG::pzcorebus_mdata_last  [N_MREQ] ;
+  var mresp_accept: logic                      [N_SRESP];
+  var sresp_valid : logic                      [N_SRESP];
+  var sresp       : PKG::pzcorebus_sresp       [N_SRESP];
+  var sid         : PKG::pzcorebus_sid         [N_SRESP];
+  var serror      : PKG::pzcorebus_serror      [N_SRESP];
+  var sdata       : PKG::pzcorebus_sdata       [N_SRESP];
+  var sinfo       : PKG::pzcorebus_sinfo       [N_SRESP];
+  var sresp_uniten: PKG::pzcorebus_sresp_uniten[N_SRESP];
+  var sresp_last  : PKG::pzcorebus_sresp_last  [N_SRESP];
+
+  modport master {
+    scmd_accept : input ,
+    mcmd_valid  : output,
+    mcmd        : output,
+    mid         : output,
+    maddr       : output,
+    mlength     : output,
+    mparam      : output,
+    minfo       : output,
+    sdata_accept: input ,
+    mdata_valid : output,
+    mdata       : output,
+    mdata_byteen: output,
+    mdata_last  : output,
+    mresp_accept: output,
+    sresp_valid : input ,
+    sresp       : input ,
+    sid         : input ,
+    serror      : input ,
+    sdata       : input ,
+    sinfo       : input ,
+    sresp_uniten: input ,
+    sresp_last  : input ,
+  }
+
+  modport slave {
+    ..converse(master)
+  }
+}

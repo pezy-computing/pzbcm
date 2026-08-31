@@ -1,0 +1,34 @@
+//========================================
+//
+// Copyright (c) 2026 PEZY Computing, K.K.
+//
+//========================================
+pub module pzcorebus_if_unbundler::<
+  PKG    : pzcorebus_proto_pkg,
+  N_MREQ : u32                ,
+  N_SRESP: u32                ,
+> (
+  bundled_if: modport pzcorebus_bundled_if::<PKG, N_MREQ, N_SRESP>::slave          ,
+  mreq_if   : modport pzcorebus_mreq_if::<PKG>::master_mreq               [N_MREQ] ,
+  sresp_if  : modport pzcorebus_sresp_if::<PKG>::master_sresp             [N_SRESP],
+) {
+  for i in 0..N_MREQ :g_mreq {
+    always_comb {
+      bundled_if.scmd_accept[i] = mreq_if[i].scmd_accept;
+      mreq_if[i].mcmd           = bundled_if.mcmd[i];
+      mreq_if[i].mid            = bundled_if.mid[i];
+      mreq_if[i].maddr          = bundled_if.maddr[i];
+      mreq_if[i].mlength        = bundled_if.mlength[i];
+      mreq_if[i].mparam         = bundled_if.mparam[i];
+      mreq_if[i].minfo          = bundled_if.minfo[i];
+    }
+
+    always_comb {
+      bundled_if.sdata_accept[i] = mreq_if[i].sdata_accept;
+      mreq_if[i].mdata_valid     = bundled_if.mdata_valid[i];
+      mreq_if[i].mdata           = bundled_if.mdata[i];
+      mreq_if[i].mdata_byteen    = bundled_if.mdata_byteen[i];
+      mreq_if[i].mdata_last      = bundled_if.mdata_last[i];
+    }
+  }
+}
