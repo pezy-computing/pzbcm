@@ -75,7 +75,8 @@ pub module pzcorebus_mreq_m_to_1_switch::<PKG: pzcorebus_proto_pkg> #(
 //--------------------------------------------------------------
 //  Switch
 //--------------------------------------------------------------
-  inst switch_if: pzcorebus_mreq_if::<PKG>[2];
+  inst arbiter_if: pzcorebus_mreq_if::<PKG>[SLAVES];
+  inst switch_if : pzcorebus_mreq_if::<PKG>        ;
 
   var mcmd_valid : logic<SLAVES>;
   var mcmd_grant : logic<SLAVES>;
@@ -86,7 +87,16 @@ pub module pzcorebus_mreq_m_to_1_switch::<PKG: pzcorebus_proto_pkg> #(
 
   for i in 0..SLAVES :g_mcmd {
     always_comb {
-      mcmd_valid[i] = aligner_if[i].mcmd_valid;
+      aligner_if[i].slave_mreq <> arbiter_if[i].master_mreq;
+      if sresp_idle && ((!mcmd_done) || aligner_if[i].is_mcmd_no_data()) {
+        aligner_if[i].scmd_accept = arbiter_if[i].scmd_accept;
+        arbiter_if[i].mcmd_valid  = aligner_if[i].mcmd_valid;
+      } else {
+        aligner_if[i].scmd_accept = false;
+        arbiter_if[i].mcmd_valid  = false;
+      }
+
+      mcmd_valid[i] = arbiter_if[i].mcmd_valid;
     }
   }
 
@@ -96,9 +106,9 @@ pub module pzcorebus_mreq_m_to_1_switch::<PKG: pzcorebus_proto_pkg> #(
     var grant     : logic<SLAVES>;
 
     always_comb {
-      done[0] = switch_if[0].mcmd_with_data_ack() && switch_if[0].mdata_last_ack();
-      done[1] = switch_if[0].mcmd_with_data_ack() && mdata_done;
-      done[2] = mcmd_done                         && switch_if[0].mdata_last_ack();
+      done[0] = switch_if.mcmd_with_data_ack() && switch_if.mdata_last_ack();
+      done[1] = switch_if.mcmd_with_data_ack() && mdata_done;
+      done[2] = mcmd_done                      && switch_if.mdata_last_ack();
     }
 
     always_ff {
@@ -109,10 +119,10 @@ pub module pzcorebus_mreq_m_to_1_switch::<PKG: pzcorebus_proto_pkg> #(
         mcmd_done  = false;
         mdata_done = false;
       } else {
-        if switch_if[0].mcmd_with_data_ack() {
+        if switch_if.mcmd_with_data_ack() {
           mcmd_done = true;
         }
-        if switch_if[0].mdata_last_ack() {
+        if switch_if.mdata_last_ack() {
           mdata_done = true;
         }
       }
@@ -129,7 +139,7 @@ pub module pzcorebus_mreq_m_to_1_switch::<PKG: pzcorebus_proto_pkg> #(
     always_ff {
       if_reset {
         grant = '0;
-      } else if switch_if[0].mcmd_with_data_ack() {
+      } else if switch_if.mcmd_with_data_ack() {
         grant = mcmd_grant;
       }
     }
@@ -141,7 +151,7 @@ pub module pzcorebus_mreq_m_to_1_switch::<PKG: pzcorebus_proto_pkg> #(
   }
 
   always_comb {
-    mcmd_ack = switch_if[0].mcmd_ack();
+    mcmd_ack = switch_if.mcmd_ack();
   }
 
   inst u_arbiter: pzbcm_arbiter #(
@@ -171,19 +181,11 @@ pub module pzcorebus_mreq_m_to_1_switch::<PKG: pzcorebus_proto_pkg> #(
     SLAVES: SLAVES               ,
     KIND  : selector_kind::ONEHOT,
   )(
-    i_mcmd_select : mcmd_grant  ,
-    i_mdata_select: mdata_grant ,
-    slave_if      : aligner_if  ,
-    master_if     : switch_if[0],
+    i_mcmd_select : mcmd_grant ,
+    i_mdata_select: mdata_grant,
+    slave_if      : arbiter_if ,
+    master_if     : switch_if  ,
   );
-
-  always_comb {
-    switch_if[0].slave_mreq <> switch_if[1].master_mreq;
-    if !(sresp_idle && ((!mcmd_done) || switch_if[0].is_mcmd_no_data())) {
-      switch_if[0].scmd_accept = false;
-      switch_if[1].mcmd_valid  = false;
-    }
-  }
 
   if WAIT_FOR_SRESP :g_sresp {
     var sresp_select: logic<SLAVES>;
@@ -197,7 +199,7 @@ pub module pzcorebus_mreq_m_to_1_switch::<PKG: pzcorebus_proto_pkg> #(
         sresp_idle = true;
       } else if i_sresp_last_ack {
         sresp_idle = true;
-      } else if switch_if[1].mcmd_non_posted_ack() {
+      } else if switch_if.mcmd_non_posted_ack() {
         sresp_idle = false;
       }
     }
@@ -205,7 +207,7 @@ pub module pzcorebus_mreq_m_to_1_switch::<PKG: pzcorebus_proto_pkg> #(
     always_ff {
       if_reset {
         sresp_select = '0;
-      } else if switch_if[1].mcmd_non_posted_ack() {
+      } else if switch_if.mcmd_non_posted_ack() {
         sresp_select = mcmd_grant;
       }
     }
@@ -230,24 +232,24 @@ pub module pzcorebus_mreq_m_to_1_switch::<PKG: pzcorebus_proto_pkg> #(
       SLAVE_FIFO_MCMD_DEPTH  : MASTER_FIFO_MCMD_DEPTH ,
       SLAVE_FIFO_MDATA_DEPTH : MASTER_FIFO_MDATA_DEPTH,
     )(
-      i_clk    : i_clk       ,
-      i_rst    : i_rst       ,
-      slave_if : switch_if[1],
-      master_if: master_if   ,
+      i_clk    : i_clk    ,
+      i_rst    : i_rst    ,
+      slave_if : switch_if,
+      master_if: master_if,
     );
   } else if MASTER_FIFO {
     inst u_fifo: pzcorebus_mreq_fifo::<PKG> #(
       MCMD_DEPTH : MASTER_FIFO_MCMD_DEPTH ,
       MDATA_DEPTH: MASTER_FIFO_MDATA_DEPTH,
     )(
-      i_clk    : i_clk       ,
-      i_rst    : i_rst       ,
-      slave_if : switch_if[1],
-      master_if: master_if   ,
+      i_clk    : i_clk    ,
+      i_rst    : i_rst    ,
+      slave_if : switch_if,
+      master_if: master_if,
     );
   } else {
     always_comb {
-      switch_if[1].slave_mreq <> master_if;
+      switch_if.slave_mreq <> master_if;
     }
   }
 }
