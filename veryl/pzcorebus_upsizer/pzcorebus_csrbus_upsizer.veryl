@@ -1,0 +1,147 @@
+//========================================
+//
+// Copyright (c) 2024 PEZY Computing, K.K.
+//
+//========================================
+pub module pzcorebus_csrbus_upsizer::<
+  SLAVE_PKG : pzcorebus_proto_pkg,
+  MASTER_PKG: pzcorebus_proto_pkg,
+> #(
+  param SLAVE_MCMD_SLICER  : bbool = false,
+  param SLAVE_SRESP_SLICER : bbool = false,
+  param MASTER_MCMD_SLICER : bbool = false,
+  param MASTER_SRESP_SLICER: bbool = false,
+)(
+  i_clk    : input   clock                             ,
+  i_rst    : input   reset                             ,
+  slave_if : modport pzcorebus_if::<SLAVE_PKG>::slave  ,
+  master_if: modport pzcorebus_if::<MASTER_PKG>::master,
+) {
+  const SLAVE_DATA_WIDTH : u32 = SLAVE_PKG::BUS_CONFIG.data_width;
+  const SLAVE_BYTE_SIZE  : u32 = SLAVE_DATA_WIDTH / 8;
+  const MASTER_DATA_WIDTH: u32 = MASTER_PKG::BUS_CONFIG.data_width;
+  const RATIO            : u32 = MASTER_DATA_WIDTH / SLAVE_DATA_WIDTH;
+  const INDEX_WIDTH      : u32 = $clog2(RATIO);
+  const INDEX_LSB        : u32 = $clog2(SLAVE_BYTE_SIZE);
+
+//--------------------------------------------------------------
+//  Slave Slicer
+//--------------------------------------------------------------
+  inst slicer_if: pzcorebus_if::<SLAVE_PKG>;
+
+  inst u_slave_slicer: pzcorebus_slicer::<SLAVE_PKG> #(
+    MCMD_VALID : SLAVE_MCMD_SLICER ,
+    SRESP_VALID: SLAVE_SRESP_SLICER,
+  )(
+    i_clk    : i_clk    ,
+    i_rst    : i_rst    ,
+    slave_if : slave_if ,
+    master_if: slicer_if,
+  );
+
+//--------------------------------------------------------------
+//  Upsizer
+//--------------------------------------------------------------
+  inst upsizer_if: pzcorebus_if::<MASTER_PKG>;
+
+  var word_index    : logic<2, INDEX_WIDTH>;
+  var wait_for_sresp: logic                ;
+
+  always_comb {
+    if wait_for_sresp {
+      word_index[0] = word_index[1];
+    } else {
+      word_index[0] = slicer_if.maddr[INDEX_LSB+:INDEX_WIDTH];
+    }
+  }
+
+  always_ff {
+    if slicer_if.mcmd_non_posted_ack() {
+      word_index[1] = word_index[0];
+    }
+  }
+
+  always_ff {
+    if_reset {
+      wait_for_sresp = false;
+    } else if slicer_if.sresp_last_ack() {
+      wait_for_sresp = false;
+    } else if slicer_if.mcmd_non_posted_ack() {
+      wait_for_sresp = true;
+    }
+  }
+
+  always_comb {
+    if wait_for_sresp {
+      slicer_if.scmd_accept = false;
+      upsizer_if.mcmd_valid = false;
+    } else {
+      slicer_if.scmd_accept = upsizer_if.scmd_accept;
+      upsizer_if.mcmd_valid = slicer_if.mcmd_valid;
+    }
+
+    upsizer_if.mcmd         = slicer_if.mcmd;
+    upsizer_if.mid          = slicer_if.mid;
+    upsizer_if.maddr        = slicer_if.maddr;
+    upsizer_if.minfo        = slicer_if.minfo;
+    upsizer_if.mdata        = {slicer_if.mdata repeat RATIO};
+    upsizer_if.mdata_byteen = get_mdata_byteen(word_index[0], slicer_if.mdata_byteen);
+  }
+
+  always_comb {
+    upsizer_if.mlength     = '0;
+    upsizer_if.mparam      = '0;
+    upsizer_if.mdata_valid = false;
+    upsizer_if.mdata_last  = false;
+  }
+
+  always_comb {
+    if wait_for_sresp {
+      upsizer_if.mresp_accept = slicer_if.mresp_accept;
+      slicer_if.sresp_valid   = upsizer_if.sresp_valid;
+    } else {
+      upsizer_if.mresp_accept = false;
+      slicer_if.sresp_valid   = false;
+    }
+
+    slicer_if.sresp  = upsizer_if.sresp;
+    slicer_if.sid    = upsizer_if.sid;
+    slicer_if.serror = upsizer_if.serror;
+    slicer_if.sinfo  = upsizer_if.sinfo;
+    slicer_if.sdata  = upsizer_if.sdata[word_index[0] step SLAVE_DATA_WIDTH];
+  }
+
+  always_comb {
+    slicer_if.sresp_uniten = '0;
+    slicer_if.sresp_last   = '0;
+  }
+
+  function get_mdata_byteen(
+    word_index  : input logic<INDEX_WIDTH>               ,
+    mdata_byteen: input SLAVE_PKG::pzcorebus_mdata_byteen,
+  ) -> MASTER_PKG::pzcorebus_mdata_byteen {
+    var byteen: MASTER_PKG::pzcorebus_mdata_byteen;
+
+    byteen = '0;
+    if SLAVE_PKG::BUS_CONFIG.use_byte_enable {
+      byteen[word_index step SLAVE_BYTE_SIZE] = mdata_byteen as SLAVE_BYTE_SIZE;
+    } else {
+      byteen[word_index step SLAVE_BYTE_SIZE] = '1;
+    }
+
+    return byteen;
+  }
+
+//--------------------------------------------------------------
+//  Master Slicer
+//--------------------------------------------------------------
+  inst u_master_slicer: pzcorebus_slicer::<MASTER_PKG> #(
+    MCMD_VALID : MASTER_MCMD_SLICER ,
+    SRESP_VALID: MASTER_SRESP_SLICER,
+  )(
+    i_clk    : i_clk     ,
+    i_rst    : i_rst     ,
+    slave_if : upsizer_if,
+    master_if: master_if ,
+  );
+}

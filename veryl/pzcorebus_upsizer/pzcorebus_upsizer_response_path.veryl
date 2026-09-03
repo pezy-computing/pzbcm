@@ -17,8 +17,8 @@ module pzcorebus_upsizer_response_path::<
   const SLAVE_DATA_WIDTH       : u32 = SLAVE_PKG::BUS_CONFIG.data_width;
   const SLAVE_DATA_SIZE        : u32 = SLAVE_PKG::BUS_CONFIG.data_size;
   const MASTER_DATA_SIZE       : u32 = MASTER_PKG::BUS_CONFIG.data_size;
-  const UNIT_INDEX_WIDTH       : u32 = $clog2(MAX_DATA_SIZE);
-  const MASTER_UNIT_INDEX_WIDTH: u32 = $clog2(MASTER_DATA_SIZE);
+  const UNIT_INDEX_WIDTH       : u32 = $std::utils::clog2_clipped(MAX_DATA_SIZE, 1);
+  const MASTER_UNIT_INDEX_WIDTH: u32 = $std::utils::clog2_clipped(MASTER_DATA_SIZE, 1);
 
   var sresp_busy  : logic                         ;
   var start_index : logic<UNIT_INDEX_WIDTH>       ;
