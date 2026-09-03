@@ -14,13 +14,14 @@ pub module pzcorebus_if_bundler::<
 ) {
   for i in 0..N_MREQ :g_mreq {
     always_comb {
-      mreq_if[i].scmd_accept = bundled_if.scmd_accept[i];
-      bundled_if.mcmd[i]     = mreq_if[i].mcmd;
-      bundled_if.mid[i]      = mreq_if[i].mid;
-      bundled_if.maddr[i]    = mreq_if[i].maddr;
-      bundled_if.mlength[i]  = mreq_if[i].mlength;
-      bundled_if.mparam[i]   = mreq_if[i].mparam;
-      bundled_if.minfo[i]    = mreq_if[i].minfo;
+      mreq_if[i].scmd_accept   = bundled_if.scmd_accept[i];
+      bundled_if.mcmd_valid[i] = mreq_if[i].mcmd_valid;
+      bundled_if.mcmd[i]       = mreq_if[i].mcmd;
+      bundled_if.mid[i]        = mreq_if[i].mid;
+      bundled_if.maddr[i]      = mreq_if[i].maddr;
+      bundled_if.mlength[i]    = mreq_if[i].mlength;
+      bundled_if.mparam[i]     = mreq_if[i].mparam;
+      bundled_if.minfo[i]      = mreq_if[i].minfo;
     }
 
     always_comb {
@@ -40,6 +41,7 @@ pub module pzcorebus_if_bundler::<
       sresp_if[i].sid            = bundled_if.sid[i];
       sresp_if[i].serror         = bundled_if.serror[i];
       sresp_if[i].sdata          = bundled_if.sdata[i];
+      sresp_if[i].sinfo          = bundled_if.sinfo[i];
       sresp_if[i].sresp_uniten   = bundled_if.sresp_uniten[i];
       sresp_if[i].sresp_last     = bundled_if.sresp_last[i];
     }
