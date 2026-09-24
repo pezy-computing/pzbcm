@@ -4,29 +4,36 @@
 //
 //========================================
 pub module pzbcm_arbiter #(
-  param REQUESTS       : u32                         = 2                                       ,
-  param ONEHOT_GRANT   : bbool                       = true                                    ,
-  param KEEP_RESULT    : bbool                       = true                                    ,
-  param GRANT_WIDTH    : u32                         = calc_grant_width(REQUESTS, ONEHOT_GRANT),
-  param FREE_WIDTH     : u32                         = REQUESTS                                ,
-  param PRIORITY_ENABLE: bbool                       = false                                   ,
-  param PRIORITY_WIDTH : u32                         = 1                                       ,
-  param WEIGHT_ENABLE  : bbool                       = false                                   ,
-  param WEIGHT_WIDTH   : u32                         = 1                                       ,
-  param INITIAL_WEIGHT : bit<REQUESTS, WEIGHT_WIDTH> = '1                                      ,
+  param REQUESTS       : u32                           = 2                                            ,
+  param ONEHOT_GRANT   : bbool                         = true                                         ,
+  param KEEP_RESULT    : bbool                         = true                                         ,
+  param GRANT_WIDTH    : u32                           = calc_grant_width(REQUESTS, ONEHOT_GRANT)     ,
+  param FREE_WIDTH     : u32                           = REQUESTS                                     ,
+  param PRIORITY_ENABLE: bbool                         = false                                        ,
+  param PRIORITY_WIDTH : u32                           = 1                                            ,
+  param FIXED_PRIORITY : bbool                         = false                                        ,
+  param PRIORITY       : bit<REQUESTS, PRIORITY_WIDTH> = '0                                           ,
+  param WEIGHT_ENABLE  : bbool                         = false                                        ,
+  param WEIGHT_WIDTH   : u32                           = 1                                            ,
+  param INITIAL_WEIGHT : bit<REQUESTS, WEIGHT_WIDTH>   = '1                                           ,
+  const STATE_WIDTH    : u32                           = clog2_clipped(REQUESTS, 1)                   ,
+  const N_SLOTS        : u32                           = calc_n_slots(PRIORITY_ENABLE, PRIORITY_WIDTH),
 )(
-  i_clk         : input  clock                                                            ,
-  i_rst         : input  reset                                                            ,
-  i_kind        : input  pzbcm_arbiter_kind              = pzbcm_arbiter_kind::ROUND_ROBIN,
-  i_init        : input  logic                           = false                          ,
-  i_priority    : input  logic<REQUESTS, PRIORITY_WIDTH> = '0                             ,
-  i_weight_valid: input  logic                           = false                          ,
-  i_weight      : input  logic<REQUESTS, WEIGHT_WIDTH>   = '0                             ,
-  i_request     : input  logic<REQUESTS>                                                  ,
-  o_grant       : output logic<GRANT_WIDTH>                                               ,
-  i_free        : input  logic<FREE_WIDTH>                                                ,
+  i_clk          : input  clock                                                            ,
+  i_rst          : input  reset                                                            ,
+  i_kind         : input  pzbcm_arbiter_kind              = pzbcm_arbiter_kind::ROUND_ROBIN,
+  i_init         : input  logic                           = false                          ,
+  i_priority     : input  logic<REQUESTS, PRIORITY_WIDTH> = '0                             ,
+  i_weight_valid : input  logic                           = false                          ,
+  i_weight       : input  logic<REQUESTS, WEIGHT_WIDTH>   = '0                             ,
+  i_request      : input  logic<REQUESTS>                                                  ,
+  o_grant        : output logic<GRANT_WIDTH>                                               ,
+  i_free         : input  logic<FREE_WIDTH>                                                ,
+  i_update_state : input  logic                           = true                           ,
+  o_current_state: output logic<N_SLOTS, STATE_WIDTH>     = _                              ,
 ) {
   import pzbcm_arbiter_pkg::*;
+  import $std::utils::clog2_clipped;
 
   if REQUESTS >= 2 :g {
     var request: logic<REQUESTS>   ;
@@ -42,23 +49,28 @@ pub module pzbcm_arbiter #(
       ONEHOT_GRANT   : ONEHOT_GRANT   ,
       PRIORITY_ENABLE: PRIORITY_ENABLE,
       PRIORITY_WIDTH : PRIORITY_WIDTH ,
+      FIXED_PRIORITY : FIXED_PRIORITY ,
+      PRIORITY       : PRIORITY       ,
       WEIGHT_ENABLE  : WEIGHT_ENABLE  ,
       WEIGHT_WIDTH   : WEIGHT_WIDTH   ,
       INITIAL_WEIGHT : INITIAL_WEIGHT ,
     )(
-      i_clk         : i_clk         ,
-      i_rst         : i_rst         ,
-      i_kind        : i_kind        ,
-      i_init        : i_init        ,
-      i_priority    : i_priority    ,
-      i_weight_valid: i_weight_valid,
-      i_weight      : i_weight      ,
-      i_request     : request       ,
-      o_grant       : grant         ,
+      i_clk          : i_clk          ,
+      i_rst          : i_rst          ,
+      i_kind         : i_kind         ,
+      i_init         : i_init         ,
+      i_priority     : i_priority     ,
+      i_weight_valid : i_weight_valid ,
+      i_weight       : i_weight       ,
+      i_request      : request        ,
+      o_grant        : grant          ,
+      i_update_state : i_update_state ,
+      o_current_state: o_current_state,
     );
 
     if KEEP_RESULT :g_grant {
       var free         : logic             ;
+      var update       : logic             ;
       var current_grant: logic<GRANT_WIDTH>;
       var grant_latched: logic<GRANT_WIDTH>;
 
@@ -74,12 +86,16 @@ pub module pzbcm_arbiter #(
         }
       }
 
+      always_comb {
+        update = i_update_state && (request != '0);
+      }
+
       always_ff {
         if_reset {
           busy = false;
         } else if free {
           busy = false;
-        } else if request != '0 {
+        } else if update {
           busy = true;
         }
       }
@@ -87,7 +103,7 @@ pub module pzbcm_arbiter #(
       always_ff {
         if_reset {
           grant_latched = 0 as GRANT_WIDTH;
-        } else if request != '0 {
+        } else if update {
           grant_latched = grant;
         }
       }
@@ -116,11 +132,13 @@ pub module pzbcm_arbiter #(
     }
   } else if ONEHOT_GRANT {
     always_comb {
-      o_grant = '1;
+      o_grant         = '1;
+      o_current_state = '0;
     }
   } else {
     always_comb {
-      o_grant = 0 as GRANT_WIDTH;
+      o_grant         = 0 as GRANT_WIDTH;
+      o_current_state = '0;
     }
   }
 }

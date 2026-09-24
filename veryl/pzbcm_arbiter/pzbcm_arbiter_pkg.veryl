@@ -21,4 +21,15 @@ pub package pzbcm_arbiter_pkg {
       return $clog2(requests);
     }
   }
+
+  function calc_n_slots(
+    priority_enable: input bbool,
+    priority_width : input u32  ,
+  ) -> u32 {
+    if priority_enable {
+      return 2**priority_width;
+    } else {
+      return 1;
+    }
+  }
 }
