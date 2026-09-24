@@ -196,6 +196,10 @@ pub interface pzcorebus_mreq_if::<PKG: pzcorebus_proto_pkg> {
     return pzcorebus_utils_pkg::<PKG>::is_mcmd_read(mcmd);
   }
 
+  function is_mcmd_write() -> logic {
+    return pzcorebus_utils_pkg::<PKG>::is_mcmd_write(mcmd);
+  }
+
   function is_mcmd_broadcast() -> logic {
     return pzcorebus_utils_pkg::<PKG>::is_mcmd_broadcast(mcmd);
   }
@@ -292,6 +296,7 @@ pub interface pzcorebus_mreq_if::<PKG: pzcorebus_proto_pkg> {
     is_mcmd_no_data           : import,
     is_mcmd_with_data         : import,
     is_mcmd_read              : import,
+    is_mcmd_write             : import,
     is_mcmd_broadcast         : import,
     is_mcmd_atomic            : import,
     is_mcmd_message           : import,
@@ -335,6 +340,7 @@ pub interface pzcorebus_mreq_if::<PKG: pzcorebus_proto_pkg> {
     is_mcmd_no_data           : import,
     is_mcmd_with_data         : import,
     is_mcmd_read              : import,
+    is_mcmd_write             : import,
     is_mcmd_broadcast         : import,
     is_mcmd_atomic            : import,
     is_mcmd_message           : import,
@@ -585,6 +591,7 @@ pub interface pzcorebus_if::<PKG: pzcorebus_proto_pkg> {
     is_mcmd_no_data           : import,
     is_mcmd_with_data         : import,
     is_mcmd_read              : import,
+    is_mcmd_write             : import,
     is_mcmd_broadcast         : import,
     is_mcmd_atomic            : import,
     is_mcmd_message           : import,

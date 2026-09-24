@@ -30,6 +30,14 @@ pub package pzcorebus_utils_pkg::<PKG: pzcorebus_proto_pkg> {
     return mcmd_kind(mcmd) == PKG::pzcorebus_mcmd_kind::READ;
   }
 
+  function is_mcmd_write(mcmd: input PKG::pzcorebus_mcmd) -> logic {
+    if PKG::IS_CSR {
+      return inside mcmd_kind(mcmd) { PKG::pzcorebus_mcmd_kind::WRITE, PKG::pzcorebus_mcmd_kind::BROADCAST };
+    } else {
+      return mcmd_kind(mcmd) == PKG::pzcorebus_mcmd_kind::WRITE;
+    }
+  }
+
   function is_mcmd_broadcast(mcmd: input PKG::pzcorebus_mcmd) -> logic {
     return PKG::IS_CSR && (mcmd_kind(mcmd) == PKG::pzcorebus_mcmd_kind::BROADCAST);
   }
