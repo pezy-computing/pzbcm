@@ -1,0 +1,16 @@
+pub module pzcorebus_sresp_dummy_slave (
+  slave_if: interface::slave_sresp,
+) {
+  import pzcorebus_common_pkg::pzcorebus_sresp;
+
+  always_comb {
+    slave_if.sresp_valid  = false;
+    slave_if.sresp        = 0 as pzcorebus_sresp;
+    slave_if.sid          = '0;
+    slave_if.serror       = false;
+    slave_if.sdata        = '0;
+    slave_if.sinfo        = '0;
+    slave_if.sresp_uniten = '0;
+    slave_if.sresp_last   = '0;
+  }
+}
