@@ -124,7 +124,7 @@ pub module pzcorebus_mreq_aligner_core::<PKG: pzcorebus_proto_pkg> #(
     case mcmd_state {
       state::IDLE: {
         if WAIT_FOR_DATA {
-          mcmd_active = fifo_if.is_mcmd_no_data() || fifo_if.mdata_valid || (mdata_state == state::DONE);
+          mcmd_active = fifo_if.is_mcmd_no_data() || fifo_if.mdata_valid || (mdata_state != state::IDLE);
         } else {
           mcmd_active = true;
         }
@@ -147,20 +147,12 @@ pub module pzcorebus_mreq_aligner_core::<PKG: pzcorebus_proto_pkg> #(
       }
     }
 
-    master_if.put_mcmd(fifo_if.get_mcmd());
-    if mcmd_active {
-      fifo_if.scmd_accept  = master_if.scmd_accept;
-      master_if.mcmd_valid = fifo_if.mcmd_valid;
-    } else {
+    fifo_if.slave_mreq <> master_if;
+    if !mcmd_active {
       fifo_if.scmd_accept  = false;
       master_if.mcmd_valid = false;
     }
-
-    master_if.put_mdata(fifo_if.get_mdata());
-    if mdata_active {
-      fifo_if.sdata_accept  = master_if.sdata_accept;
-      master_if.mdata_valid = fifo_if.mdata_valid;
-    } else {
+    if !mdata_active {
       fifo_if.sdata_accept  = false;
       master_if.mdata_valid = false;
     }
