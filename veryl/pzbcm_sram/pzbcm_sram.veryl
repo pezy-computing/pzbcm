@@ -133,7 +133,7 @@ pub module pzbcm_sram::<PKG: pzbcm_sram_proto_pkg>#(
 
     if BANKS >= 2 {
       bank_lsb = BANK_LSB;
-      bank_msb = bank_lsb - BANK_WIDTH - 1;
+      bank_msb = bank_lsb + BANK_WIDTH - 1;
     } else {
       bank_lsb = 0;
       bank_msb = 0;
