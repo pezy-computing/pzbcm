@@ -1,0 +1,63 @@
+//========================================
+//
+// Copyright (c) 2026 PEZY Computing, K.K.
+//
+//========================================
+pub module pzcorebus_gate::<PKG: pzcorebus_proto_pkg> #(
+  param RETURN_SRESP : bbool = true ,
+  param SLAVE_SLICER : bbool = true ,
+  param MASTER_SLICER: bbool = false,
+)(
+  i_clk    : input   clock                      ,
+  i_rst    : input   reset                      ,
+  i_enable : input   logic                      ,
+  slave_if : modport pzcorebus_if::<PKG>::slave ,
+  master_if: modport pzcorebus_if::<PKG>::master,
+) {
+  import $std::selector_pkg::selector_kind;
+
+  inst slicer_if: pzcorebus_if::<PKG>    ;
+  inst switch_if: pzcorebus_if::<PKG> [2];
+
+  if SLAVE_SLICER :g_slave_slicer {
+    inst u_slave_slicer: pzcorebus_slicer::<PKG> (
+      i_clk    : i_clk    ,
+      i_rst    : i_rst    ,
+      slave_if : slave_if ,
+      master_if: slicer_if,
+    );
+  } else {
+    connect slave_if <> slicer_if.master;
+  }
+
+  inst u_demux: pzcorebus_demux::<PKG> #(
+    MASTERS: 2                    ,
+    KIND   : selector_kind::BINARY,
+  )(
+    i_mcmd_select : i_enable ,
+    i_mdata_select: i_enable ,
+    i_sresp_select: i_enable ,
+    slave_if      : slicer_if,
+    master_if     : switch_if,
+  );
+
+  if MASTER_SLICER: g_master_slicer {
+    inst u_master_slicer: pzcorebus_slicer::<PKG> (
+      i_clk    : i_clk       ,
+      i_rst    : i_rst       ,
+      slave_if : switch_if[1],
+      master_if: master_if   ,
+    );
+  } else {
+    connect switch_if[1].slave <> master_if;
+  }
+
+  inst u_dummy: pzcorebus_dummy_slave::<PKG> #(
+    TIE_OFF       : !RETURN_SRESP,
+    REPORT_WARNING: false        ,
+  )(
+    i_clk   : i_clk       ,
+    i_rst   : i_rst       ,
+    slave_if: switch_if[0],
+  );
+}

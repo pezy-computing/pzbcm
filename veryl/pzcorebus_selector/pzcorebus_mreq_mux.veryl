@@ -22,7 +22,7 @@ pub module pzcorebus_mreq_mux::<PKG: pzcorebus_proto_pkg> #(
   var s_sdata_accept: logic<SLAVES>                      ;
   var s_mdata_valid : logic<SLAVES>                      ;
   var s_mdata       : PKG::pzcorebus_packed_mdata<SLAVES>;
-  var m_sdmc_accept : logic                              ;
+  var m_scmd_accept : logic                              ;
   var m_mcmd_valid  : logic                              ;
   var m_mcmd        : PKG::pzcorebus_packed_mcmd         ;
   var m_sdata_accept: logic                              ;
@@ -42,7 +42,7 @@ pub module pzcorebus_mreq_mux::<PKG: pzcorebus_proto_pkg> #(
   }
 
   always_comb {
-    s_scmd_accept = $std::dispatch::<KIND, SLAVES, lbool>(i_mcmd_select, m_sdmc_accept, false);
+    s_scmd_accept = $std::dispatch::<KIND, SLAVES, lbool>(i_mcmd_select, m_scmd_accept, false);
   }
 
   always_comb {
@@ -68,7 +68,7 @@ pub module pzcorebus_mreq_mux::<PKG: pzcorebus_proto_pkg> #(
   }
 
   always_comb {
-    m_sdmc_accept        = master_if.scmd_accept;
+    m_scmd_accept        = master_if.scmd_accept;
     master_if.mcmd_valid = m_mcmd_valid;
     master_if.put_packed_mcmd(m_mcmd);
 
