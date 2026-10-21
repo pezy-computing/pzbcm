@@ -59,8 +59,8 @@ pub module pzcorebus_demux::<PKG: pzcorebus_proto_pkg> #(
     }
   } else {
     always_comb {
-      s_scmd_accept = '0;
-      m_mdata_valid = '0;
+      s_sdata_accept = '0;
+      m_mdata_valid  = '0;
     }
   }
 
