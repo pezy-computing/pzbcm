@@ -8,9 +8,9 @@ pub module pzcorebus_if_unbundler::<
   N_MREQ : u32                ,
   N_SRESP: u32                ,
 > (
-  bundled_if: modport pzcorebus_bundled_if::<PKG, N_MREQ, N_SRESP>::slave          ,
-  mreq_if   : modport pzcorebus_mreq_if::<PKG>::master_mreq               [N_MREQ] ,
-  sresp_if  : modport pzcorebus_sresp_if::<PKG>::master_sresp             [N_SRESP],
+  bundled_if: modport pzcorebus_bundled_if::<PKG, N_MREQ, N_SRESP>::slave,
+  mreq_if   : interface::master_mreq  [N_MREQ]                           ,
+  sresp_if  : interface::master_sresp [N_SRESP]                          ,
 ) {
   for i in 0..N_MREQ :g_mreq {
     always_comb {
