@@ -1,0 +1,35 @@
+//========================================
+//
+// Copyright (c) 2026 PEZY Computing, K.K.
+//                    All Rights Reserved.
+//
+//========================================
+pub module pzcorebus_bundled_dummy_master::<
+  PKG    : pzcorebus_proto_pkg,
+  N_MREQ : u32                ,
+  N_SRESP: u32                ,
+> #(
+  param MRESP_ACCEPT: lbool = true,
+)(
+  master_if: modport pzcorebus_bundled_if::<PKG, N_MREQ, N_SRESP>::master,
+) {
+  always_comb {
+    for i in 0..N_MREQ {
+      master_if.mcmd_valid[i]   = false;
+      master_if.mcmd[i]         = 0 as PKG::pzcorebus_mcmd;
+      master_if.mid[i]          = 0 as PKG::pzcorebus_mid;
+      master_if.maddr[i]        = 0 as PKG::pzcorebus_maddr;
+      master_if.mlength[i]      = 0 as PKG::pzcorebus_mlength;
+      master_if.mparam[i]       = 0 as PKG::pzcorebus_mparam;
+      master_if.minfo[i]        = 0 as PKG::pzcorebus_minfo;
+      master_if.mdata_valid[i]  = false;
+      master_if.mdata[i]        = 0 as PKG::pzcorebus_mdata;
+      master_if.mdata_byteen[i] = 0 as PKG::pzcorebus_mdata_byteen;
+      master_if.mdata_last[i]   = false;
+    }
+
+    for i in 0..N_SRESP {
+      master_if.mresp_accept[i] = MRESP_ACCEPT;
+    }
+  }
+}
