@@ -51,3 +51,60 @@ pub module pzcorebus_sresp_slicer::<PKG: pzcorebus_proto_pkg> #(
     }
   }
 }
+
+pub module pzcorebus_sresp_array_slicer::<PKG: pzcorebus_proto_pkg> #(
+  param N              : u32   = 2     ,
+  param STAGES         : u32   = 1     ,
+  param ASCENDING_ORDER: bbool = true  ,
+  param FULL_BANDWIDTH : bbool = true  ,
+  param DISABLE_MBFF   : bbool = false ,
+  param USE_RESET      : bbool = true  ,
+  param SRESP_VALID    : bbool = true  ,
+  param SRESP_STAGES   : u32   = STAGES,
+)(
+  i_clk    : input   clock                                  ,
+  i_rst    : input   reset                                  ,
+  slave_if : modport pzcorebus_sresp_if::<PKG>::slave_sresp [N],
+  master_if: modport pzcorebus_sresp_if::<PKG>::master_sresp [N],
+) {
+  for i in 0..N :g {
+    var sresp: PKG::pzcorebus_packed_sresp[2];
+
+    always_comb {
+      sresp[1] = master_if[i].get_packed_sresp();
+    }
+
+    always_comb {
+      slave_if[i].put_packed_sresp(sresp[0]);
+    }
+
+    if SRESP_VALID && SRESP_STAGES >= 1 :g_sresp {
+      inst u_slicer: $std::slicer #(
+        TYPE           : PKG::pzcorebus_packed_sresp,
+        STAGES         : SRESP_STAGES               ,
+        ASCENDING_ORDER: ASCENDING_ORDER            ,
+        FULL_BANDWIDTH : FULL_BANDWIDTH             ,
+        DISABLE_MBFF   : DISABLE_MBFF               ,
+        USE_RESET      : USE_RESET                  ,
+      )(
+        i_clk  : i_clk                    ,
+        i_rst  : i_rst                    ,
+        o_ready: master_if[i].mresp_accept,
+        i_valid: master_if[i].sresp_valid ,
+        i_data : sresp[1]                 ,
+        i_ready: slave_if[i].mresp_accept ,
+        o_valid: slave_if[i].sresp_valid  ,
+        o_data : sresp[0]                 ,
+      );
+    } else {
+      always_comb {
+        master_if[i].mresp_accept = slave_if[i].mresp_accept;
+        slave_if[i].sresp_valid   = master_if[i].sresp_valid;
+      }
+
+      always_comb {
+        sresp[0] = sresp[1];
+      }
+    }
+  }
+}

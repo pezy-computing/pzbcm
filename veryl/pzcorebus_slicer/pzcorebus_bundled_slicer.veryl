@@ -1,0 +1,71 @@
+pub module pzcorebus_bundled_slicer::<
+  PKG    : pzcorebus_proto_pkg,
+  N_MREQ : u32                ,
+  N_SRESP: u32                ,
+> #(
+  param STAGES         : u32   = 1     ,
+  param ASCENDING_ORDER: bbool = true  ,
+  param FULL_BANDWIDTH : bbool = true  ,
+  param DISABLE_MBFF   : bbool = false ,
+  param USE_RESET      : bbool = true  ,
+  param MCMD_VALID     : bbool = true  ,
+  param MCMD_STAGES    : u32   = STAGES,
+  param MDATA_VALID    : bbool = true  ,
+  param MDATA_STAGES   : u32   = STAGES,
+  param SRESP_VALID    : bbool = true  ,
+  param SRESP_STAGES   : u32   = STAGES,
+)(
+  i_clk    : input   clock                                               ,
+  i_rst    : input   reset                                               ,
+  slave_if : modport pzcorebus_bundled_if::<PKG, N_MREQ, N_SRESP>::slave ,
+  master_if: modport pzcorebus_bundled_if::<PKG, N_MREQ, N_SRESP>::master,
+) {
+  inst mreq_if : pzcorebus_mreq_if::<PKG> [2, N_MREQ ];
+  inst sresp_if: pzcorebus_sresp_if::<PKG> [2, N_SRESP];
+
+  inst u_unbundler: pzcorebus_if_unbundler::<PKG, N_MREQ, N_SRESP> (
+    bundled_if: slave_if   ,
+    mreq_if   : mreq_if[0] ,
+    sresp_if  : sresp_if[0],
+  );
+
+  inst u_bundler: pzcorebus_if_bundler::<PKG, N_MREQ, N_SRESP> (
+    mreq_if   : mreq_if[1] ,
+    sresp_if  : sresp_if[1],
+    bundled_if: master_if  ,
+  );
+
+  inst u_mreq_slicer: pzcorebus_mreq_array_slicer::<PKG> #(
+    N              : N_MREQ         ,
+    STAGES         : STAGES         ,
+    ASCENDING_ORDER: ASCENDING_ORDER,
+    FULL_BANDWIDTH : FULL_BANDWIDTH ,
+    DISABLE_MBFF   : DISABLE_MBFF   ,
+    USE_RESET      : USE_RESET      ,
+    MCMD_VALID     : MCMD_VALID     ,
+    MCMD_STAGES    : MCMD_STAGES    ,
+    MDATA_VALID    : MDATA_VALID    ,
+    MDATA_STAGES   : MDATA_STAGES   ,
+  )(
+    i_clk    : i_clk     ,
+    i_rst    : i_rst     ,
+    slave_if : mreq_if[0],
+    master_if: mreq_if[1],
+  );
+
+  inst u_sresp_slicer: pzcorebus_sresp_array_slicer::<PKG> #(
+    N              : N_SRESP        ,
+    STAGES         : STAGES         ,
+    ASCENDING_ORDER: ASCENDING_ORDER,
+    FULL_BANDWIDTH : FULL_BANDWIDTH ,
+    DISABLE_MBFF   : DISABLE_MBFF   ,
+    USE_RESET      : USE_RESET      ,
+    SRESP_VALID    : SRESP_VALID    ,
+    SRESP_STAGES   : SRESP_STAGES   ,
+  )(
+    i_clk    : i_clk      ,
+    i_rst    : i_rst      ,
+    slave_if : sresp_if[0],
+    master_if: sresp_if[1],
+  );
+}
