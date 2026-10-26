@@ -1,0 +1,62 @@
+//========================================
+//
+// Copyright (c) 2026 PEZY Computing, K.K.
+//
+//========================================
+pub module pzcorebus_sresp_async_fifo::<
+  PKG: pzcorebus_proto_pkg,
+  S  : $std::synchronizer ,
+> #(
+  param STAGES           : u32   = 2                         ,
+  param SRESP_DEPTH      : u32   = calc_default_depth(STAGES),
+  param MERGE_RESET      : bbool = false                     ,
+  param RESET_SYNC_STAGES: u32   = 2                         ,
+)(
+  i_slave_clk : input   's clock                                  ,
+  i_slave_rst : input   's reset                                  ,
+  slave_if    : modport 's pzcorebus_sresp_if::<PKG>::slave_sresp ,
+  i_master_clk: input   'm clock                                  ,
+  i_master_rst: input   'm reset                                  ,
+  master_if   : modport 'm pzcorebus_sresp_if::<PKG>::master_sresp,
+) {
+  import $std::async_fifo_pkg::calc_default_depth;
+
+  var s_sresp_empty: 's logic                      ;
+  var s_sresp_pop  : 's logic                      ;
+  var s_sresp      : 's PKG::pzcorebus_packed_sresp;
+  var m_sresp_full : 'm logic                      ;
+  var m_sresp_push : 'm logic                      ;
+  var m_sresp      : 'm PKG::pzcorebus_packed_sresp;
+
+  always_comb {
+    s_sresp_pop          = slave_if.mresp_accept;
+    slave_if.sresp_valid = !s_sresp_empty;
+    slave_if.put_packed_sresp(s_sresp);
+  }
+
+  always_comb {
+    master_if.mresp_accept = !m_sresp_full;
+    m_sresp_push           = master_if.sresp_valid;
+    m_sresp                = master_if.get_packed_sresp();
+  }
+
+  inst u_async_fifo: $std::async_fifo::<S> #(
+    TYPE              : PKG::pzcorebus_packed_sresp,
+    STAGES            : STAGES                     ,
+    DEPTH             : SRESP_DEPTH                ,
+    MERGE_RESET       : MERGE_RESET                ,
+    RESET_SYNC_STAGES : RESET_SYNC_STAGES          ,
+  ) (
+    is_clk        : i_master_clk ,
+    is_rst        : i_master_rst ,
+    os_almost_full: _            ,
+    os_full       : m_sresp_full ,
+    is_push       : m_sresp_push ,
+    is_data       : m_sresp      ,
+    id_clk        : i_slave_clk  ,
+    id_rst        : i_slave_rst  ,
+    od_empty      : s_sresp_empty,
+    id_pop        : s_sresp_pop  ,
+    od_data       : s_sresp      ,
+  );
+}

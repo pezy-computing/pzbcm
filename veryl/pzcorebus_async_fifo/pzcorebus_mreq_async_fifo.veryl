@@ -1,0 +1,125 @@
+//========================================
+//
+// Copyright (c) 2026 PEZY Computing, K.K.
+//
+//========================================
+pub module pzcorebus_mreq_async_fifo::<
+  PKG: pzcorebus_proto_pkg,
+  S  : $std::synchronizer ,
+> #(
+  param STAGES           : u32   = 2                         ,
+  param MCMD_DEPTH       : u32   = calc_default_depth(STAGES),
+  param MDATA_DEPTH      : u32   = calc_default_depth(STAGES),
+  param MERGE_RESET      : bbool = false                     ,
+  param RESET_SYNC_STAGES: u32   = 2                         ,
+)(
+  i_slave_clk : input   's clock                                ,
+  i_slave_rst : input   's reset                                ,
+  slave_if    : modport 's pzcorebus_mreq_if::<PKG>::slave_mreq ,
+  i_master_clk: input   'm clock                                ,
+  i_master_rst: input   'm reset                                ,
+  master_if   : modport 'm pzcorebus_mreq_if::<PKG>::master_mreq,
+) {
+  import $std::async_fifo_pkg::calc_default_depth;
+
+  var s_rst: 's reset;
+  var m_rst: 'm reset;
+
+  inst u_reset_sync: $std::async_fifo_reset_sync::<S> #(
+      MERGE_RESET      : MERGE_RESET      ,
+      RESET_SYNC_STAGES: RESET_SYNC_STAGES,
+  ) (
+      is_clk: i_slave_clk ,
+      is_rst: i_slave_rst ,
+      os_rst: s_rst       ,
+      id_clk: i_master_clk,
+      id_rst: i_master_rst,
+      od_rst: m_rst       ,
+  );
+
+  var s_mcmd_full : 's logic                     ;
+  var s_mcmd_push : 's logic                     ;
+  var s_mcmd      : 's PKG::pzcorebus_packed_mcmd;
+  var m_mcmd_empty: 'm logic                     ;
+  var m_mcmd_pop  : 'm logic                     ;
+  var m_mcmd      : 'm PKG::pzcorebus_packed_mcmd;
+
+  var s_mdata_full : 's logic                      ;
+  var s_mdata_push : 's logic                      ;
+  var s_mdata      : 's PKG::pzcorebus_packed_mdata;
+  var m_mdata_empty: 'm logic                      ;
+  var m_mdata_pop  : 'm logic                      ;
+  var m_mdata      : 'm PKG::pzcorebus_packed_mdata;
+
+  always_comb {
+    slave_if.scmd_accept = !s_mcmd_full;
+    s_mcmd_push          = slave_if.mcmd_valid;
+    s_mcmd               = slave_if.get_packed_mcmd();
+  }
+
+  always_comb {
+    m_mcmd_pop            = master_if.scmd_accept;
+    master_if.mcmd_valid  = !m_mcmd_empty;
+    m_mdata_pop           = master_if.sdata_accept;
+    master_if.mdata_valid = !m_mdata_empty;
+    master_if.put_packed_mcmd(m_mcmd);
+    master_if.put_packed_mdata(m_mdata);
+  }
+
+  :g_mcmd {
+    inst u_async_fifo: $std::async_fifo::<S> #(
+      TYPE       : PKG::pzcorebus_packed_mcmd,
+      STAGES     : STAGES                    ,
+      DEPTH      : MCMD_DEPTH                ,
+      MERGE_RESET: false                     ,
+    ) (
+      is_clk        : i_slave_clk ,
+      is_rst        : s_rst       ,
+      os_almost_full: _           ,
+      os_full       : s_mcmd_full ,
+      is_push       : s_mcmd_push ,
+      is_data       : s_mcmd      ,
+      id_clk        : i_master_clk,
+      id_rst        : m_rst       ,
+      od_empty      : m_mcmd_empty,
+      id_pop        : m_mcmd_pop  ,
+      od_data       : m_mcmd      ,
+    );
+  }
+
+  always_comb {
+    slave_if.sdata_accept = !s_mdata_full;
+    s_mdata_push          = slave_if.mdata_valid;
+    s_mdata               = slave_if.get_packed_mdata();
+  }
+
+  if PKG::IS_MEM :g_mdata {
+    inst u_async_fifo: $std::async_fifo::<S> #(
+      TYPE       : PKG::pzcorebus_packed_mdata,
+      STAGES     : STAGES                     ,
+      DEPTH      : MDATA_DEPTH                ,
+      MERGE_RESET: false                      ,
+    ) (
+      is_clk        : i_slave_clk  ,
+      is_rst        : s_rst        ,
+      os_almost_full: _            ,
+      os_full       : s_mdata_full ,
+      is_push       : s_mdata_push ,
+      is_data       : s_mdata      ,
+      id_clk        : i_master_clk ,
+      id_rst        : m_rst        ,
+      od_empty      : m_mdata_empty,
+      id_pop        : m_mdata_pop  ,
+      od_data       : m_mdata      ,
+    );
+  } else {
+    always_comb {
+      s_mdata_full = false;
+    }
+
+    always_comb {
+      m_mdata_empty = true;
+      m_mdata       = '0;
+    }
+  }
+}
