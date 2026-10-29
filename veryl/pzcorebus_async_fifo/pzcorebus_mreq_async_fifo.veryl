@@ -26,15 +26,15 @@ pub module pzcorebus_mreq_async_fifo::<
   var m_rst: 'm reset;
 
   inst u_reset_sync: $std::async_fifo_reset_sync::<S> #(
-      MERGE_RESET      : MERGE_RESET      ,
-      RESET_SYNC_STAGES: RESET_SYNC_STAGES,
+    MERGE_RESET      : MERGE_RESET      ,
+    RESET_SYNC_STAGES: RESET_SYNC_STAGES,
   ) (
-      is_clk: i_slave_clk ,
-      is_rst: i_slave_rst ,
-      os_rst: s_rst       ,
-      id_clk: i_master_clk,
-      id_rst: i_master_rst,
-      od_rst: m_rst       ,
+    is_clk: i_slave_clk ,
+    is_rst: i_slave_rst ,
+    os_rst: s_rst       ,
+    id_clk: i_master_clk,
+    id_rst: i_master_rst,
+    od_rst: m_rst       ,
   );
 
   var s_mcmd_full : 's logic                     ;
@@ -55,14 +55,19 @@ pub module pzcorebus_mreq_async_fifo::<
     slave_if.scmd_accept = !s_mcmd_full;
     s_mcmd_push          = slave_if.mcmd_valid;
     s_mcmd               = slave_if.get_packed_mcmd();
+
+    slave_if.sdata_accept = !s_mdata_full;
+    s_mdata_push          = slave_if.mdata_valid;
+    s_mdata               = slave_if.get_packed_mdata();
   }
 
   always_comb {
-    m_mcmd_pop            = master_if.scmd_accept;
-    master_if.mcmd_valid  = !m_mcmd_empty;
+    m_mcmd_pop           = master_if.scmd_accept;
+    master_if.mcmd_valid = !m_mcmd_empty;
+    master_if.put_packed_mcmd(m_mcmd);
+
     m_mdata_pop           = master_if.sdata_accept;
     master_if.mdata_valid = !m_mdata_empty;
-    master_if.put_packed_mcmd(m_mcmd);
     master_if.put_packed_mdata(m_mdata);
   }
 
@@ -85,12 +90,6 @@ pub module pzcorebus_mreq_async_fifo::<
       id_pop        : m_mcmd_pop  ,
       od_data       : m_mcmd      ,
     );
-  }
-
-  always_comb {
-    slave_if.sdata_accept = !s_mdata_full;
-    s_mdata_push          = slave_if.mdata_valid;
-    s_mdata               = slave_if.get_packed_mdata();
   }
 
   if PKG::IS_MEM :g_mdata {
