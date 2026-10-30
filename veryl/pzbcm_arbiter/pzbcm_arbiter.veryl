@@ -16,6 +16,7 @@ pub module pzbcm_arbiter #(
   param WEIGHT_ENABLE  : bbool                         = false                                        ,
   param WEIGHT_WIDTH   : u32                           = 1                                            ,
   param INITIAL_WEIGHT : bit<REQUESTS, WEIGHT_WIDTH>   = '1                                           ,
+  param SIMPLE_MUX     : bbool                         = true                                         ,
   const STATE_WIDTH    : u32                           = clog2_clipped(REQUESTS, 1)                   ,
   const N_SLOTS        : u32                           = calc_n_slots(PRIORITY_ENABLE, PRIORITY_WIDTH),
 )(
@@ -54,6 +55,7 @@ pub module pzbcm_arbiter #(
       WEIGHT_ENABLE  : WEIGHT_ENABLE  ,
       WEIGHT_WIDTH   : WEIGHT_WIDTH   ,
       INITIAL_WEIGHT : INITIAL_WEIGHT ,
+      SIMPLE_MUX     : SIMPLE_MUX     ,
     )(
       i_clk          : i_clk          ,
       i_rst          : i_rst          ,

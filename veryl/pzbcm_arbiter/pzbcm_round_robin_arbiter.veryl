@@ -14,6 +14,7 @@ pub module pzbcm_round_robin_arbiter #(
   param WEIGHT_ENABLE  : bbool                         = false                                        ,
   param WEIGHT_WIDTH   : u32                           = 1                                            ,
   param INITIAL_WEIGHT : bit<REQUESTS, WEIGHT_WIDTH>   = '1                                           ,
+  param SIMPLE_MUX     : bbool                         = true                                         ,
   const STATE_WIDTH    : u32                           = clog2_clipped(REQUESTS, 1)                   ,
   const N_SLOTS        : u32                           = calc_n_slots(PRIORITY_ENABLE, PRIORITY_WIDTH),
 )(
@@ -37,92 +38,104 @@ pub module pzbcm_round_robin_arbiter #(
   const PRIORITY_LSB : u32 = WEIGHT_LSB   + (if WEIGHT_ENABLE ? 1 : 0);
   const REQUEST_LSB  : u32 = PRIORITY_LSB + (if PRIORITY_ENABLE ? PRIORITY_WIDTH : 0);
 
+  type pzbcm_arbiter_state = logic<STATE_WIDTH>;
+
   struct pzbcm_arbiter_compare_data {
-    index: logic<STATE_WIDTH>  ,
+    index: pzbcm_arbiter_state ,
     value: logic<COMPARE_WIDTH>,
   }
 
-  struct pzbcm_arbiter_compare_result {
+  struct pzbcm_arbiter_result {
     location: logic<REQUESTS>           ,
     result  : pzbcm_arbiter_compare_data,
   }
 
-  var current_state  : logic<N_SLOTS, STATE_WIDTH>         ;
-  var use_round_robin: logic                               ;
-  var weight         : logic<REQUESTS, WEIGHT_WIDTH>       ;
-  var compare_data   : pzbcm_arbiter_compare_data<REQUESTS>;
-  var compare_result : pzbcm_arbiter_compare_result        ;
+  var current_state  : pzbcm_arbiter_state<N_SLOTS> ;
+  var use_round_robin: logic                        ;
+  var weight         : logic<REQUESTS, WEIGHT_WIDTH>;
+  var result         : pzbcm_arbiter_result         ;
 
 //--------------------------------------------------------------
 //  Arbiter
 //--------------------------------------------------------------
-  if ONEHOT_GRANT :g_result {
-    always_comb {
-      o_grant = compare_result.location;
+  const N_SELECT_ENTRIES: u32 = REQUESTS * 2;
+
+  always_comb {
+    if ONEHOT_GRANT {
+      o_grant = result.location as GRANT_WIDTH;
+    } else {
+      o_grant = result.result.index as GRANT_WIDTH;
     }
-  } else {
-    always_comb {
-      o_grant = compare_result.result.index;
-    }
+    o_current_state = current_state;
   }
 
   always_comb {
     use_round_robin = i_kind == pzbcm_arbiter_kind::ROUND_ROBIN;
   }
 
-  always_comb {
-    for i in 0..REQUESTS {
-      var priority_value: logic<PRIORITY_WIDTH>;
-
-      if !PRIORITY_ENABLE {
-        priority_value = 0 as PRIORITY_WIDTH;
-      } else if FIXED_PRIORITY {
-        priority_value = PRIORITY[i];
-      } else {
-        priority_value = i_priority[i];
-      }
-
-      compare_data[i].index              = i as STATE_WIDTH;
-      compare_data[i].value[0]           = use_round_robin && ((i as STATE_WIDTH) >: current_state[priority_value]);
-      compare_data[i].value[REQUEST_LSB] = i_request[i];
-      if WEIGHT_ENABLE {
-        compare_data[i].value[WEIGHT_LSB] = weight[i] >= (1 as WEIGHT_WIDTH);
-      }
-      if PRIORITY_ENABLE {
-        compare_data[i].value[PRIORITY_LSB+:PRIORITY_WIDTH] = priority_value;
-      }
-    }
-
-    compare_result = find_max(compare_data);
-  }
-
-  always_comb {
-    o_current_state = current_state;
-  }
-
-  for i in 0..N_SLOTS :g_state {
-    var match_priority: logic;
+  if !SIMPLE_MUX || PRIORITY_ENABLE || WEIGHT_ENABLE :g_arbiter {
+    var compare_data: pzbcm_arbiter_compare_data<REQUESTS>;
 
     always_comb {
-      match_priority =
-        (!PRIORITY_ENABLE)
-        || (compare_result.result.value[PRIORITY_LSB+:PRIORITY_WIDTH] == (i as PRIORITY_WIDTH));
-    }
+      for i in 0..REQUESTS {
+        var priority_value: logic<PRIORITY_WIDTH>;
 
-    always_ff {
-      if_reset {
-        current_state[i] = 0 as STATE_WIDTH;
-      } else if i_init || !use_round_robin {
-        current_state[i] = 0 as STATE_WIDTH;
-      } else if (i_request != '0) && i_update_state && match_priority {
-        current_state[i] = compare_result.result.index;
+        if !PRIORITY_ENABLE {
+          priority_value = 0 as PRIORITY_WIDTH;
+        } else if FIXED_PRIORITY {
+          priority_value = PRIORITY[i];
+        } else {
+          priority_value = i_priority[i];
+        }
+
+        compare_data[i].index              = i as STATE_WIDTH;
+        compare_data[i].value[0]           = use_round_robin && ((i as STATE_WIDTH) >: current_state[priority_value]);
+        compare_data[i].value[REQUEST_LSB] = i_request[i];
+        if WEIGHT_ENABLE {
+          compare_data[i].value[WEIGHT_LSB] = weight[i] >= (1 as WEIGHT_WIDTH);
+        }
+        if PRIORITY_ENABLE {
+          compare_data[i].value[PRIORITY_LSB+:PRIORITY_WIDTH] = priority_value;
+        }
+      }
+
+      result = find_max(compare_data);
+    }
+  } else {
+    const INDEX_LIST: pzbcm_arbiter_state<N_SELECT_ENTRIES> = init_index_list();
+
+    var select: logic<N_SELECT_ENTRIES>;
+
+    always_comb {
+      for i in 0..REQUESTS {
+        select[REQUESTS * 0 + i] = i_request[i] && use_round_robin && ((i as STATE_WIDTH) >: current_state[0]);
+        select[REQUESTS * 1 + i] = i_request[i];
+      }
+
+      result              = '0;
+      result.result.index = $std::select_vector::<N_SELECT_ENTRIES, pzbcm_arbiter_state>(select, INDEX_LIST);
+      if ONEHOT_GRANT {
+        for i in 0..REQUESTS {
+          result.location[i] = result.result.index == (i as STATE_WIDTH);
+        }
       }
     }
+  }
+
+  function init_index_list() -> pzbcm_arbiter_state<N_SELECT_ENTRIES> {
+    var list: pzbcm_arbiter_state<N_SELECT_ENTRIES>;
+
+    for i in 0..REQUESTS {
+      list[REQUESTS * 0 + i] = i as STATE_WIDTH;
+      list[REQUESTS * 1 + i] = i as STATE_WIDTH;
+    }
+
+    return list;
   }
 
   function find_max(
     compare_data: input pzbcm_arbiter_compare_data<REQUESTS>,
-  ) -> pzbcm_arbiter_compare_result {
+  ) -> pzbcm_arbiter_result {
     const DEPTH: u32 = $clog2(REQUESTS);
 
     var stride          : u32                                 ;
@@ -132,7 +145,7 @@ pub module pzbcm_round_robin_arbiter #(
     var next_location   : logic<REQUESTS>                     ;
     var current_data    : pzbcm_arbiter_compare_data<REQUESTS>;
     var next_data       : pzbcm_arbiter_compare_data<REQUESTS>;
-    var result          : pzbcm_arbiter_compare_result        ;
+    var result          : pzbcm_arbiter_result                ;
 
     next_n        = REQUESTS;
     next_location = '1;
@@ -176,6 +189,26 @@ pub module pzbcm_round_robin_arbiter #(
     return result;
   }
 
+  for i in 0..N_SLOTS :g_state {
+    var match_priority: logic;
+
+    always_comb {
+      match_priority =
+        (!PRIORITY_ENABLE)
+        || (result.result.value[PRIORITY_LSB+:PRIORITY_WIDTH] == (i as PRIORITY_WIDTH));
+    }
+
+    always_ff {
+      if_reset {
+        current_state[i] = 0 as STATE_WIDTH;
+      } else if i_init || !use_round_robin {
+        current_state[i] = 0 as STATE_WIDTH;
+      } else if (i_request != '0) && i_update_state && match_priority {
+        current_state[i] = result.result.index;
+      }
+    }
+  }
+
 //--------------------------------------------------------------
 //  Weight
 //--------------------------------------------------------------
@@ -212,7 +245,7 @@ pub module pzbcm_round_robin_arbiter #(
       var eq_1 : logic;
 
       always_comb {
-        grant             = i_request[i] && compare_result.location[i];
+        grant             = i_request[i] && result.location[i];
         eq_0              = weight[i] == (0 as WEIGHT_WIDTH);
         eq_1              = weight[i] == (1 as WEIGHT_WIDTH);
         weight_eq_0       = eq_0 || eq_1 && grant;
